@@ -141,3 +141,8 @@ artifacts/
 **/test-code/out/
 
 **/*.sqlite
+
+# Neo4j
+**/neo4j_data
+
+
