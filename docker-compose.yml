@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "7070:7070"
+      - "7071:7070"
     volumes:
       # Mount the 'projects' folder so users can analyze local files easily.
       # Users must create a folder named 'projects' next to this file!
@@ -18,6 +18,8 @@ services:
       # - OLLAMA_ENDPOINT=http://host.docker.internal:11434
     depends_on:
       - neo4j
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   neo4j:
     image: neo4j:5.15.0

@@ -1,8 +1,11 @@
 import argparse
 import json
+import os
 
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
+from langchain_community.chat_models import ChatOllama
+from langchain_core.language_models import BaseChatModel
 from neo4j import GraphDatabase, Record
 
 from src.llm.capability_extractor.cache_stats import CacheStats
@@ -15,7 +18,7 @@ load_dotenv("env/.env", override=True)
 c = ConsoleColors()
 
 
-def collect(struct, path: list[str], llm: AzureChatOpenAI, all_paths: list[list[str]]) -> None:
+def collect(struct, path: list[str], llm: BaseChatModel, all_paths: list[list[str]]) -> None:
     if "ROOT" not in struct["name"]:
         all_paths += [path + [struct["name"]]]
         # explain_through_llm(struct, path, llm)
@@ -27,7 +30,7 @@ def matching_structures(structure_name: str, all_paths: list[list[str]]) -> tupl
     return structure_name, [path for path in all_paths if path[-1] == structure_name]
 
 
-def llm_explanation_block(paragraph_name: str, explanation: str, llm: AzureChatOpenAI) -> str:
+def llm_explanation_block(paragraph_name: str, explanation: str, llm: BaseChatModel) -> str:
     system_message = f"""
                         You are an expert of Mainframe and IDMS codebases.
                         The user will provide you with the name of a COBOL paragraph as well as an explanation of all the
@@ -53,7 +56,7 @@ def llm_explanation_block(paragraph_name: str, explanation: str, llm: AzureChatO
 
 
 def all_capabilities(ds_input_path: str, paragrah_capabilities_output_path: str, neo4j_uri: str, auth: tuple[str, str],
-                     llm: AzureChatOpenAI, database: str):
+                     llm: BaseChatModel, database: str):
     master_explanations: dict[str, str] = {}
     cache_stats = CacheStats()
     all_paths = data_structure_graph(llm, ds_input_path)
@@ -88,7 +91,7 @@ def all_capabilities(ds_input_path: str, paragrah_capabilities_output_path: str,
 
 def capabilities_for_paragraph(nrds: list[Record], all_paths: list[list[str]], master_explanations: dict,
                                overall_progress: str,
-                               llm: AzureChatOpenAI, cache_stats: CacheStats) -> str:
+                               llm: BaseChatModel, cache_stats: CacheStats) -> str:
     if len(nrds) == 0:
         return ""
     explanation = ""
@@ -119,7 +122,7 @@ def capabilities_for_paragraph(nrds: list[Record], all_paths: list[list[str]], m
     return llm_explanation_block(nrds[0]["n"]["name"], explanation, llm)
 
 
-def data_structure_graph(llm: AzureChatOpenAI, ds_input_path: str) -> list[list[str]]:
+def data_structure_graph(llm: BaseChatModel, ds_input_path: str) -> list[list[str]]:
     with open(ds_input_path, 'r') as file:
         data_structures = json.load(file)
         all_paths: list[list[str]] = []
@@ -127,7 +130,7 @@ def data_structure_graph(llm: AzureChatOpenAI, ds_input_path: str) -> list[list[
         return all_paths
 
 
-def llm_explanation(struct_name: str, path: list[str], llm: AzureChatOpenAI) -> str:
+def llm_explanation(struct_name: str, path: list[str], llm: BaseChatModel) -> str:
     print(c.bold(f"Path is {path} for {struct_name}"))
     system_message = f"""
                                 You are an expert of Mainframe and IDMS codebases.
@@ -167,14 +170,20 @@ if __name__ == "__main__":
     print(c.green(neo4j_uri))
 
     auth = (neo4j_username, neo4j_password)
-    llm4 = AzureChatOpenAI(
-        deployment_name="gpt-4o",
-        azure_endpoint=open_ai_endpoint,
-        openai_api_version="2023-06-01-preview",
-        openai_api_key=open_ai_key,
-        temperature=0.8,
-        request_timeout=6000
-    )
+    
+    if os.getenv("LLM_SOURCE") == "OLLAMA":
+        print(c.cyan("Using Ollama LLM"))
+        llm4 = ChatOllama(model="mistral", base_url=os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434"))
+    else:
+        print(c.cyan("Using Azure OpenAI LLM"))
+        llm4 = AzureChatOpenAI(
+            deployment_name="gpt-4o",
+            azure_endpoint=open_ai_endpoint,
+            openai_api_version="2023-06-01-preview",
+            openai_api_key=open_ai_key,
+            temperature=0.8,
+            request_timeout=6000
+        )
 
     f = open(paragrah_capabilities_output_path, "w")
     f.write("")
