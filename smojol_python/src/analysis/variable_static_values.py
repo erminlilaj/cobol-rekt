@@ -1,13 +1,13 @@
 import argparse
 import json
 
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 from src.common.json_navigator import find_where, node_type, recursive, path, ASTNode
 from src.llm.common.console_colors import ConsoleColors
 from src.llm.common.parameter_constants import ParameterConstants
 
-load_dotenv("env/.env", override=True)
+# load_dotenv("env/.env", override=True)
 c = ConsoleColors()
 
 
