@@ -1,6 +1,7 @@
 import os
 import glob
 import re
+import json
 
 MERMAID_DIR = "out/report/test-exp.cbl.report/mermaid"
 OUTPUT_HTML = "out/report/test-exp.cbl.report/visualize_graphs.html"
@@ -56,6 +57,26 @@ def sanitize_mermaid_code(code):
 
 def generate_html(mermaid_dir, output_html, title):
     html_content = HTML_TEMPLATE_START.replace("test-exp.cbl", title)
+
+    # Check for LLM Summary
+    report_dir = os.path.dirname(mermaid_dir)
+    llm_summary_dir = os.path.join(report_dir, "llm_summary")
+    if os.path.exists(llm_summary_dir):
+        json_files = [f for f in os.listdir(llm_summary_dir) if f.endswith(".json")]
+        if json_files:
+            summary_path = os.path.join(llm_summary_dir, json_files[0])
+            try:
+                with open(summary_path, 'r') as f:
+                    summary_data = json.load(f)
+                    formatted_summary = json.dumps(summary_data, indent=2)
+                    html_content += f"""
+                    <div class="graph-container">
+                        <h2>LLM Business Logic Summary</h2>
+                        <pre style="white-space: pre-wrap; word-wrap: break-word; background: #eee; padding: 10px;">{formatted_summary}</pre>
+                    </div>
+                    """
+            except Exception as e:
+                print(f"Error reading LLM summary: {e}")
     
     # Ensure directory exists to avoid errors if path is missing
     if not os.path.exists(mermaid_dir):
