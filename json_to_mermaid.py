@@ -11,8 +11,16 @@ def sanitize_label(label):
     """Escape quotes and special characters for Mermaid labels"""
     if not label:
         return ""
+    # Replace double quotes with single quotes to avoid breaking Mermaid syntax
     label = label.replace('"', "'")
-    return f'"{label}"'
+    # Replace newlines with spaces to prevent syntax errors
+    label = label.replace('\n', ' ').replace('\r', '')
+    # Escape single quotes by doubling them (Mermaid uses "" inside "")
+    # Actually, the safest is to use HTML entity for apostrophe
+    label = label.replace("'", "&#39;")
+    # Escape other problematic characters
+    label = label.replace("<", "&lt;").replace(">", "&gt;")
+    return label.strip()
 
 def parse_evaluate_node(node, sanitized_id, node_map, mermaid_lines):
     """
@@ -126,7 +134,7 @@ def main():
             left_shape = "(("
             right_shape = "))"
             
-        mermaid_lines.append(f'    {sanitized_id}{left_shape}{sanitize_label(raw_label)}{right_shape}')
+        mermaid_lines.append(f'    {sanitized_id}{left_shape}"{sanitize_label(raw_label)}"{right_shape}')
         node_map[node_id] = sanitized_id
 
     # Process Edges
