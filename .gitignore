@@ -146,3 +146,4 @@ artifacts/
 **/neo4j_data
 
 
+**/.venv/

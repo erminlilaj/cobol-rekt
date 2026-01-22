@@ -14,6 +14,59 @@ def sanitize_label(label):
     label = label.replace('"', "'")
     return f'"{label}"'
 
+def parse_evaluate_node(node, sanitized_id, node_map, mermaid_lines):
+    """
+    Parses an EVALUATE node and generates a subgraph with split WHEN conditions.
+    Returns the ID of the last node created (to link to NEXT logic).
+    """
+    original_text = node.get("originalText", "")
+    
+    # regex to find WHEN clauses.
+    # Pattern looks for 'WHEN ...' up to the next 'WHEN' or 'END-EVALUATE' or end of string
+    # We treat 'ALSO' lines as part of the same condition for now to keep it simple, 
+    # or we could split them too. For visual clarity, let's keep the full condition text.
+    
+    # 1. Extract the main subject (e.g. EVALUATE TRUE ALSO TRUE)
+    subject_match = re.match(r"(EVALUATE\s+.*?)(?=\s+WHEN)", original_text, re.DOTALL | re.IGNORECASE)
+    subject_text = subject_match.group(1).strip() if subject_match else "EVALUATE"
+    
+    # Create the Diamond Decision Node for the Evaluate Entry
+    mermaid_lines.append(f'    subgraph SG_{sanitized_id} ["{sanitize_label(subject_text)}"]')
+    mermaid_lines.append(f'    direction TB')
+    
+    entry_id = f"{sanitized_id}_ENTRY"
+    mermaid_lines.append(f'    {entry_id}{{"{sanitize_label(subject_text)}"}}')
+    node_map[node.get("id")] = entry_id # Map external edges to this entry point
+
+    # 2. Extract WHEN clauses
+    # This regex matches "WHEN <condition> <action>"
+    # It's tricky because actions can be multi-line.
+    # We'll split by "WHEN" keyword.
+    
+    parts = re.split(r"\s+WHEN\s+", original_text)
+    
+    # parts[0] is the EVALUATE line (already handled)
+    # parts[1:] are the WHEN clauses
+    
+    previous_decision_id = entry_id
+    
+    for i, part in enumerate(parts[1:]):
+        # part contains "condition ... action ..."
+        # simplistic heuristic: split by first newline or known keywords to separate condition from action?
+        # A robust way is hard without a full parser. 
+        # Let's just display the whole text in a box for now, OR try to split "ALSO"
+        
+        # Clean up termination
+        part = part.replace("END-EVALUATE.", "").replace("END-EVALUATE", "").strip()
+        
+        # Create a unique ID for this branch
+        branch_id = f"{sanitized_id}_WHEN_{i}"
+        
+        # Draw arrow from entry (or previous) to this branch
+        mermaid_lines.append(f'    {entry_id} -- Option {i+1} --> {branch_id}["WHEN {sanitize_label(part)}"]')
+
+    mermaid_lines.append(f'    end') # End subgraph
+
 def main():
     parser = argparse.ArgumentParser(description="Convert CFG JSON to Mermaid Flowchart")
     parser.add_argument("input_json", help="Path to CFG JSON file")
@@ -33,7 +86,6 @@ def main():
     mermaid_lines = ["flowchart TD"]
 
     # Process Nodes
-    # Use 'originalText' if available and short enough, else 'label' or 'name'
     node_map = {}
     
     for node in nodes:
@@ -42,9 +94,17 @@ def main():
             continue
             
         sanitized_id = sanitize_id(node_id)
+        original_text = node.get("originalText", "")
+        
+        # SPECIAL HANDLING FOR EVALUATE NODES
+        if original_text.strip().upper().startswith("EVALUATE"):
+            parse_evaluate_node(node, sanitized_id, node_map, mermaid_lines)
+            continue
+            
+        # Normal Node Processing
         
         # Determine label
-        raw_label = node.get("originalText", "")
+        raw_label = original_text
         if not raw_label or len(raw_label) > 50:
              raw_label = node.get("label", node.get("name", "Node"))
         
@@ -77,7 +137,6 @@ def main():
         
         if from_id in node_map and to_id in node_map:
             arrow = "-->"
-            label = ""
             
             if edge_type == "TRUE_CONDITION":
                 arrow = "-- Yes -->"
