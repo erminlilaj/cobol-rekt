@@ -140,7 +140,8 @@ def main():
         f'"{sys.executable}" generate_viewer.py '
         f'--mermaid-dir "{report_subdir / "mermaid"}" '
         f'--output "{report_subdir / "visualize_graphs.html"}" '
-        f'--title "{target_file}"'
+        f'--title "{target_file}" '
+        f'--source "{src_dir}/{target_file}"'
     )
     run_command(cmd_viewer)
 

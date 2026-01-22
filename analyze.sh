@@ -97,7 +97,8 @@ echo "[6/7] Generating HTML Visualizer..."
 python3 generate_viewer.py \
     --mermaid-dir "$REPORT_SUBDIR/mermaid" \
     --output "$REPORT_SUBDIR/visualize_graphs.html" \
-    --title "$TARGET"
+    --title "$TARGET" \
+    --source "$SRC_DIR/$TARGET"
 
 # 7. LLM Analysis (Optional)
 if [ "$USE_LLM" == "true" ]; then
@@ -131,7 +132,8 @@ echo "[6/7] Generating HTML Visualizer..."
 python3 generate_viewer.py \
     --mermaid-dir "$REPORT_SUBDIR/mermaid" \
     --output "$REPORT_SUBDIR/visualize_graphs.html" \
-    --title "$TARGET"
+    --title "$TARGET" \
+    --source "$SRC_DIR/$TARGET"
 
 echo "==================================================="
 echo "Analysis complete. View results at:"
