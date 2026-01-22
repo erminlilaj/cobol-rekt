@@ -107,7 +107,7 @@ def main():
     os.makedirs(mermaid_out.parent, exist_ok=True)
 
     if cfg_json.exists():
-        run_command(f'python json_to_mermaid.py "{cfg_json}" "{mermaid_out}"')
+        run_command(f'"{sys.executable}" json_to_mermaid.py "{cfg_json}" "{mermaid_out}"')
     else:
         Colors.print_msg(f"Warning: CFG JSON not found at {cfg_json}", Colors.YELLOW)
 
@@ -120,7 +120,7 @@ def main():
         env = os.environ.copy()
         # Add python module path to PYTHONPATH
         env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}{os.pathsep}{current_dir / python_dir}"
-        run_command(f'python -m src.analysis.variable_static_values "{ast_json}" --output="{values_out}"', env=env)
+        run_command(f'"{sys.executable}" -m src.analysis.variable_static_values "{ast_json}" --output="{values_out}"', env=env)
     else:
         Colors.print_msg(f"Warning: AST JSON not found at {ast_json}", Colors.YELLOW)
 
@@ -130,14 +130,14 @@ def main():
     dep_mermaid = report_subdir / "mermaid" / "data_dependencies.md"
     
     if unified_json.exists():
-        run_command(f'python convert_dependencies.py "{unified_json}" "{dep_mermaid}"')
+        run_command(f'"{sys.executable}" convert_dependencies.py "{unified_json}" "{dep_mermaid}"')
     else:
         Colors.print_msg(f"Warning: Unified JSON not found at {unified_json}", Colors.YELLOW)
 
     # 7. HTML Viewer
     Colors.print_msg("[7/7] Generating HTML Visualizer...", Colors.GREEN)
     cmd_viewer = (
-        f'python generate_viewer.py '
+        f'"{sys.executable}" generate_viewer.py '
         f'--mermaid-dir "{report_subdir / "mermaid"}" '
         f'--output "{report_subdir / "visualize_graphs.html"}" '
         f'--title "{target_file}"'
@@ -170,10 +170,10 @@ def main():
         llm_mermaid = report_subdir / "mermaid" / "llm_summary_graph.md"
         
         if llm_json.exists():
-            run_command(f'python llm_json_to_mermaid.py "{llm_json}" "{llm_mermaid}"')
+            run_command(f'"{sys.executable}" llm_json_to_mermaid.py "{llm_json}" "{llm_mermaid}"')
 
     Colors.print_msg("[Optional] Converting AST and Data Structures to Graphs...", Colors.GREEN)
-    run_command(f'python convert_json_graphs.py "{report_subdir}"')
+    run_command(f'"{sys.executable}" convert_json_graphs.py "{report_subdir}"')
 
     # Regenerate Viewer to include new graphs
     Colors.print_msg("[Refresing] Generating HTML Visualizer...", Colors.GREEN)

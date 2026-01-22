@@ -42,6 +42,7 @@ def main():
     # Store used nodes to only print relevant ones
     used_node_ids = set()
     graph_edges = []
+    edges = data.get("edges", [])
 
     for edge in edges:
         edge_type = edge.get("edgeType")
