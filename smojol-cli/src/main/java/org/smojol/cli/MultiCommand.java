@@ -72,6 +72,10 @@ public class MultiCommand implements Callable<Integer> {
         @Option(names = { "-p", "--permissiveSearch" }, description = "Match filename using looser criteria")
         private boolean isPermissiveSearch;
 
+        @Option(names = { "-l",
+                        "--lenient" }, defaultValue = "false", description = "Continue analysis despite parsing errors (use DIAGNOSTIC_MODE)")
+        private boolean isLenient;
+
         @Override
         public Integer call() throws IOException {
                 LoggingConfig.setupLogging();
@@ -98,8 +102,9 @@ public class MultiCommand implements Callable<Integer> {
                                 new UUIDProvider(), new OccursIgnoringFormat1DataStructureBuilder(), programSearch,
                                 new LocalFilesystemOperations());
                 copyBookPaths.forEach(cpp -> LOGGER.info(cpp.getAbsolutePath()));
+                TaskRunnerMode mode = isLenient ? TaskRunnerMode.DIAGNOSTIC_MODE : TaskRunnerMode.PRODUCTION_MODE;
                 Map<String, List<AnalysisTaskResult>> runResults = taskRunner.runForPrograms(toGraphTasks(commands),
-                                programNames, TaskRunnerMode.PRODUCTION_MODE);
+                                programNames, mode);
                 return processResults(runResults);
         }
 

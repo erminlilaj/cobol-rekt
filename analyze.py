@@ -98,7 +98,7 @@ def main():
 
     # Argument Parsing
     if len(sys.argv) < 2:
-        print(f"Usage: python analyze.py <filename.cbl> [--llm]")
+        print(f"Usage: python analyze.py <filename.cbl> [--llm] [--graphviz] [--lenient]")
         print(f"       (Ensure the file exists in {src_dir})")
         sys.exit(1)
 
@@ -113,6 +113,8 @@ def main():
 
     use_llm = "--llm" in sys.argv
     use_graphviz = "--graphviz" in sys.argv
+    use_lenient = "--lenient" in sys.argv
+    lenient_flag = "--lenient" if use_lenient else ""
 
 
     # Ensure Report Directory Exists
@@ -123,6 +125,8 @@ def main():
     Colors.print_msg(f"Source Dir: {src_dir}", Colors.GREEN)
     if use_llm:
         Colors.print_msg("LLM Analysis: ENABLED (Model: granite-code:20b)", Colors.YELLOW)
+    if use_lenient:
+        Colors.print_msg("Lenient Mode: ENABLED (will continue despite parsing errors)", Colors.YELLOW)
     Colors.print_msg("---------------------------------------------------", Colors.BLUE)
 
     # 0. Ensure Copybooks Exist
@@ -138,7 +142,8 @@ def main():
         f'--dialectJarPath "{dialect_jar}" '
         f'--dialect COBOL '
         f'--reportDir "{report_dir}" '
-        f'--generation=PROGRAM'
+        f'--generation=PROGRAM '
+        f'{lenient_flag}'
     )
     run_command(cmd_core)
 
@@ -152,7 +157,8 @@ def main():
         f'--dialectJarPath "{dialect_jar}" '
         f'--dialect COBOL '
         f'--reportDir "{report_dir}" '
-        f'--generation=PROGRAM'
+        f'--generation=PROGRAM '
+        f'{lenient_flag}'
     )
     # Allow this to fail without stopping
     run_command(cmd_adv, check=False)
@@ -167,7 +173,8 @@ def main():
         f'--dialectJarPath "{dialect_jar}" '
         f'--dialect COBOL '
         f'--reportDir "{report_dir}" '
-        f'--generation=SECTION'
+        f'--generation=SECTION '
+        f'{lenient_flag}'
     )
     run_command(cmd_mermaid)
 
@@ -181,7 +188,8 @@ def main():
             f'--dialectJarPath "{dialect_jar}" '
             f'--dialect COBOL '
             f'--reportDir "{report_dir}" '
-            f'--generation=PROGRAM'
+            f'--generation=PROGRAM '
+            f'{lenient_flag}'
         )
         run_command(cmd_graphviz)
 
@@ -194,8 +202,9 @@ def main():
             os.makedirs(llm_input_dir, exist_ok=True)
             for dot_file in report_subdir_gv.glob("*.dot"):
                 out_txt = llm_input_dir / f"{dot_file.stem}.txt"
-                Colors.print_msg(f"  Converting {dot_file.name} -> {out_txt.name}", Colors.CYAN)
+                Colors.print_msg(f"  Converting {dot_file.name} -> {out_txt.name}", Colors.GREEN)
                 nodes, edges = graph_to_text.parse_dot(str(dot_file))
+
                 if nodes:
                     graph_to_text.generate_llm_text(nodes, edges, str(out_txt))
 
@@ -271,7 +280,8 @@ def main():
             f'--dialectJarPath "{dialect_jar}" '
             f'--dialect COBOL '
             f'--reportDir "{report_dir}" '
-            f'--generation=PROGRAM'
+            f'--generation=PROGRAM '
+            f'{lenient_flag}'
         )
         run_command(cmd_llm, env=env)
 
