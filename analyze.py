@@ -4,6 +4,8 @@ import sys
 import shutil
 import re
 from pathlib import Path
+import graph_to_text
+
 
 # ANSI colors for terminal output
 class Colors:
@@ -182,6 +184,22 @@ def main():
             f'--generation=PROGRAM'
         )
         run_command(cmd_graphviz)
+
+        # 3.5.1 Generate LLM Input
+        report_subdir_gv = Path(report_dir) / f"{target_file}.report" / "graphviz"
+        llm_input_dir = Path(report_dir) / f"{target_file}.report" / "llm_input"
+        
+        if report_subdir_gv.exists():
+            Colors.print_msg("[3.6/7] Generating LLM Input Text...", Colors.GREEN)
+            os.makedirs(llm_input_dir, exist_ok=True)
+            for dot_file in report_subdir_gv.glob("*.dot"):
+                out_txt = llm_input_dir / f"{dot_file.stem}.txt"
+                Colors.print_msg(f"  Converting {dot_file.name} -> {out_txt.name}", Colors.CYAN)
+                nodes, edges = graph_to_text.parse_dot(str(dot_file))
+                if nodes:
+                    graph_to_text.generate_llm_text(nodes, edges, str(out_txt))
+
+
 
 
 
