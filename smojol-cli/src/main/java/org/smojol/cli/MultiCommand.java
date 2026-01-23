@@ -102,7 +102,7 @@ public class MultiCommand implements Callable<Integer> {
                                 new UUIDProvider(), new OccursIgnoringFormat1DataStructureBuilder(), programSearch,
                                 new LocalFilesystemOperations());
                 copyBookPaths.forEach(cpp -> LOGGER.info(cpp.getAbsolutePath()));
-                TaskRunnerMode mode = isLenient ? TaskRunnerMode.DIAGNOSTIC_MODE : TaskRunnerMode.PRODUCTION_MODE;
+                TaskRunnerMode mode = isLenient ? TaskRunnerMode.LENIENT_MODE : TaskRunnerMode.PRODUCTION_MODE;
                 Map<String, List<AnalysisTaskResult>> runResults = taskRunner.runForPrograms(toGraphTasks(commands),
                                 programNames, mode);
                 return processResults(runResults);
