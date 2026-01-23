@@ -2,6 +2,7 @@ import os
 import glob
 import re
 import json
+import html
 
 MERMAID_DIR = "out/report/test-exp.cbl.report/mermaid"
 OUTPUT_HTML = "out/report/test-exp.cbl.report/visualize_graphs.html"
@@ -50,22 +51,118 @@ def extract_nodes_from_mermaid(mermaid_dir):
             print(f"Warning: Could not parse {filepath}: {e}")
     return node_labels
 
-def map_nodes_to_lines(source_file, mermaid_dir):
+def extract_nodes_from_svg(graphviz_dir):
+    """
+    Parses all Graphviz SVG files in a directory and extracts node ID -> label mapping.
+    Matches the format of extract_nodes_from_mermaid.
+    """
+    node_labels = {}
+    # Regex to find node groups: <g id="nodeX" class="node">
+    # Then find <title>...</title> and <text>...</text> inside
+    
+    svg_files = glob.glob(os.path.join(graphviz_dir, "*.svg"))
+    
+    for filepath in svg_files:
+        try:
+            with open(filepath, 'r') as f:
+                content = f.read()
+            
+            # Simple parsing: Split by <g id="node
+            # This is a heuristic. A robust XML parser is better but avoiding deps for now.
+            # Using regex for <g class="node"> blocks
+            
+            # Pattern to capture the content of a node group
+            # <g id="node1" class="node"><title>...</title>...<text>...</text>...</g>
+            # Note: dot output puts title first.
+            
+            node_blocks = re.findall(r'<g [^>]*class="node"[^>]*>(.*?)</g>', content, re.DOTALL)
+            
+            for block in node_blocks:
+                # Extract Title (UUID)
+                title_match = re.search(r'<title>(.*?)</title>', block)
+                if not title_match:
+                    continue
+                
+                raw_id = title_match.group(1).strip()
+                
+                # Check if it looks like a UUID (approx)
+                # Graphviz might add prefixes or suffixes? 
+                # In the viewed file: a5bb79f2-eb48-4f88-b065-2e8e50f21928 (raw uuid)
+                
+                # Sanitize ID to match expected format (N + underscores)
+                sanitized_id = "N" + raw_id.replace('-', '_') # Same as mermaid extraction
+                
+                # Extract Text (Labels)
+                # There can be multiple <text> tags for multi-line labels
+                text_matches = re.findall(r'<text [^>]*>(.*?)</text>', block)
+                
+                if not text_matches:
+                    continue
+                    
+                full_label = "\n".join(text_matches)
+                first_line = text_matches[0]
+                
+                # HTML decode first line
+                first_line = html.unescape(text_matches[0])
+                
+                valid_first_line = first_line
+                
+                # Heuristic: If first line is "Processing", try to find first non-dash line
+                if "Processing" in first_line or set(first_line.strip()) == {'-'}:
+                    for line in text_matches:
+                        line_clean = html.unescape(line).strip()
+                        if "Processing" not in line_clean and set(line_clean) != {'-'} and line_clean:
+                            valid_first_line = line_clean
+                            break
+
+
+
+                
+                node_labels[sanitized_id] = {
+                    'raw_label': full_label,
+                    'first_line': normalize_text(valid_first_line),
+                    'line_count': len(text_matches)
+                }
+                
+        except Exception as e:
+            print(f"Warning: Could not parse {filepath}: {e}")
+            
+    return node_labels
+
+
+def map_nodes_to_lines(source_file, mermaid_dir, use_graphviz=False):
     """Creates a mapping from Node ID to Source Line Ranges using mermaid file labels."""
     mapping = {}
-    if not os.path.exists(source_file) or not os.path.exists(mermaid_dir):
+    
+    # In Graphviz mode, mermaid_dir is actually the parent folder (somewhat confusingly named here)
+    # or we handle path adjustments inside.
+    # The caller passes 'mermaid_dir' as the location of .md files. 
+    # If use_graphviz is True, we look in sibling 'graphviz' dir.
+    
+    if use_graphviz:
+         output_dir = os.path.join(os.path.dirname(mermaid_dir), "graphviz")
+    else:
+         output_dir = mermaid_dir
+
+    if not os.path.exists(source_file) or not os.path.exists(output_dir):
         return mapping
 
     try:
-        with open(source_file, 'r') as f:
+        with open(source_file, 'r', encoding='utf-8', errors='replace') as f:
             source_lines = f.readlines()
         
         # Precompute normalized source lines
         normalized_source = [normalize_text(line) for line in source_lines]
         
-        node_labels = extract_nodes_from_mermaid(mermaid_dir)
+        if use_graphviz:
+            node_labels = extract_nodes_from_svg(output_dir)
+        else:
+            node_labels = extract_nodes_from_mermaid(output_dir)
         
         for node_id, label_info in node_labels.items():
+
+
+
             first_line = label_info['first_line']
             line_count = label_info['line_count']
             
@@ -140,7 +237,8 @@ HTML_TEMPLATE_START = """
         .resizer:hover { background: #999; }
         .resizer.hidden { display: none; }
 
-        .zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 5px; background: rgba(255, 255, 255, 0.9); border: 1px solid #ddd; padding: 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); z-index: 5; }
+        .zoom-controls { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 5px; background: rgba(255, 255, 255, 0.9); border: 1px solid #ddd; padding: 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); z-index: 5; display: none; }
+        .zoom-controls.visible { display: flex; }
         .zoom-btn { background: white; border: 1px solid #ccc; border-radius: 4px; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; color: #555; }
         .zoom-btn:hover { background: #f0f0f0; }
 
@@ -177,11 +275,24 @@ HTML_TEMPLATE_END = """
       // Inject Node Mapping Data
       // NODE_TO_LINES_PLACEHOLDER
       
-      mermaid.initialize({ startOnLoad: false });
+      const ENABLE_PAN_ZOOM = // ENABLE_PAN_ZOOM_PLACEHOLDER;
+      const USE_GRAPHVIZ = // USE_GRAPHVIZ_PLACEHOLDER;
       
-      await mermaid.run({
-        querySelector: '.mermaid'
-      });
+      if (!USE_GRAPHVIZ) {
+          mermaid.initialize({ 
+            startOnLoad: false,
+            maxTextSize: 5000000, // Increase limit to 5MB
+            securityLevel: 'loose', // Allow HTML in labels (required for <br/>, <i>, etc.)
+            htmlLabels: true, // Enable HTML label parsing
+            flowchart: {
+              htmlLabels: true
+            }
+          });
+          
+          await mermaid.run({
+            querySelector: '.mermaid'
+          });
+      }
 
       // Initialize svg-pan-zoom and Event Listeners
       document.querySelectorAll('.mermaid-container').forEach((container) => {
@@ -205,20 +316,41 @@ HTML_TEMPLATE_END = """
                 document.querySelectorAll('.highlight-node').forEach(el => el.classList.remove('highlight-node'));
 
                 // Mermaid modifies IDs to 'flowchart-XXXXX-N' format. Extract the core UUID.
-                const rawNodeId = node.id;
+                let rawNodeId = node.id;
+                
+                // Graphviz Support: Node ID is usually 'nodeX', UUID is in <title> child
+                let graphvizUuid = null;
+                const titleNode = node.querySelector('title');
+                if (titleNode) {
+                    graphvizUuid = titleNode.textContent.trim();
+                    // Sanitize to match NODE_TO_LINES format (N + underscores)
+                    // Configured in extract_nodes_from_svg to be N + raw_id.replace('-', '_')
+                    // But wait, extract_nodes_from_svg used: "N" + raw_id.replace('-', '_')
+                    // So we must replicate that here to match the key.
+                    if (graphvizUuid) {
+                         const sanitizedGraphvizId = "N" + graphvizUuid.replace(/-/g, '_');
+                         // If this sanitized ID exists in our map, use it.
+                         if (NODE_TO_LINES && NODE_TO_LINES[sanitizedGraphvizId]) {
+                             rawNodeId = sanitizedGraphvizId;
+                         }
+                    }
+                }
+
                 // Add highlight to clicked node
                 node.classList.add('highlight-node');
                 
                 // Try to find a matching key in NODE_TO_LINES by checking if the rawNodeId contains it
                 if (typeof NODE_TO_LINES !== 'undefined') {
                     for (const [mappedId, range] of Object.entries(NODE_TO_LINES)) {
-                        if (rawNodeId.includes(mappedId)) {
+                        // Check if DOM ID contains mapped ID (Mermaid) OR if it exactly matches (Graphviz sanitized)
+                        if (rawNodeId.includes(mappedId) || rawNodeId === mappedId) {
                             const [startLine, endLine] = range;
                             
                             let firstElement = null;
                             for (let i = startLine; i <= endLine; i++) {
                                 const lineEl = document.getElementById(`line-${i}`);
                                 if (lineEl) {
+
                                     lineEl.classList.add('highlight-code');
                                     if (!firstElement) firstElement = lineEl;
                                 }
@@ -244,41 +376,43 @@ HTML_TEMPLATE_END = """
         
         // --- End Interaction Logic ---
 
-        // Create custom controls
-        const controls = document.createElement('div');
-        controls.className = 'zoom-controls';
-        controls.innerHTML = `
-            <button class="zoom-btn zoom-in" title="Zoom In">+</button>
-            <button class="zoom-btn zoom-out" title="Zoom Out">-</button>
-            <button class="zoom-btn zoom-reset" title="Reset">R</button>
-        `;
-        container.appendChild(controls);
-
-        try {
-            const panZoomInstance = svgPanZoom(svgElement, {
-            zoomEnabled: true,
-            controlIconsEnabled: false,
-            fit: true,
-            center: true,
-            minZoom: 0.1,
-            maxZoom: 10
-            });
-
-            // Bind controls
-            controls.querySelector('.zoom-in').addEventListener('click', () => panZoomInstance.zoomIn());
-            controls.querySelector('.zoom-out').addEventListener('click', () => panZoomInstance.zoomOut());
-            controls.querySelector('.zoom-reset').addEventListener('click', () => panZoomInstance.reset());
-            
-            // Handle resize
-            const observer = new ResizeObserver(() => {
-                panZoomInstance.resize();
-                panZoomInstance.fit();
-                panZoomInstance.center();
-            });
-            observer.observe(container);
-
-        } catch (e) {
-            console.error("SVG Pan Zoom failed initialization", e);
+        if (ENABLE_PAN_ZOOM) {
+            // Create custom controls
+            const controls = document.createElement('div');
+            controls.className = 'zoom-controls visible';
+            controls.innerHTML = `
+                <button class="zoom-btn zoom-in" title="Zoom In">+</button>
+                <button class="zoom-btn zoom-out" title="Zoom Out">-</button>
+                <button class="zoom-btn zoom-reset" title="Reset">R</button>
+            `;
+            container.appendChild(controls);
+    
+            try {
+                const panZoomInstance = svgPanZoom(svgElement, {
+                zoomEnabled: true,
+                controlIconsEnabled: false,
+                fit: true,
+                center: true,
+                minZoom: 0.1,
+                maxZoom: 10
+                });
+    
+                // Bind controls
+                controls.querySelector('.zoom-in').addEventListener('click', () => panZoomInstance.zoomIn());
+                controls.querySelector('.zoom-out').addEventListener('click', () => panZoomInstance.zoomOut());
+                controls.querySelector('.zoom-reset').addEventListener('click', () => panZoomInstance.reset());
+                
+                // Handle resize
+                const observer = new ResizeObserver(() => {
+                    panZoomInstance.resize();
+                    panZoomInstance.fit();
+                    panZoomInstance.center();
+                });
+                observer.observe(container);
+    
+            } catch (e) {
+                console.error("SVG Pan Zoom failed initialization", e);
+            }
         }
       });
       
@@ -304,8 +438,19 @@ HTML_TEMPLATE_END = """
                       // Find SVG node whose ID contains the mapped nodeId
                       const allNodes = document.querySelectorAll('.node');
                       allNodes.forEach(svgNode => {
+                          // Mermaid check: ID contains mapped ID
                           if (svgNode.id.includes(nodeId)) {
                               svgNode.classList.add('highlight-node');
+                          } else {
+                              // Graphviz check: Title content contains UUID
+                              const titleNode = svgNode.querySelector('title');
+                              if (titleNode) {
+                                  const rawUuid = titleNode.textContent.trim();
+                                  const sanitizedGraphvizId = "N" + rawUuid.replace(/-/g, '_');
+                                  if (sanitizedGraphvizId === nodeId) {
+                                       svgNode.classList.add('highlight-node');
+                                  }
+                              }
                           }
                       });
                   }
@@ -372,9 +517,28 @@ HTML_TEMPLATE_END = """
 def sanitize_mermaid_code(code):
     """
     Fixes Mermaid syntax errors:
-    1. Sanitizes UUIDs: Prefixes with 'N' and replaces hyphens with underscores.
-    2. Sanitizes Quotes: Replaces HTML entity &quot; with single quotes to prevent syntax breakage.
+    1. Removes invisible zero-width Unicode characters.
+    2. Sanitizes UUIDs: Prefixes with 'N' and replaces hyphens with underscores.
+    3. Sanitizes Quotes: Replaces HTML entity &quot; with single quotes to prevent syntax breakage.
     """
+    # Remove zero-width and other invisible Unicode characters that break Mermaid parsing
+    # Common culprits: Zero Width Space (\u200B), Zero Width Non-Joiner (\u200C),
+    # Zero Width Joiner (\u200D), Byte Order Mark (\uFEFF), others
+    invisible_chars = [
+        '\u200B',  # Zero Width Space
+        '\u200C',  # Zero Width Non-Joiner
+        '\u200D',  # Zero Width Joiner
+        '\uFEFF',  # Byte Order Mark
+        '\u00A0',  # Non-breaking space (replace with regular space)
+        '\u2028',  # Line Separator
+        '\u2029',  # Paragraph Separator
+    ]
+    for char in invisible_chars:
+        if char == '\u00A0':
+            code = code.replace(char, ' ')  # Replace NBSP with regular space
+        else:
+            code = code.replace(char, '')  # Remove others
+    
     # Regex to identify UUIDs
     uuid_pattern = re.compile(r'\b([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})\b', re.IGNORECASE)
     
@@ -388,9 +552,44 @@ def sanitize_mermaid_code(code):
     # Apply Quote fix (Replace HTML encoded quotes with single quotes)
     code = code.replace("&quot;", "'")
     
+    # Fix potential unescaped double quotes inside labels
+    # This matches: Any char not ] or ", followed by ", followed by any char not " or [
+    # It's a heuristic. A safer way is to rely on the fact that labels are inside ["..."]
+    
+    # Aggressive replacement: Replace all " with ' inside the label content
+    # We iterate line by line to be safer
+    lines = code.split('\n')
+    new_lines = []
+    for line in lines:
+        # Check if line has a label definition like key["label content"]
+        if '["' in line and '"]' in line:
+            parts = line.split('["', 1)
+            pre = parts[0]
+            remainder = parts[1]
+            if '"]' in remainder:
+                label_parts = remainder.rsplit('"]', 1)
+                label_content = label_parts[0]
+                post = label_parts[1]
+                
+                # Sanitize content
+                label_content = label_content.replace('"', "'")
+                # Also escape other chars if needed
+                
+                new_line = f'{pre}["{label_content}"]{post}'
+                new_lines.append(new_line)
+            else:
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+            
+    code = "\n".join(new_lines)
+
     return code
 
-def generate_html(mermaid_dir, output_html, title, source_file=None):
+    return code
+
+def generate_html(mermaid_dir, output_html, title, source_file=None, enable_pan_zoom=True, use_graphviz=False):
+
     html_content = HTML_TEMPLATE_START.replace("test-exp.cbl", title)
 
     # Inject Source Code if provided
@@ -400,10 +599,13 @@ def generate_html(mermaid_dir, output_html, title, source_file=None):
     if source_file and os.path.exists(source_file):
         try:
             # Generate Mapping using mermaid files (not CFG JSON, as IDs differ per run)
-            node_mapping = map_nodes_to_lines(source_file, mermaid_dir)
+            node_mapping = map_nodes_to_lines(source_file, mermaid_dir, use_graphviz=use_graphviz)
             print(f"Generated mappings for {len(node_mapping)} nodes.")
 
-            with open(source_file, "r") as f:
+            print(f"Generated mappings for {len(node_mapping)} nodes.")
+
+
+            with open(source_file, 'r', encoding='utf-8', errors='replace') as f:
                 lines = f.readlines()
                 formatted_lines = []
                 for idx, line in enumerate(lines, 1):
@@ -447,7 +649,21 @@ def generate_html(mermaid_dir, output_html, title, source_file=None):
     # Sort files for consistent order
     files = sorted(glob.glob(os.path.join(mermaid_dir, "*.md")))
     
+    files = sorted(glob.glob(os.path.join(mermaid_dir, "*.md")))
+    
+    if use_graphviz:
+        # Switch to Graphviz mode
+        # Assume graphviz sibling directory
+        graphviz_dir = os.path.join(os.path.dirname(mermaid_dir), "graphviz")
+        if os.path.exists(graphviz_dir):
+             files = sorted(glob.glob(os.path.join(graphviz_dir, "*.svg")))
+             print(f"Graphviz Mode: Found {len(files)} SVG files in {graphviz_dir}")
+        else:
+             print(f"Graphviz Mode: Directory {graphviz_dir} not found. Falling back to Mermaid.")
+             use_graphviz = False # Fallback
+
     if not files:
+
         print(f"No md files found in {mermaid_dir}")
         return
 
@@ -455,10 +671,37 @@ def generate_html(mermaid_dir, output_html, title, source_file=None):
         filename = os.path.basename(filepath)
         section_name = os.path.splitext(filename)[0]
         
+        if use_graphviz:
+             # Graphviz SVG embedding
+             with open(filepath, "r") as f:
+                 svg_content = f.read()
+             
+             # Attempt to clean up SVG (remove xml decl, width/height to allow scaling)
+             # Removing <?xml ...> and <!DOCTYPE ...>
+             svg_content = re.sub(r'<\?xml.*?\?>', '', svg_content)
+             svg_content = re.sub(r'<!DOCTYPE.*?>', '', svg_content)
+
+             # Enforce class for styling
+             if '<svg' in svg_content:
+                 svg_content = svg_content.replace('<svg', '<svg class="graphviz-svg"', 1)
+
+             html_content += f"""
+            <div class="graph-card">
+                <h2>{section_name}</h2>
+                <div class="mermaid-container">
+                    <div class="mermaid">
+                        {svg_content}
+                    </div>
+                </div>
+            </div>
+            """
+             continue
+
         with open(filepath, "r") as f:
             mermaid_code = f.read()
 
         # Remove YAML front matter
+
         if mermaid_code.startswith("---"):
             try:
                 parts = mermaid_code.split("---", 2)
@@ -488,6 +731,14 @@ def generate_html(mermaid_dir, output_html, title, source_file=None):
     mapping_json = f"const NODE_TO_LINES = {json.dumps(node_mapping)};"
     html_template_end_injected = HTML_TEMPLATE_END.replace("// NODE_TO_LINES_PLACEHOLDER", mapping_json)
     
+    # Inject Pan Zoom Flag
+    pan_zoom_bool = "true" if enable_pan_zoom else "false"
+    html_template_end_injected = html_template_end_injected.replace("// ENABLE_PAN_ZOOM_PLACEHOLDER;", pan_zoom_bool)
+    
+    # Inject Graphviz Flag
+    use_graphviz_bool = "true" if use_graphviz else "false"
+    html_template_end_injected = html_template_end_injected.replace("// USE_GRAPHVIZ_PLACEHOLDER;", use_graphviz_bool)
+    
     html_content += html_template_end_injected
     
     # Ensure output directory exists
@@ -508,8 +759,16 @@ if __name__ == "__main__":
     parser.add_argument("--title", default="test-exp.cbl", help="Title/filename for the report")
     parser.add_argument("--source", help="Path to the COBOL source file for the split-pane view", required=False)
     parser.add_argument("--code", action="store_true", help="Enable split-pane code view with interactive highlighting")
+    parser.add_argument("--graphviz", action="store_true", help="Use Graphviz SVG outputs instead of Mermaid")
     
     args = parser.parse_args()
+
     # Only pass source file if --code flag is set
     source_file = args.source if args.code else None
-    generate_html(args.mermaid_dir, args.output, args.title, source_file)
+    
+    # Requirement: "remove completely the pan if its not --code"
+    # Logic: Enable pan only if --code is True.
+    # Note: Usually pan is good for large graphs, but following specific instruction.
+    enable_pan = args.code
+    
+    generate_html(args.mermaid_dir, args.output, args.title, source_file, enable_pan_zoom=enable_pan, use_graphviz=args.graphviz)

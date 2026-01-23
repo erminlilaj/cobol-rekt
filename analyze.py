@@ -100,7 +100,7 @@ def main():
         print(f"       (Ensure the file exists in {src_dir})")
         sys.exit(1)
 
-    target_path = Path(sys.argv[1]).resolve()
+    target_path = Path(sys.argv[1]).resolve().absolute()
     if not target_path.exists():
         Colors.print_msg(f"Error: File not found at {target_path}", Colors.RED)
         sys.exit(1)
@@ -108,7 +108,10 @@ def main():
     target_file = target_path.name
     src_dir = target_path.parent
     copybooks_dir = src_dir # Assume copybooks are in the same dir for now
+
     use_llm = "--llm" in sys.argv
+    use_graphviz = "--graphviz" in sys.argv
+
 
     # Ensure Report Directory Exists
     os.makedirs(report_dir, exist_ok=True)
@@ -166,6 +169,22 @@ def main():
     )
     run_command(cmd_mermaid)
 
+    if use_graphviz:
+        Colors.print_msg("[3.5/7] Generating Graphviz Flowchart (DOT/SVG)...", Colors.GREEN)
+        cmd_graphviz = (
+            f'java -jar "{smojol_cli}" run "{target_file}" '
+            f'--commands="EXPORT_GRAPHVIZ" '
+            f'--srcDir "{src_dir}" '
+            f'--copyBooksDir "{copybooks_dir}" '
+            f'--dialectJarPath "{dialect_jar}" '
+            f'--dialect COBOL '
+            f'--reportDir "{report_dir}" '
+            f'--generation=PROGRAM'
+        )
+        run_command(cmd_graphviz)
+
+
+
     report_subdir = Path(report_dir) / f"{target_file}.report"
     
     # 4. Custom CFG to Mermaid
@@ -211,7 +230,11 @@ def main():
         f'--title "{target_file}" '
         f'--source "{target_path}"'
     )
+    if use_graphviz:
+        cmd_viewer += ' --graphviz'
+
     run_command(cmd_viewer)
+
 
     # 8. LLM Analysis
     if use_llm:

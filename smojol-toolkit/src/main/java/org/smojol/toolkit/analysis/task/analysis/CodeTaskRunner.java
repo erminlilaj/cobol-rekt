@@ -45,6 +45,8 @@ public class CodeTaskRunner {
     private static final String TRANSPILER_MODEL_DIR = "transpiler_model";
     private static final String LLM_SUMMARY_DIR = "llm_summary";
     private static final String MERMAID_DIR = "mermaid";
+    private static final String GRAPHVIZ_DIR = "graphviz";
+
     private final String sourceDir;
     private final List<File> copyBookPaths;
     private final String dialectJarPath;
@@ -58,7 +60,10 @@ public class CodeTaskRunner {
     private final ProgramSearch programSearch;
     private final ResourceOperations resourceOperations;
 
-    public CodeTaskRunner(String sourceDir, String reportRootDir, List<File> copyBookPaths, String dialectJarPath, LanguageDialect dialect, FlowchartGenerationStrategy flowchartGenerationStrategy, IdProvider idProvider, Format1DataStructureBuildStrategy format1DataStructureBuilder, ProgramSearch programSearch, ResourceOperations resourceOperations) {
+    public CodeTaskRunner(String sourceDir, String reportRootDir, List<File> copyBookPaths, String dialectJarPath,
+            LanguageDialect dialect, FlowchartGenerationStrategy flowchartGenerationStrategy, IdProvider idProvider,
+            Format1DataStructureBuildStrategy format1DataStructureBuilder, ProgramSearch programSearch,
+            ResourceOperations resourceOperations) {
         this.sourceDir = sourceDir;
         this.copyBookPaths = copyBookPaths;
         this.dialectJarPath = dialectJarPath;
@@ -77,10 +82,12 @@ public class CodeTaskRunner {
         LOGGER.info("srcDir = " + sourceDir);
         LOGGER.info("reportRootDir = " + reportRootDir);
         LOGGER.info("dialectJarPath = " + dialectJarPath);
-        LOGGER.info("copyBookPaths = " + String.join(",", copyBookPaths.stream().map(cp -> cp.toString() + "\n").toList()));
+        LOGGER.info(
+                "copyBookPaths = " + String.join(",", copyBookPaths.stream().map(cp -> cp.toString() + "\n").toList()));
     }
 
-    public Map<String, List<AnalysisTaskResult>> runForPrograms(List<CommandLineAnalysisTask> tasks, List<String> programFilenames, TaskRunnerMode runnerMode) throws IOException {
+    public Map<String, List<AnalysisTaskResult>> runForPrograms(List<CommandLineAnalysisTask> tasks,
+            List<String> programFilenames, TaskRunnerMode runnerMode) throws IOException {
         Map<String, List<AnalysisTaskResult>> results = new HashMap<>();
         for (String programFilename : programFilenames) {
             LOGGER.info(String.format("Running tasks: %s for program '%s' in %s mode...",
@@ -89,10 +96,12 @@ public class CodeTaskRunner {
             try {
                 Pair<File, String> programPath = programSearch.run(programFilename, sourceDir);
                 if (programPath == ProgramSearch.NO_PATH) {
-                    LOGGER.severe(String.format("No program found for '%s' anywhere in path %s \n", programFilename, sourceDir));
+                    LOGGER.severe(String.format("No program found for '%s' anywhere in path %s \n", programFilename,
+                            sourceDir));
                     continue;
                 }
-                List<AnalysisTaskResult> analysisTaskResults = runForProgram(programFilename, programPath.getRight(), reportRootDir, this.dialect, runnerMode.tasks(tasks));
+                List<AnalysisTaskResult> analysisTaskResults = runForProgram(programFilename, programPath.getRight(),
+                        reportRootDir, this.dialect, runnerMode.tasks(tasks));
                 results.put(programFilename, analysisTaskResults);
             } catch (ParseDiagnosticRuntimeError e) {
                 errorMap.put(programFilename, e.getErrors());
@@ -102,40 +111,65 @@ public class CodeTaskRunner {
         return runnerMode.run(errorMap, results);
     }
 
-    public Map<String, List<AnalysisTaskResult>> runForPrograms(List<CommandLineAnalysisTask> tasks, List<String> programFilenames) throws IOException {
+    public Map<String, List<AnalysisTaskResult>> runForPrograms(List<CommandLineAnalysisTask> tasks,
+            List<String> programFilenames) throws IOException {
         return runForPrograms(tasks, programFilenames, TaskRunnerMode.PRODUCTION_MODE);
     }
 
-    private List<AnalysisTaskResult> runForProgram(String programFilename, String sourceDir, String reportRootDir, LanguageDialect dialect, List<CommandLineAnalysisTask> tasks) throws IOException {
+    private List<AnalysisTaskResult> runForProgram(String programFilename, String sourceDir, String reportRootDir,
+            LanguageDialect dialect, List<CommandLineAnalysisTask> tasks) throws IOException {
         String programReportDir = String.format("%s.report", programFilename);
         Path astOutputDir = Paths.get(reportRootDir, programReportDir, AST_DIR).toAbsolutePath().normalize();
-        Path dataStructuresOutputDir = Paths.get(reportRootDir, programReportDir, DATA_STRUCTURES_DIR).toAbsolutePath().normalize();
+        Path dataStructuresOutputDir = Paths.get(reportRootDir, programReportDir, DATA_STRUCTURES_DIR).toAbsolutePath()
+                .normalize();
         Path flowASTOutputDir = Paths.get(reportRootDir, programReportDir, FLOW_AST_DIR).toAbsolutePath().normalize();
         Path imageOutputDir = Paths.get(reportRootDir, programReportDir, IMAGES_DIR).toAbsolutePath().normalize();
         Path dotFileOutputDir = Paths.get(reportRootDir, programReportDir, DOTFILES_DIR).toAbsolutePath().normalize();
-        Path graphMLExportOutputDir = Paths.get(reportRootDir, programReportDir, GRAPHML_DIR).toAbsolutePath().normalize();
+        Path graphvizOutputDir = Paths.get(reportRootDir, programReportDir, GRAPHVIZ_DIR).toAbsolutePath().normalize();
+        Path graphMLExportOutputDir = Paths.get(reportRootDir, programReportDir, GRAPHML_DIR).toAbsolutePath()
+                .normalize();
+
         Path cfgOutputDir = Paths.get(reportRootDir, programReportDir, CFG_DIR).toAbsolutePath().normalize();
-        Path similarityOutputDir = Paths.get(reportRootDir, programReportDir, SIMILARITY_DIR).toAbsolutePath().normalize();
-        Path unifiedModelOutputDir = Paths.get(reportRootDir, programReportDir, UNIFIED_MODEL_DIR).toAbsolutePath().normalize();
-        Path transpilerModelOutputDir = Paths.get(reportRootDir, programReportDir, TRANSPILER_MODEL_DIR).toAbsolutePath().normalize();
-        Path llmSummaryOutputDir = Paths.get(reportRootDir, programReportDir, LLM_SUMMARY_DIR).toAbsolutePath().normalize();
-        String graphMLExportOutputPath = graphMLExportOutputDir.resolve(String.format("%s.graphml", programFilename)).toAbsolutePath().normalize().toString();
-        String cfgOutputPath = cfgOutputDir.resolve(String.format("cfg-%s.json", programFilename)).toAbsolutePath().normalize().toString();
-        String cobolParseTreeOutputPath = astOutputDir.resolve(String.format("cobol-%s.json", programFilename)).toAbsolutePath().normalize().toString();
-        String flowASTOutputPath = flowASTOutputDir.resolve(String.format("flow-ast-%s.json", programFilename)).toAbsolutePath().normalize().toString();
+        Path similarityOutputDir = Paths.get(reportRootDir, programReportDir, SIMILARITY_DIR).toAbsolutePath()
+                .normalize();
+        Path unifiedModelOutputDir = Paths.get(reportRootDir, programReportDir, UNIFIED_MODEL_DIR).toAbsolutePath()
+                .normalize();
+        Path transpilerModelOutputDir = Paths.get(reportRootDir, programReportDir, TRANSPILER_MODEL_DIR)
+                .toAbsolutePath().normalize();
+        Path llmSummaryOutputDir = Paths.get(reportRootDir, programReportDir, LLM_SUMMARY_DIR).toAbsolutePath()
+                .normalize();
+        String graphMLExportOutputPath = graphMLExportOutputDir.resolve(String.format("%s.graphml", programFilename))
+                .toAbsolutePath().normalize().toString();
+        String cfgOutputPath = cfgOutputDir.resolve(String.format("cfg-%s.json", programFilename)).toAbsolutePath()
+                .normalize().toString();
+        String cobolParseTreeOutputPath = astOutputDir.resolve(String.format("cobol-%s.json", programFilename))
+                .toAbsolutePath().normalize().toString();
+        String flowASTOutputPath = flowASTOutputDir.resolve(String.format("flow-ast-%s.json", programFilename))
+                .toAbsolutePath().normalize().toString();
         String absoluteDialectJarPath = Paths.get(dialectJarPath).toAbsolutePath().normalize().toString();
         SourceConfig sourceConfig = new SourceConfig(programFilename, sourceDir, copyBookPaths, absoluteDialectJarPath);
-        OutputArtifactConfig dataStructuresOutputConfig = new OutputArtifactConfig(dataStructuresOutputDir, programFilename + "-data.json");
-        OutputArtifactConfig similarityOutputConfig = new OutputArtifactConfig(similarityOutputDir, programFilename + "-similarity.json");
-        OutputArtifactConfig unifiedModelOutputConfig = new OutputArtifactConfig(unifiedModelOutputDir, programFilename + "-unified.json");
-        OutputArtifactConfig transpilerModelOutputConfig = new OutputArtifactConfig(transpilerModelOutputDir, programFilename + "-transpiler-model.json");
-        OutputArtifactConfig llmOutputConfig = new OutputArtifactConfig(llmSummaryOutputDir, programFilename + "-llm-summary.json");
+        OutputArtifactConfig dataStructuresOutputConfig = new OutputArtifactConfig(dataStructuresOutputDir,
+                programFilename + "-data.json");
+        OutputArtifactConfig similarityOutputConfig = new OutputArtifactConfig(similarityOutputDir,
+                programFilename + "-similarity.json");
+        OutputArtifactConfig unifiedModelOutputConfig = new OutputArtifactConfig(unifiedModelOutputDir,
+                programFilename + "-unified.json");
+        OutputArtifactConfig transpilerModelOutputConfig = new OutputArtifactConfig(transpilerModelOutputDir,
+                programFilename + "-transpiler-model.json");
+        OutputArtifactConfig llmOutputConfig = new OutputArtifactConfig(llmSummaryOutputDir,
+                programFilename + "-llm-summary.json");
 
-        FlowchartOutputWriter flowchartOutputWriter = new FlowchartOutputWriter(flowchartGenerationStrategy, dotFileOutputDir, imageOutputDir);
-        RawASTOutputConfig rawAstOutputConfig = new RawASTOutputConfig(astOutputDir, cobolParseTreeOutputPath, new CobolTreeVisualiser());
-        OutputArtifactConfig mermaidOutputConfig = new OutputArtifactConfig(Paths.get(reportRootDir, programReportDir, MERMAID_DIR).toAbsolutePath().normalize(), "");
+        FlowchartOutputWriter flowchartOutputWriter = new FlowchartOutputWriter(flowchartGenerationStrategy,
+                dotFileOutputDir, imageOutputDir);
+        RawASTOutputConfig rawAstOutputConfig = new RawASTOutputConfig(astOutputDir, cobolParseTreeOutputPath,
+                new CobolTreeVisualiser());
+        OutputArtifactConfig mermaidOutputConfig = new OutputArtifactConfig(
+                Paths.get(reportRootDir, programReportDir, MERMAID_DIR).toAbsolutePath().normalize(), "");
+        OutputArtifactConfig graphvizOutputConfig = new OutputArtifactConfig(graphvizOutputDir, "");
+
         FlowASTOutputConfig flowASTOutputConfig = new FlowASTOutputConfig(flowASTOutputDir, flowASTOutputPath);
-        GraphMLExportConfig graphMLOutputConfig = new GraphMLExportConfig(graphMLExportOutputDir, graphMLExportOutputPath);
+        GraphMLExportConfig graphMLOutputConfig = new GraphMLExportConfig(graphMLExportOutputDir,
+                graphMLExportOutputPath);
         CFGOutputConfig cfgOutputConfig = new CFGOutputConfig(cfgOutputDir, cfgOutputPath);
         ComponentsBuilder ops = new ComponentsBuilder(new CobolTreeVisualiser(resourceOperations),
                 new EntityNavigatorBuilder(), new UnresolvedReferenceThrowStrategy(),
@@ -150,11 +184,15 @@ public class CodeTaskRunner {
                 rawAstOutputConfig, graphMLOutputConfig,
                 flowASTOutputConfig, cfgOutputConfig,
                 graphBuildConfig, dataStructuresOutputConfig, unifiedModelOutputConfig, similarityOutputConfig,
-                mermaidOutputConfig, transpilerModelOutputConfig,
+                mermaidOutputConfig, graphvizOutputConfig, transpilerModelOutputConfig,
                 llmOutputConfig, idProvider, resourceOperations, new Neo4JDriverBuilder());
+
         return tasks.getFirst() != CommandLineAnalysisTask.BUILD_BASE_ANALYSIS
-                ? pipelineTasks.run(Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS), tasks.stream()).toList())
+                ? pipelineTasks.run(
+                        Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS), tasks.stream()).toList())
                 : pipelineTasks.run(tasks);
-//        return pipelineTasks.run(Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS), tasks.stream()).toList());
+        // return
+        // pipelineTasks.run(Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS),
+        // tasks.stream()).toList());
     }
 }
