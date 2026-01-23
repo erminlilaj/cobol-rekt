@@ -1,5 +1,26 @@
 # ==========================================
-# Runtime Environment
+# Stage 1: Build the Application
+# ==========================================
+FROM maven:3.9.6-eclipse-temurin-21 AS builder
+WORKDIR /build
+
+# Copy the root pom.xml
+COPY pom.xml .
+
+# Copy all source code for proper reactor build
+COPY smojol-cli smojol-cli
+COPY smojol-api smojol-api
+COPY smojol-toolkit smojol-toolkit
+COPY smojol-core smojol-core
+COPY mojo-common mojo-common
+COPY woof woof
+COPY che-che4z-lsp-for-cobol-integration che-che4z-lsp-for-cobol-integration
+
+# Build all modules, skipping tests to save time/avoid environment issues
+RUN mvn clean package -DskipTests
+
+# ==========================================
+# Stage 2: Runtime Environment
 # ==========================================
 FROM eclipse-temurin:21-jre-jammy
 
@@ -19,12 +40,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 2. Copy the API JAR (The Web Server)
-COPY smojol-api/target/smojol-api.jar /app/app.jar
+# 2. Copy the API JAR (The Web Server) from builder
+COPY --from=builder /build/smojol-api/target/smojol-api-*.jar /app/app.jar
 
-# 3. FIX: Copy the CLI JAR (The Analysis Tool)
-# We use the exact name found in your terminal
-COPY smojol-cli/target/smojol-cli.jar /app/cli.jar
+# 3. FIX: Copy the CLI JAR (The Analysis Tool) from builder
+COPY --from=builder /build/smojol-cli/target/smojol-cli-*.jar /app/cli.jar
 
 # 4. Copy other necessary files
 COPY db /app/db
