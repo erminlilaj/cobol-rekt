@@ -113,7 +113,7 @@ public class MultiCommand implements Callable<Integer> {
                 Boolean allSucceeded = runResults.values().stream()
                                 .map(rs -> rs.stream().map(AnalysisTaskResult::isSuccess)
                                                 .reduce(true, (innerAll, x) -> innerAll && x))
-                                .reduce((a, b) -> a && b).get();
+                                .reduce((a, b) -> a && b).orElse(true);
                 resultMessages.forEach(LOGGER::info);
                 return allSucceeded ? 0 : 1;
         }

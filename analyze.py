@@ -7,6 +7,7 @@ from pathlib import Path
 import graph_to_text
 import copybook_resolver
 from copybook_resolver import Colors
+from sandbox_manager import SandboxEnvironment
 
 
 
@@ -36,7 +37,7 @@ def main():
 
     # Argument Parsing
     if len(sys.argv) < 2:
-        print(f"Usage: python analyze.py <filename.cbl> [--llm] [--graphviz] [--lenient] [--ignore-copybooks]")
+        print(f"Usage: python analyze.py <filename.cbl> [--llm] [--graphviz] [--lenient] [--ignore-copybooks] [--no-sandbox]")
         print(f"       (Ensure the file exists in {src_dir})")
         sys.exit(1)
 
@@ -50,11 +51,11 @@ def main():
     copybooks_dir = src_dir # Assume copybooks are in the same dir for now
 
     use_llm = "--llm" in sys.argv
-    use_llm = "--llm" in sys.argv
     use_graphviz = "--graphviz" in sys.argv
     use_lenient = "--lenient" in sys.argv
     lenient_flag = "--lenient" if use_lenient else ""
     ignore_copybooks = "--ignore-copybooks" in sys.argv
+    use_sandbox = "--no-sandbox" not in sys.argv
 
 
     # Ensure Report Directory Exists
@@ -64,24 +65,52 @@ def main():
     Colors.print_msg(f"Analyzing: {target_file}", Colors.GREEN)
     Colors.print_msg(f"Source Dir: {src_dir}", Colors.GREEN)
     if use_llm:
-        Colors.print_msg("LLM Analysis: ENABLED (Model: granite-code:20b)", Colors.YELLOW)
+        Colors.print_msg("LLM Analysis: ENABLED (see run_llm_documentation.py for config)", Colors.YELLOW)
     if use_lenient:
         Colors.print_msg("Lenient Mode: ENABLED (will continue despite parsing errors)", Colors.YELLOW)
     if ignore_copybooks:
         Colors.print_msg("Ignore Copybooks: ENABLED (All copybooks will be DUMMY)", Colors.MAGENTA)
+    if use_sandbox:
+        Colors.print_msg("Sandbox Mode: ENABLED (isolated environment with auto-stubbing)", Colors.YELLOW)
     Colors.print_msg("---------------------------------------------------", Colors.BLUE)
 
-    # 0. Ensure Copybooks Exist (Recursive)
-    Colors.print_msg("[0/7] resolving Copybook Dependencies...", Colors.BLUE)
-    copybook_resolver.resolve_copybooks_recursively(target_path, copybooks_dir, src_dir, ignore_mode=ignore_copybooks)
+    # Set up sandbox environment if enabled
+    sandbox = None
+    effective_src_dir = src_dir
+    effective_copybooks_dir = copybooks_dir
+    effective_target_file = target_file
+    
+    if use_sandbox:
+        Colors.print_msg("[0/7] Setting up Sandbox Environment...", Colors.BLUE)
+        # Create sandbox with auto-stub enabled (unless ignore_copybooks is set)
+        sandbox = SandboxEnvironment(
+            source_file=target_path,
+            copybook_dirs=[copybooks_dir],
+            auto_stub=not ignore_copybooks,
+            verbose=True
+        )
+        sandbox.__enter__()
+        
+        # Use sandbox paths for analysis
+        effective_src_dir = sandbox.sandbox_source_dir
+        effective_copybooks_dir = sandbox.sandbox_copybooks
+        effective_target_file = sandbox.sandbox_source.name
+        
+        if sandbox.stubs_created:
+            Colors.print_msg(f"  Auto-created {len(sandbox.stubs_created)} stub copybooks", Colors.YELLOW)
+    else:
+        # Legacy mode: resolve copybooks in-place
+        Colors.print_msg("[0/7] Resolving Copybook Dependencies...", Colors.BLUE)
+        copybook_resolver.resolve_copybooks_recursively(target_path, copybooks_dir, src_dir, ignore_mode=ignore_copybooks)
+
 
     # 1. Core Structures
     Colors.print_msg("[1/7] Generating Core Structures (AST, CFG)...", Colors.GREEN)
     cmd_core = (
-        f'java -jar "{smojol_cli}" run "{target_file}" '
+        f'java -jar "{smojol_cli}" run "{effective_target_file}" '
         f'--commands="WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES" '
-        f'--srcDir "{src_dir}" '
-        f'--copyBooksDir "{copybooks_dir}" '
+        f'--srcDir "{effective_src_dir}" '
+        f'--copyBooksDir "{effective_copybooks_dir}" '
         f'--dialectJarPath "{dialect_jar}" '
         f'--dialect COBOL '
         f'--reportDir "{report_dir}" '
@@ -93,10 +122,10 @@ def main():
     # 2. Advanced Analysis
     Colors.print_msg("[2/7] Generating Advanced Analysis (Transpiler, Unified, GraphML)...", Colors.GREEN)
     cmd_adv = (
-        f'java -jar "{smojol_cli}" run "{target_file}" '
+        f'java -jar "{smojol_cli}" run "{effective_target_file}" '
         f'--commands="BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML" '
-        f'--srcDir "{src_dir}" '
-        f'--copyBooksDir "{copybooks_dir}" '
+        f'--srcDir "{effective_src_dir}" '
+        f'--copyBooksDir "{effective_copybooks_dir}" '
         f'--dialectJarPath "{dialect_jar}" '
         f'--dialect COBOL '
         f'--reportDir "{report_dir}" '
@@ -109,10 +138,10 @@ def main():
     # 3. Mermaid Flowchart
     Colors.print_msg("[3/7] Attempting Mermaid Flowchart Generation (Section-based)...", Colors.GREEN)
     cmd_mermaid = (
-        f'java -jar "{smojol_cli}" run "{target_file}" '
+        f'java -jar "{smojol_cli}" run "{effective_target_file}" '
         f'--commands="EXPORT_MERMAID" '
-        f'--srcDir "{src_dir}" '
-        f'--copyBooksDir "{copybooks_dir}" '
+        f'--srcDir "{effective_src_dir}" '
+        f'--copyBooksDir "{effective_copybooks_dir}" '
         f'--dialectJarPath "{dialect_jar}" '
         f'--dialect COBOL '
         f'--reportDir "{report_dir}" '
@@ -124,10 +153,10 @@ def main():
     if use_graphviz:
         Colors.print_msg("[3.5/7] Generating Graphviz Flowchart (DOT/SVG)...", Colors.GREEN)
         cmd_graphviz = (
-            f'java -jar "{smojol_cli}" run "{target_file}" '
+            f'java -jar "{smojol_cli}" run "{effective_target_file}" '
             f'--commands="EXPORT_GRAPHVIZ" '
-            f'--srcDir "{src_dir}" '
-            f'--copyBooksDir "{copybooks_dir}" '
+            f'--srcDir "{effective_src_dir}" '
+            f'--copyBooksDir "{effective_copybooks_dir}" '
             f'--dialectJarPath "{dialect_jar}" '
             f'--dialect COBOL '
             f'--reportDir "{report_dir}" '
@@ -206,34 +235,19 @@ def main():
     run_command(cmd_viewer)
 
 
-    # 8. LLM Analysis
+    # 8. LLM Documentation (Optional)
     if use_llm:
-        Colors.print_msg("[8/8] Running LLM-based Summarization...", Colors.GREEN)
-        # Set environment variables for LLM
-        env = os.environ.copy()
-        env["LLM_SOURCE"] = "OLLAMA"
-        env["OLLAMA_ENDPOINT"] = "http://localhost:11434/api/generate"
-        env["OLLAMA_MODEL"] = "granite-code:20b"
+        Colors.print_msg("[8/8] Running LLM Documentation Generation...", Colors.GREEN)
         
-        cmd_llm = (
-            f'java -jar "{smojol_cli}" run "{target_file}" '
-            f'--commands="WRITE_LLM_SUMMARY" '
-            f'--srcDir "{src_dir}" '
-            f'--copyBooksDir "{copybooks_dir}" '
-            f'--dialectJarPath "{dialect_jar}" '
-            f'--dialect COBOL '
-            f'--reportDir "{report_dir}" '
-            f'--generation=PROGRAM '
-            f'{lenient_flag}'
-        )
-        run_command(cmd_llm, env=env)
-
-        Colors.print_msg("[Optional] Generating LLM Graph...", Colors.GREEN)
-        llm_json = report_subdir / "llm_summary" / f"{target_file}-llm-summary.json"
-        llm_mermaid = report_subdir / "mermaid" / "llm_summary_graph.md"
+        # LLM input directory from graphviz conversion
+        llm_input_dir = report_subdir / "llm_input"
         
-        if llm_json.exists():
-            run_command(f'"{sys.executable}" llm_json_to_mermaid.py "{llm_json}" "{llm_mermaid}"')
+        if llm_input_dir.exists():
+            # Call run_llm_documentation.py - it owns all model/port/endpoint config
+            run_command(f'"{sys.executable}" run_llm_documentation.py "{llm_input_dir}" --verbose')
+        else:
+            Colors.print_msg(f"Warning: LLM input directory not found at {llm_input_dir}", Colors.YELLOW)
+            Colors.print_msg("Tip: Use --graphviz flag to generate LLM input files.", Colors.YELLOW)
 
     Colors.print_msg("[Optional] Converting AST and Data Structures to Graphs...", Colors.GREEN)
     run_command(f'"{sys.executable}" convert_json_graphs.py "{report_subdir}"')
@@ -241,6 +255,11 @@ def main():
     # Regenerate Viewer to include new graphs
     Colors.print_msg("[Refresing] Generating HTML Visualizer...", Colors.GREEN)
     run_command(cmd_viewer)
+
+    # Cleanup sandbox if used
+    if sandbox is not None:
+        Colors.print_msg("[Cleanup] Removing sandbox environment...", Colors.BLUE)
+        sandbox.__exit__(None, None, None)
 
     Colors.print_msg("===================================================", Colors.BLUE)
     Colors.print_msg("Analysis complete. View results at:", Colors.GREEN)

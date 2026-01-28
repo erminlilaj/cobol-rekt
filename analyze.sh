@@ -3,7 +3,7 @@
 # Configuration: Local Paths
 SMOJOL_CLI="smojol-cli/target/smojol-cli.jar"
 DIALECT_JAR="che-che4z-lsp-for-cobol-integration/server/dialect-idms/target/dialect-idms.jar"
-SRC_DIR="smojol-test-code"
+SRC_DIR="${SOURCE_DIR:-smojol-test-code}"
 COPYBOOKS_DIR="smojol-test-code"
 REPORT_DIR="out/report"
 PYTHON_DIR="smojol_python"
@@ -27,7 +27,7 @@ mkdir -p "$REPORT_DIR"
 echo "---------------------------------------------------"
 echo "Analyzing: $TARGET"
 if [ "$USE_LLM" == "true" ]; then
-    echo "LLM Analysis: ENABLED (Model: granite-code:20b)"
+    echo "LLM Analysis: ENABLED (see run_llm_documentation.py for config)"
 fi
 echo "---------------------------------------------------"
 
@@ -100,27 +100,19 @@ python3 generate_viewer.py \
     --title "$TARGET" \
     --source "$SRC_DIR/$TARGET"
 
-# 7. LLM Analysis (Optional)
+# 7. LLM Documentation (Optional)
 if [ "$USE_LLM" == "true" ]; then
-    echo "[7/7] Running LLM-based Summarization..."
-    export LLM_SOURCE=OLLAMA
-    export OLLAMA_ENDPOINT=http://localhost:11434/api/generate
-    export OLLAMA_MODEL="granite-code:20b"
+    echo "[7/7] Running LLM Documentation Generation..."
     
-    java -jar "$SMOJOL_CLI" run "$TARGET" \
-        --commands="WRITE_LLM_SUMMARY" \
-        --srcDir "$SRC_DIR" \
-        --copyBooksDir "$COPYBOOKS_DIR" \
-        --dialectJarPath "$DIALECT_JAR" \
-        --dialect COBOL \
-        --reportDir "$REPORT_DIR" \
-        --generation=PROGRAM
-
-    echo "[Optional] Generating LLM Graph..."
-    LLM_JSON="$REPORT_SUBDIR/llm_summary/$TARGET-llm-summary.json"
-    LLM_MERMAID="$REPORT_SUBDIR/mermaid/llm_summary_graph.md"
-    if [ -f "$LLM_JSON" ]; then
-        python3 llm_json_to_mermaid.py "$LLM_JSON" "$LLM_MERMAID"
+    # Generate graph-to-text input first (if llm_input dir exists)
+    LLM_INPUT_DIR="$REPORT_SUBDIR/llm_input"
+    
+    if [ -d "$LLM_INPUT_DIR" ]; then
+        # Call run_llm_documentation.py - it owns all model/port config
+        python3 run_llm_documentation.py "$LLM_INPUT_DIR" --verbose
+    else
+        echo "Warning: LLM input directory not found at $LLM_INPUT_DIR"
+        echo "Skipping LLM documentation generation."
     fi
 fi
 
