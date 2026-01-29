@@ -173,7 +173,7 @@ def run_evaluation(target_file, copybooks_dir, verbose=False):
     
     return result.returncode, result.stdout, result.stderr
 
-def generate_report(errors, target_file, verbose=False):
+def generate_report(errors, exec_context, target_file, verbose=False):
     """Generate a privacy-safe diagnostic report."""
     Colors.print_msg("\n" + "=" * 60, Colors.BLUE)
     Colors.print_msg(f"  COBOL SYNTAX EVALUATION REPORT", Colors.BOLD)
@@ -215,32 +215,48 @@ def generate_report(errors, target_file, verbose=False):
         elif cat == 'Syntax Errors (Unexpected Token)':
             for err in cat_errors:
                 line = err.get('line', '?')
+                start_char = err.get('start_char', '?')
+                end_char = err.get('end_char', '?')
+                file_name = err.get('file', '?')
+                copybook_id = err.get('copybook_id')
                 suggestion = err['suggestion']
+                
                 # Extract just the token type, not the actual code
                 token_match = re.search(r"input '([^']+)'", suggestion)
                 token = token_match.group(1) if token_match else 'unknown'
-                Colors.print_msg(f"  Line {line}: Unexpected '{token}'", Colors.YELLOW)
+                
+                Colors.print_msg(f"\n  ┌─ ERROR at Line {line}, Columns {start_char}-{end_char}", Colors.YELLOW)
+                Colors.print_msg(f"  │  File: {file_name}", Colors.YELLOW)
+                if copybook_id:
+                    Colors.print_msg(f"  │  Inside copybook: {copybook_id}", Colors.YELLOW)
+                Colors.print_msg(f"  │  Unexpected token: '{token}'", Colors.YELLOW)
+                Colors.print_msg(f"  └─ Span length: {end_char - start_char if isinstance(start_char, int) and isinstance(end_char, int) else '?'} characters", Colors.YELLOW)
                 
                 # Provide specific guidance based on token
                 if token == '(':
                     Colors.print_msg(f"    DIAGNOSIS: Parenthesis appeared where parser didn't expect it", Colors.CYAN)
+                    Colors.print_msg(f"    LOCATION HINT: Check what keyword is at column {start_char - 10 if isinstance(start_char, int) else '?'}-{start_char}", Colors.CYAN)
                     Colors.print_msg(f"    COMMON CAUSES:", Colors.GREEN)
-                    Colors.print_msg(f"      • Space before '(' in CICS/SQL: 'FROM (' should be 'FROM('", Colors.GREEN)
-                    Colors.print_msg(f"      • Macro/preprocessor directive not expanded", Colors.GREEN)
-                    Colors.print_msg(f"      • Reference modification syntax issue: VAR(1:5)", Colors.GREEN)
-                    Colors.print_msg(f"    FIX: Remove space before '(' OR check if this is a macro", Colors.GREEN)
+                    Colors.print_msg(f"      1. Space before '(' in CICS/SQL command", Colors.GREEN)
+                    Colors.print_msg(f"         BAD:  EXEC CICS SEND FROM (VAR)", Colors.RED)
+                    Colors.print_msg(f"         GOOD: EXEC CICS SEND FROM(VAR)", Colors.GREEN)
+                    Colors.print_msg(f"      2. Missing LENGTH clause in CICS SEND", Colors.GREEN)
+                    Colors.print_msg(f"         BAD:  EXEC CICS SEND FROM(VAR) END-EXEC", Colors.RED)
+                    Colors.print_msg(f"         GOOD: EXEC CICS SEND FROM(VAR) LENGTH(LEN) END-EXEC", Colors.GREEN)
+                    Colors.print_msg(f"      3. Preprocessor macro not expanded", Colors.GREEN)
+                    Colors.print_msg(f"      4. Reference modification issue: VAR(1:5)", Colors.GREEN)
                 elif token in ('WHEN', 'ELSE', 'END-IF', 'END-EVALUATE', 'END-PERFORM'):
                     Colors.print_msg(f"    DIAGNOSIS: Control structure keyword found outside its block", Colors.CYAN)
-                    Colors.print_msg(f"    CAUSE: Parser lost track of block structure due to earlier error", Colors.GREEN)
-                    Colors.print_msg(f"    FIX: Find and fix the FIRST error above this line", Colors.GREEN)
+                    Colors.print_msg(f"    ROOT CAUSE: An earlier error broke the parser's understanding", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: Scroll UP and fix the FIRST error - this one will disappear", Colors.GREEN)
                 elif token == 'CONDITION':
                     Colors.print_msg(f"    DIAGNOSIS: 'CONDITION' is a reserved word in CICS", Colors.CYAN)
-                    Colors.print_msg(f"    CAUSE: May be used as variable name or in unsupported context", Colors.GREEN)
-                    Colors.print_msg(f"    FIX: If HANDLE CONDITION, check syntax; if variable, rename it", Colors.GREEN)
+                    Colors.print_msg(f"    CAUSE: Used as variable name OR in unsupported HANDLE CONDITION", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: Rename the variable OR check CICS HANDLE syntax", Colors.GREEN)
                 elif token in ('EXEC', 'END-EXEC'):
                     Colors.print_msg(f"    DIAGNOSIS: Embedded SQL/CICS block boundary issue", Colors.CYAN)
                     Colors.print_msg(f"    CAUSE: Nested EXEC blocks or unclosed previous EXEC", Colors.GREEN)
-                    Colors.print_msg(f"    FIX: Ensure each EXEC has matching END-EXEC", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: Ensure each EXEC has exactly one matching END-EXEC", Colors.GREEN)
                 else:
                     Colors.print_msg(f"    DIAGNOSIS: Token '{token}' not expected in this context", Colors.CYAN)
                     Colors.print_msg(f"    POSSIBLE CAUSES:", Colors.GREEN)
@@ -285,6 +301,20 @@ def generate_report(errors, target_file, verbose=False):
     if 'Missing Period/Statement Boundary' in categories:
         Colors.print_msg("3. Fix the FIRST error - later errors are often cascading", Colors.GREEN)
     
+    # Show EXEC context if available
+    if exec_context:
+        Colors.print_msg("\n" + "-" * 60, Colors.BLUE)
+        Colors.print_msg("DETECTED EXEC BLOCKS (for context):", Colors.CYAN)
+        Colors.print_msg("-" * 60, Colors.BLUE)
+        cics_count = sum(1 for e in exec_context if e['type'] == 'CICS')
+        sql_count = sum(1 for e in exec_context if e['type'] == 'SQL')
+        Colors.print_msg(f"  Total EXEC blocks found: {len(exec_context)}", Colors.YELLOW)
+        Colors.print_msg(f"    • CICS blocks: {cics_count}", Colors.YELLOW)
+        Colors.print_msg(f"    • SQL blocks: {sql_count}", Colors.YELLOW)
+        if verbose:
+            for ex in exec_context[:5]:
+                Colors.print_msg(f"    [{ex['number']}] {ex['type']}: {ex['preview']}", Colors.CYAN)
+    
     Colors.print_msg("\n" + "=" * 60 + "\n", Colors.BLUE)
     
     return len(errors)
@@ -314,8 +344,8 @@ def main():
         print(stderr[:2000] if len(stderr) > 2000 else stderr)
         Colors.print_msg("--- End Raw Output ---\n", Colors.CYAN)
     
-    errors = parse_error_output(stderr)
-    error_count = generate_report(errors, target_file, verbose)
+    errors, exec_context = parse_error_output(stderr)
+    error_count = generate_report(errors, exec_context, target_file, verbose)
     
     # Cleanup temp directory
     import shutil
