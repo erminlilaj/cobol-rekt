@@ -548,16 +548,30 @@ class SandboxEnvironment:
         
         total_changes = 0
         
+        # Debug: List files to be preprocessed
+        if self._verbose:
+            Colors.print_msg(f"  [DEBUG] Sandbox copybooks directory: {self._sandbox_copybooks_dir}", Colors.CYAN)
+            copybook_files = list(self._sandbox_copybooks_dir.iterdir()) if self._sandbox_copybooks_dir.exists() else []
+            Colors.print_msg(f"  [DEBUG] Found {len(copybook_files)} copybook files", Colors.CYAN)
+            for f in copybook_files[:10]:  # Show first 10
+                Colors.print_msg(f"    - {f.name}", Colors.CYAN)
+            if len(copybook_files) > 10:
+                Colors.print_msg(f"    ... and {len(copybook_files) - 10} more", Colors.CYAN)
+        
         # Preprocess source file (if it's a copy, not a symlink)
         if self._sandbox_source_file and self._sandbox_source_file.is_file():
             if not self._sandbox_source_file.is_symlink():
-                from cobol_preprocessor import preprocess_file as prep_file
-                changes = prep_file(str(self._sandbox_source_file), verbose=False)
+                changes = preprocess_file(str(self._sandbox_source_file), verbose=self._verbose)
                 total_changes += len(changes)
+                if self._verbose and changes:
+                    Colors.print_msg(f"  [DEBUG] Source file: {len(changes)} fixes", Colors.GREEN)
         
         # Preprocess all copybooks
-        stats = preprocess_directory(str(self._sandbox_copybooks_dir), verbose=False)
+        stats = preprocess_directory(str(self._sandbox_copybooks_dir), verbose=self._verbose)
         total_changes += stats.get('total_changes', 0)
+        
+        if self._verbose:
+            Colors.print_msg(f"  [DEBUG] Copybook preprocessing: {stats.get('files_changed', 0)} files changed, {stats.get('total_changes', 0)} fixes", Colors.GREEN)
         
         if self._verbose and total_changes > 0:
             Colors.print_msg(f"  Normalized syntax: {total_changes} fixes applied", Colors.GREEN)
