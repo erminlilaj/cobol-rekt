@@ -180,7 +180,7 @@ def preprocess_directory(directory: str, extensions: List[str] = None,
         Dictionary with stats
     """
     if extensions is None:
-        extensions = ['.cbl', '.CBL', '.cob', '.COB', '.cpy', '.CPY', '']
+        extensions = ['.cbl', '.CBL', '.cob', '.COB', '.cpy', '.CPY']
     
     directory = Path(directory)
     stats = {
@@ -190,18 +190,28 @@ def preprocess_directory(directory: str, extensions: List[str] = None,
         'changes_by_type': {}
     }
     
-    for ext in extensions:
-        pattern = f"*{ext}" if ext else "*"
-        for file_path in directory.glob(pattern):
-            if file_path.is_file():
-                changes = preprocess_file(file_path, verbose=verbose)
-                stats['files_processed'] += 1
-                if changes:
-                    stats['files_changed'] += 1
-                    stats['total_changes'] += len(changes)
-                    for change in changes:
-                        ctype = change['type']
-                        stats['changes_by_type'][ctype] = stats['changes_by_type'].get(ctype, 0) + 1
+    for file_path in directory.iterdir():
+        if not file_path.is_file():
+            continue
+        
+        # Skip backup files
+        if '.bak' in file_path.name:
+            continue
+        
+        # Check extension
+        if file_path.suffix.lower() not in [e.lower() for e in extensions]:
+            continue
+        
+        changes = preprocess_file(str(file_path), verbose=verbose)
+        stats['files_processed'] += 1
+        if changes:
+            stats['files_changed'] += 1
+            stats['total_changes'] += len(changes)
+            for change in changes:
+                ctype = change.get('type', 'OTHER')
+                stats['changes_by_type'][ctype] = stats['changes_by_type'].get(ctype, 0) + 1
+            if verbose:
+                print(f"  Fixed {file_path.name}: {[c.get('type') for c in changes]}")
     
     return stats
 
