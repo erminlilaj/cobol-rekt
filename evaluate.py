@@ -44,12 +44,20 @@ def parse_error_output(stderr_output):
         try:
             error_list = json.loads(json_str)
             for err in error_list:
+                location = err.get('location', {}).get('location', {})
+                range_info = location.get('range', {})
+                start = range_info.get('start', {})
+                end = range_info.get('end', {})
+                
                 errors.append({
                     'source': err.get('source', 'Unknown'),
                     'severity': err.get('severity', 'ERROR'),
                     'suggestion': err.get('suggestion', 'No suggestion'),
-                    'line': err.get('location', {}).get('location', {}).get('range', {}).get('start', {}).get('line', '?'),
-                    'file': Path(err.get('location', {}).get('location', {}).get('uri', '')).name
+                    'line': start.get('line', '?'),
+                    'start_char': start.get('character', '?'),
+                    'end_char': end.get('character', '?'),
+                    'file': Path(location.get('uri', '')).name,
+                    'copybook_id': err.get('location', {}).get('copybookId', None)
                 })
         except json.JSONDecodeError:
             pass
@@ -63,10 +71,34 @@ def parse_error_output(stderr_output):
                 'severity': severity,
                 'suggestion': suggestion,
                 'line': '?',
-                'file': '?'
+                'start_char': '?',
+                'end_char': '?',
+                'file': '?',
+                'copybook_id': None
             })
     
-    return errors
+    # Extract EXEC block info from raw output
+    exec_patterns = extract_exec_context(stderr_output)
+    
+    return errors, exec_patterns
+
+def extract_exec_context(stderr_output):
+    """Extract information about EXEC blocks from the raw output."""
+    exec_info = []
+    
+    # Look for replaced dialect text (shows EXEC blocks)
+    dialect_pattern = r'Replaced dialect text number \[(\d+)\] : (EXEC \w+ [^\n]+)'
+    for match in re.finditer(dialect_pattern, stderr_output):
+        num, text = match.groups()
+        # Extract first line of EXEC block
+        first_line = text.split('\n')[0].strip()
+        exec_info.append({
+            'number': num,
+            'type': 'CICS' if 'CICS' in text else 'SQL' if 'SQL' in text else 'OTHER',
+            'preview': first_line[:60] + '...' if len(first_line) > 60 else first_line
+        })
+    
+    return exec_info
 
 def categorize_errors(errors):
     """Group errors by category for clearer reporting."""
