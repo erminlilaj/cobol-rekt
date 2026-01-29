@@ -66,33 +66,34 @@ def normalize_exec_spaces(content: str) -> Tuple[str, List[dict]]:
 def normalize_cics_send(content: str) -> Tuple[str, List[dict]]:
     """
     Handle CICS SEND variations that may be missing TEXT/MAP keyword.
-    This is a more conservative fix - only adds TEXT if clearly missing.
-    
-    Note: This transformation is optional and may change semantics.
+    Adds TEXT keyword when SEND FROM is used without a type specifier.
     """
     changes = []
     
-    # Pattern: EXEC CICS SEND FROM(...) without TEXT/MAP/CONTROL
-    # Only fix if it's clearly just SEND FROM without other keywords
-    pattern = r'(EXEC\s+CICS\s+SEND\s+)(FROM\s*\()'
+    # Pattern: EXEC CICS SEND FROM(...) without TEXT/MAP/CONTROL/PAGE
+    # We need to add TEXT before FROM
+    # Match: EXEC CICS SEND <whitespace> FROM (but not if preceded by TEXT/MAP/etc)
     
-    def check_and_fix(match):
-        # Check if there's already TEXT, MAP, CONTROL, PAGE, etc.
-        before_send = match.group(0)
-        if re.search(r'\b(TEXT|MAP|CONTROL|PAGE)\b', before_send, re.IGNORECASE):
-            return match.group(0)  # Already has type, don't change
+    def fix_send(match):
+        full_match = match.group(0)
+        # Check if there's already TEXT, MAP, CONTROL, PAGE before FROM
+        if re.search(r'\b(TEXT|MAP|CONTROL|PAGE|LAST|WAIT)\s+FROM', full_match, re.IGNORECASE):
+            return full_match  # Already has type, don't change
         
-        # This is SEND FROM without type - might need TEXT
-        # For now, just log it but don't auto-fix (could change semantics)
-        changes.append({
-            'type': 'POSSIBLE_MISSING_SEND_TYPE',
-            'location': 'EXEC CICS SEND FROM',
-            'suggestion': 'Consider adding TEXT keyword: EXEC CICS SEND TEXT FROM(...)'
-        })
-        return match.group(0)  # Return unchanged
+        # Insert TEXT before FROM
+        fixed = re.sub(r'(EXEC\s+CICS\s+SEND\s+)(FROM)', r'\1TEXT \2', full_match, flags=re.IGNORECASE)
+        if fixed != full_match:
+            changes.append({
+                'type': 'ADDED_SEND_TEXT',
+                'original': 'EXEC CICS SEND FROM',
+                'fixed': 'EXEC CICS SEND TEXT FROM'
+            })
+        return fixed
     
-    # Don't actually modify, just detect
-    re.sub(pattern, check_and_fix, content, flags=re.IGNORECASE)
+    # Match EXEC CICS SEND ... FROM pattern
+    pattern = r'EXEC\s+CICS\s+SEND\s+FROM\s*\('
+    content = re.sub(pattern, fix_send, content, flags=re.IGNORECASE)
+    
     return content, changes
 
 def preprocess_content(content: str, verbose: bool = False) -> Tuple[str, List[dict]]:
@@ -108,15 +109,17 @@ def preprocess_content(content: str, verbose: bool = False) -> Tuple[str, List[d
     content, changes = normalize_exec_spaces(content)
     all_changes.extend(changes)
     
-    # 2. Detect potential SEND issues (doesn't modify)
-    _, send_warnings = normalize_cics_send(content)
-    all_changes.extend(send_warnings)
+    # 2. Fix CICS SEND FROM by adding TEXT keyword
+    content, send_changes = normalize_cics_send(content)
+    all_changes.extend(send_changes)
     
     if verbose and all_changes:
-        print(f"  Applied {len([c for c in all_changes if c['type'] == 'SPACE_BEFORE_PAREN'])} space normalizations")
-        warnings = [c for c in all_changes if c['type'] == 'POSSIBLE_MISSING_SEND_TYPE']
-        if warnings:
-            print(f"  Found {len(warnings)} possible SEND type issues")
+        space_fixes = len([c for c in all_changes if c['type'] == 'SPACE_BEFORE_PAREN'])
+        send_fixes = len([c for c in all_changes if c['type'] == 'ADDED_SEND_TEXT'])
+        if space_fixes:
+            print(f"  Applied {space_fixes} space normalizations")
+        if send_fixes:
+            print(f"  Added TEXT to {send_fixes} CICS SEND commands")
     
     return content, all_changes
 
