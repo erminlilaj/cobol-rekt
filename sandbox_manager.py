@@ -428,6 +428,9 @@ class SandboxEnvironment:
         # Preprocess copybooks to fix format issues (BMS maps, etc.)
         self._preprocess_copybooks()
         
+        # Syntax normalization (fix spaces before parentheses, etc.)
+        self._normalize_syntax()
+        
         # Auto-generate stubs for missing copybooks
         if self._auto_stub:
             self._generate_stubs()
@@ -463,19 +466,13 @@ class SandboxEnvironment:
         return False  # Don't suppress exceptions
     
     def _setup_source_file(self):
-        """Copy or symlink the source file to sandbox."""
+        """Copy the source file to sandbox (copy, not symlink, to allow preprocessing)."""
         self._sandbox_source_file = self._sandbox_source_dir / self._source_file.name
         
-        try:
-            # Try symlink first (faster, saves space)
-            os.symlink(self._source_file, self._sandbox_source_file)
-            if self._verbose:
-                Colors.print_msg(f"  Linked source: {self._source_file.name}", Colors.GREEN)
-        except (OSError, NotImplementedError):
-            # Fall back to copy (Windows without admin, or other issues)
-            shutil.copy2(self._source_file, self._sandbox_source_file)
-            if self._verbose:
-                Colors.print_msg(f"  Copied source: {self._source_file.name}", Colors.GREEN)
+        # Always copy (not symlink) so we can preprocess the file
+        shutil.copy2(self._source_file, self._sandbox_source_file)
+        if self._verbose:
+            Colors.print_msg(f"  Copied source: {self._source_file.name}", Colors.GREEN)
     
     def _setup_copybooks(self):
         """
@@ -536,6 +533,34 @@ class SandboxEnvironment:
         
         if self._verbose and fixed_count > 0:
             Colors.print_msg(f"  Fixed format issues in {fixed_count} copybooks", Colors.GREEN)
+    
+    def _normalize_syntax(self):
+        """
+        Normalize CICS/SQL syntax to be compatible with the Che parser.
+        Fixes common issues like spaces before parentheses.
+        """
+        try:
+            from cobol_preprocessor import preprocess_directory, preprocess_file
+        except ImportError:
+            if self._verbose:
+                Colors.print_msg("  [WARN] cobol_preprocessor not found, skipping syntax normalization", Colors.YELLOW)
+            return
+        
+        total_changes = 0
+        
+        # Preprocess source file (if it's a copy, not a symlink)
+        if self._sandbox_source_file and self._sandbox_source_file.is_file():
+            if not self._sandbox_source_file.is_symlink():
+                from cobol_preprocessor import preprocess_file as prep_file
+                changes = prep_file(str(self._sandbox_source_file), verbose=False)
+                total_changes += len(changes)
+        
+        # Preprocess all copybooks
+        stats = preprocess_directory(str(self._sandbox_copybooks_dir), verbose=False)
+        total_changes += stats.get('total_changes', 0)
+        
+        if self._verbose and total_changes > 0:
+            Colors.print_msg(f"  Normalized syntax: {total_changes} fixes applied", Colors.GREEN)
     
     def _generate_stubs(self):
         """Generate stubs for any missing copybooks."""
