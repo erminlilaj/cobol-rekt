@@ -183,12 +183,43 @@ def generate_report(errors, target_file, verbose=False):
         elif cat == 'Syntax Errors (Unexpected Token)':
             for err in cat_errors:
                 line = err.get('line', '?')
+                suggestion = err['suggestion']
                 # Extract just the token type, not the actual code
-                token_match = re.search(r"input '([^']+)'", err['suggestion'])
+                token_match = re.search(r"input '([^']+)'", suggestion)
                 token = token_match.group(1) if token_match else 'unknown'
                 Colors.print_msg(f"  Line {line}: Unexpected '{token}'", Colors.YELLOW)
-            Colors.print_msg("  → Check for vendor-specific syntax or macros", Colors.GREEN)
-            Colors.print_msg("  → Common causes: spaces before '(', dialect-specific keywords", Colors.GREEN)
+                
+                # Provide specific guidance based on token
+                if token == '(':
+                    Colors.print_msg(f"    DIAGNOSIS: Parenthesis appeared where parser didn't expect it", Colors.CYAN)
+                    Colors.print_msg(f"    COMMON CAUSES:", Colors.GREEN)
+                    Colors.print_msg(f"      • Space before '(' in CICS/SQL: 'FROM (' should be 'FROM('", Colors.GREEN)
+                    Colors.print_msg(f"      • Macro/preprocessor directive not expanded", Colors.GREEN)
+                    Colors.print_msg(f"      • Reference modification syntax issue: VAR(1:5)", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: Remove space before '(' OR check if this is a macro", Colors.GREEN)
+                elif token in ('WHEN', 'ELSE', 'END-IF', 'END-EVALUATE', 'END-PERFORM'):
+                    Colors.print_msg(f"    DIAGNOSIS: Control structure keyword found outside its block", Colors.CYAN)
+                    Colors.print_msg(f"    CAUSE: Parser lost track of block structure due to earlier error", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: Find and fix the FIRST error above this line", Colors.GREEN)
+                elif token == 'CONDITION':
+                    Colors.print_msg(f"    DIAGNOSIS: 'CONDITION' is a reserved word in CICS", Colors.CYAN)
+                    Colors.print_msg(f"    CAUSE: May be used as variable name or in unsupported context", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: If HANDLE CONDITION, check syntax; if variable, rename it", Colors.GREEN)
+                elif token in ('EXEC', 'END-EXEC'):
+                    Colors.print_msg(f"    DIAGNOSIS: Embedded SQL/CICS block boundary issue", Colors.CYAN)
+                    Colors.print_msg(f"    CAUSE: Nested EXEC blocks or unclosed previous EXEC", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: Ensure each EXEC has matching END-EXEC", Colors.GREEN)
+                else:
+                    Colors.print_msg(f"    DIAGNOSIS: Token '{token}' not expected in this context", Colors.CYAN)
+                    Colors.print_msg(f"    POSSIBLE CAUSES:", Colors.GREEN)
+                    Colors.print_msg(f"      • Vendor-specific extension not in standard grammar", Colors.GREEN)
+                    Colors.print_msg(f"      • Typo or missing punctuation on previous line", Colors.GREEN)
+                    Colors.print_msg(f"      • Preprocessor macro that wasn't expanded", Colors.GREEN)
+            
+            Colors.print_msg("\n  GENERAL SYNTAX ERROR TIPS:", Colors.MAGENTA)
+            Colors.print_msg("  • Fix errors from TOP to BOTTOM (first error causes cascade)", Colors.GREEN)
+            Colors.print_msg("  • Check column alignment (code must be in columns 8-72)", Colors.GREEN)
+            Colors.print_msg("  • Ensure all statements end with periods where required", Colors.GREEN)
         
         elif cat == 'Missing Period/Statement Boundary':
             lines = [str(err.get('line', '?')) for err in cat_errors]
