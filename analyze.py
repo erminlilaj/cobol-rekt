@@ -10,6 +10,33 @@ from copybook_resolver import Colors
 from sandbox_manager import SandboxEnvironment
 
 
+def detect_dialect(source_file: Path) -> tuple:
+    """
+    Detect COBOL dialect by scanning source for keywords.
+    Returns (dialect_name, requires_idms_jar)
+    """
+    try:
+        content = source_file.read_text(errors='replace')[:50000]  # ~1000 lines
+    except Exception:
+        return ('COBOL', False)
+    
+    # IDMS indicators (very specific keywords)
+    idms_patterns = [
+        r'\bBIND\s+RUN-UNIT\b',
+        r'\bIDMS-\w+',
+        r'\bOBTAIN\s+(CALC|FIRST|NEXT|OWNER|PRIOR)\b',
+        r'\bREADY\s+USAGE-MODE\b',
+        r'\bFINISH\b.*\bIDMS\b',
+    ]
+    
+    for pattern in idms_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return ('IDMS', True)
+    
+    # Standard COBOL (CICS/SQL are handled by base parser)
+    return ('COBOL', False)
+
+
 
 
 
@@ -22,6 +49,81 @@ def run_command(command, cwd=None, env=None, check=True):
         if check:
             sys.exit(1)
 
+def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir, dialect_jar, lenient_flag, max_retries=3):
+    """
+    Run a quick parse to detect problematic copybooks with retry loop.
+    If copybook errors are found, stub them and retry. Returns total stubbed list.
+    """
+    all_stubbed = []
+    
+    for attempt in range(1, max_retries + 1):
+        # Run a minimal parse to trigger errors
+        cmd = (
+            f'java -jar "{smojol_cli}" run "{target_file}" '
+            f'--commands="WRITE_RAW_AST" '
+            f'--srcDir "{src_dir}" '
+            f'--copyBooksDir "{copybooks_dir}" '
+            f'--dialectJarPath "{dialect_jar}" '
+            f'--dialect COBOL '
+            f'--reportDir "out/prevalidate_temp" '
+            f'--generation=PROGRAM '
+            f'{lenient_flag}'
+        )
+        
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        
+        # Extract copybook names that have errors
+        problematic_copybooks = set()
+        
+        # Multiple patterns for different error formats
+        patterns = [
+            r'copybookId["\s:=]+([A-Za-z0-9_-]+)',
+            r'Error.*copybook.*["\']([A-Za-z0-9_-]+)["\']',
+            r'Missing copybook:\s*([A-Za-z0-9_-]+)',
+        ]
+        
+        combined = result.stderr + result.stdout
+        for pattern in patterns:
+            for match in re.finditer(pattern, combined, re.IGNORECASE):
+                copybook_name = match.group(1)
+                if copybook_name and copybook_name.lower() not in ('null', 'none', 'cobol'):
+                    problematic_copybooks.add(copybook_name)
+        
+        if not problematic_copybooks:
+            break  # No more errors, exit loop
+        
+        # Stub the problematic copybooks
+        stub_content = """\
+      * STUB COPYBOOK - Auto-generated due to parsing errors
+      * Original copybook caused syntax errors incompatible with parser
+      * This stub allows parsing to continue gracefully
+"""
+        
+        stubbed_this_round = []
+        for name in problematic_copybooks:
+            if name in all_stubbed:
+                continue  # Already stubbed
+            copybook_path = Path(copybooks_dir) / f"{name}.cpy"
+            if copybook_path.exists():
+                try:
+                    copybook_path.write_text(stub_content, encoding='utf-8')
+                    stubbed_this_round.append(name)
+                    all_stubbed.append(name)
+                except Exception:
+                    pass
+        
+        if not stubbed_this_round:
+            break  # Nothing new to stub
+        
+        Colors.print_msg(f"    Attempt {attempt}: stubbed {len(stubbed_this_round)} copybooks", Colors.YELLOW)
+    
+    # Cleanup temp directory
+    temp_dir = Path("out/prevalidate_temp")
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    
+    return all_stubbed
+
 def main():
     # Enable ANSI support on Windows
     os.system('')
@@ -29,7 +131,7 @@ def main():
     # Configuration
     current_dir = Path.cwd()
     smojol_cli = current_dir / "smojol-cli" / "target" / "smojol-cli.jar"
-    dialect_jar = current_dir / "che-che4z-lsp-for-cobol-integration" / "server" / "dialect-idms" / "target" / "dialect-idms.jar"
+    idms_dialect_jar = current_dir / "che-che4z-lsp-for-cobol-integration" / "server" / "dialect-idms" / "target" / "dialect-idms.jar"
     src_dir = "smojol-test-code"
     copybooks_dir = "smojol-test-code"
     report_dir = "out/report"
@@ -48,7 +150,12 @@ def main():
 
     target_file = target_path.name
     src_dir = target_path.parent
-    copybooks_dir = src_dir # Assume copybooks are in the same dir for now
+    copybooks_dir = src_dir  # Assume copybooks are in the same dir for now
+
+    # Auto-detect dialect
+    detected_dialect, needs_idms = detect_dialect(target_path)
+    dialect_jar = idms_dialect_jar if needs_idms else idms_dialect_jar  # Use IDMS jar as fallback
+    Colors.print_msg(f"Detected Dialect: {detected_dialect}" + (" (IDMS extensions)" if needs_idms else ""), Colors.BLUE)
 
     use_llm = "--llm" in sys.argv
     use_graphviz = "--graphviz" in sys.argv
@@ -103,6 +210,15 @@ def main():
         Colors.print_msg("[0/7] Resolving Copybook Dependencies...", Colors.BLUE)
         copybook_resolver.resolve_copybooks_recursively(target_path, copybooks_dir, src_dir, ignore_mode=ignore_copybooks)
 
+    # Pre-validation: Try a quick parse to detect problematic copybooks
+    if use_sandbox:
+        Colors.print_msg("[0.5/7] Pre-validating syntax (detecting problematic copybooks)...", Colors.BLUE)
+        problematic = pre_validate_and_stub(
+            smojol_cli, effective_target_file, effective_src_dir,
+            effective_copybooks_dir, dialect_jar, lenient_flag
+        )
+        if problematic:
+            Colors.print_msg(f"  Stubbed {len(problematic)} problematic copybooks: {', '.join(problematic)}", Colors.YELLOW)
 
     # 1. Core Structures
     Colors.print_msg("[1/7] Generating Core Structures (AST, CFG)...", Colors.GREEN)
