@@ -1,47 +1,59 @@
+#!/usr/bin/env python3
+"""
+COBOL Analysis Orchestrator
+
+Main entry point for analyzing COBOL source files. This script orchestrates:
+1. Sandbox setup (isolation, auto-stubbing)
+2. Dialect detection (IDMS vs standard COBOL)
+3. smojol-cli invocations (AST, CFG, flowcharts)
+4. Post-processing (Mermaid, Graphviz, LLM input)
+5. HTML visualization generation
+
+Usage:
+    python analyze.py <file.cbl> [options]
+
+Options:
+    --no-graphviz       Skip Graphviz DOT/SVG and LLM input generation
+    --lenient           Continue despite parsing errors
+    --ignore-copybooks  Stub all copybooks
+    --no-sandbox        Skip sandbox (modify files in-place)
+"""
+
 import os
 import subprocess
 import sys
 import shutil
 import re
 from pathlib import Path
+
+# Local imports
 import graph_to_text
 import copybook_resolver
-from copybook_resolver import Colors
-from sandbox_manager import SandboxEnvironment
+from analysis import SandboxEnvironment, Colors
 
+# ============================================================================
+# Configuration
+# ============================================================================
 
-def detect_dialect(source_file: Path) -> tuple:
-    """
-    Detect COBOL dialect by scanning source for keywords.
-    Returns (dialect_name, requires_idms_jar)
-    """
-    try:
-        content = source_file.read_text(errors='replace')[:50000]  # ~1000 lines
-    except Exception:
-        return ('COBOL', False)
+class Config:
+    """Centralized configuration for the analysis pipeline."""
     
-    # IDMS indicators (very specific keywords)
-    idms_patterns = [
-        r'\bBIND\s+RUN-UNIT\b',
-        r'\bIDMS-\w+',
-        r'\bOBTAIN\s+(CALC|FIRST|NEXT|OWNER|PRIOR)\b',
-        r'\bREADY\s+USAGE-MODE\b',
-        r'\bFINISH\b.*\bIDMS\b',
-    ]
-    
-    for pattern in idms_patterns:
-        if re.search(pattern, content, re.IGNORECASE):
-            return ('IDMS', True)
-    
-    # Standard COBOL (CICS/SQL are handled by base parser)
-    return ('COBOL', False)
+    def __init__(self):
+        self.base_dir = Path.cwd()
+        self.smojol_cli = self.base_dir / "smojol-cli" / "target" / "smojol-cli.jar"
+        self.idms_dialect_jar = (
+            self.base_dir / "che-che4z-lsp-for-cobol-integration" / 
+            "server" / "dialect-idms" / "target" / "dialect-idms.jar"
+        )
+        self.report_dir = Path("out/report")
+        self.python_dir = self.base_dir / "smojol_python"
 
-
-
-
-
+# ============================================================================
+# Utility Functions
+# ============================================================================
 
 def run_command(command, cwd=None, env=None, check=True):
+    """Execute a shell command with error handling."""
     try:
         subprocess.run(command, cwd=cwd, env=env, check=check, shell=True)
     except subprocess.CalledProcessError as e:
@@ -49,338 +61,334 @@ def run_command(command, cwd=None, env=None, check=True):
         if check:
             sys.exit(1)
 
-def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir, dialect_jar, lenient_flag, max_retries=3):
+def detect_dialect(source_file: Path) -> tuple:
     """
-    Run a quick parse to detect problematic copybooks with retry loop.
-    If copybook errors are found, stub them and retry. Returns total stubbed list.
+    Detect COBOL dialect by scanning source for IDMS keywords.
+    Returns (dialect_name, requires_idms_jar)
+    """
+    try:
+        content = source_file.read_text(errors='replace')[:50000]
+    except Exception:
+        return ('COBOL', False)
+    
+    idms_patterns = [
+        r'\bBIND\s+RUN-UNIT\b',
+        r'\bIDMS-\w+',
+        r'\bOBTAIN\s+(CALC|FIRST|NEXT|OWNER|PRIOR)\b',
+        r'\bREADY\s+USAGE-MODE\b',
+    ]
+    
+    for pattern in idms_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return ('IDMS', True)
+    
+    return ('COBOL', False)
+
+def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir, 
+                          dialect_jar, lenient_flag, max_retries=3):
+    """
+    Pre-validation loop: parse, detect broken copybooks, stub them, retry.
     """
     all_stubbed = []
+    stub_content = """\
+      * STUB COPYBOOK - Auto-generated due to parsing errors
+"""
     
     for attempt in range(1, max_retries + 1):
-        # Run a minimal parse to trigger errors
         cmd = (
             f'java -jar "{smojol_cli}" run "{target_file}" '
             f'--commands="WRITE_RAW_AST" '
-            f'--srcDir "{src_dir}" '
-            f'--copyBooksDir "{copybooks_dir}" '
-            f'--dialectJarPath "{dialect_jar}" '
-            f'--dialect COBOL '
-            f'--reportDir "out/prevalidate_temp" '
-            f'--generation=PROGRAM '
-            f'{lenient_flag}'
+            f'--srcDir "{src_dir}" --copyBooksDir "{copybooks_dir}" '
+            f'--dialectJarPath "{dialect_jar}" --dialect COBOL '
+            f'--reportDir "out/prevalidate_temp" --generation=PROGRAM {lenient_flag}'
         )
         
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-        
-        # Extract copybook names that have errors
-        problematic_copybooks = set()
-        
-        # Multiple patterns for different error formats
-        patterns = [
-            r'copybookId["\s:=]+([A-Za-z0-9_-]+)',
-            r'Error.*copybook.*["\']([A-Za-z0-9_-]+)["\']',
-            r'Missing copybook:\s*([A-Za-z0-9_-]+)',
-        ]
-        
         combined = result.stderr + result.stdout
-        for pattern in patterns:
+        
+        # Extract problematic copybook names
+        problematic = set()
+        for pattern in [r'copybookId["\s:=]+([A-Za-z0-9_-]+)',
+                        r'Error.*copybook.*["\']([A-Za-z0-9_-]+)["\']']:
             for match in re.finditer(pattern, combined, re.IGNORECASE):
-                copybook_name = match.group(1)
-                if copybook_name and copybook_name.lower() not in ('null', 'none', 'cobol'):
-                    problematic_copybooks.add(copybook_name)
+                name = match.group(1)
+                if name and name.lower() not in ('null', 'none', 'cobol'):
+                    problematic.add(name)
         
-        if not problematic_copybooks:
-            break  # No more errors, exit loop
+        if not problematic:
+            break
         
-        # Stub the problematic copybooks
-        stub_content = """\
-      * STUB COPYBOOK - Auto-generated due to parsing errors
-      * Original copybook caused syntax errors incompatible with parser
-      * This stub allows parsing to continue gracefully
-"""
-        
-        stubbed_this_round = []
-        for name in problematic_copybooks:
+        # Stub problematic copybooks
+        stubbed_round = []
+        for name in problematic:
             if name in all_stubbed:
-                continue  # Already stubbed
-            copybook_path = Path(copybooks_dir) / f"{name}.cpy"
-            if copybook_path.exists():
+                continue
+            path = Path(copybooks_dir) / f"{name}.cpy"
+            if path.exists():
                 try:
-                    copybook_path.write_text(stub_content, encoding='utf-8')
-                    stubbed_this_round.append(name)
+                    path.write_text(stub_content, encoding='utf-8')
+                    stubbed_round.append(name)
                     all_stubbed.append(name)
                 except Exception:
                     pass
         
-        if not stubbed_this_round:
-            break  # Nothing new to stub
-        
-        Colors.print_msg(f"    Attempt {attempt}: stubbed {len(stubbed_this_round)} copybooks", Colors.YELLOW)
+        if not stubbed_round:
+            break
+        Colors.print_msg(f"    Attempt {attempt}: stubbed {len(stubbed_round)} copybooks", Colors.YELLOW)
     
-    # Cleanup temp directory
+    # Cleanup
     temp_dir = Path("out/prevalidate_temp")
     if temp_dir.exists():
         shutil.rmtree(temp_dir, ignore_errors=True)
     
     return all_stubbed
 
-def main():
-    # Enable ANSI support on Windows
-    os.system('')
+# ============================================================================
+# Analysis Pipeline Steps
+# ============================================================================
 
-    # Configuration
-    current_dir = Path.cwd()
-    smojol_cli = current_dir / "smojol-cli" / "target" / "smojol-cli.jar"
-    idms_dialect_jar = current_dir / "che-che4z-lsp-for-cobol-integration" / "server" / "dialect-idms" / "target" / "dialect-idms.jar"
-    src_dir = "smojol-test-code"
-    copybooks_dir = "smojol-test-code"
-    report_dir = "out/report"
-    python_dir = "smojol_python"
-
-    # Argument Parsing
-    if len(sys.argv) < 2:
-        print(f"Usage: python analyze.py <filename.cbl> [--llm] [--graphviz] [--lenient] [--ignore-copybooks] [--no-sandbox]")
-        print(f"       (Ensure the file exists in {src_dir})")
-        sys.exit(1)
-
-    target_path = Path(sys.argv[1]).resolve().absolute()
-    if not target_path.exists():
-        Colors.print_msg(f"Error: File not found at {target_path}", Colors.RED)
-        sys.exit(1)
-
-    target_file = target_path.name
-    src_dir = target_path.parent
-    copybooks_dir = src_dir  # Assume copybooks are in the same dir for now
-
-    # Auto-detect dialect
-    detected_dialect, needs_idms = detect_dialect(target_path)
-    dialect_jar = idms_dialect_jar if needs_idms else idms_dialect_jar  # Use IDMS jar as fallback
-    Colors.print_msg(f"Detected Dialect: {detected_dialect}" + (" (IDMS extensions)" if needs_idms else ""), Colors.BLUE)
-
-    use_llm = "--llm" in sys.argv
-    use_graphviz = "--graphviz" in sys.argv
-    use_lenient = "--lenient" in sys.argv
-    lenient_flag = "--lenient" if use_lenient else ""
-    ignore_copybooks = "--ignore-copybooks" in sys.argv
-    use_sandbox = "--no-sandbox" not in sys.argv
-
-
-    # Ensure Report Directory Exists
-    os.makedirs(report_dir, exist_ok=True)
-
-    Colors.print_msg("---------------------------------------------------", Colors.BLUE)
-    Colors.print_msg(f"Analyzing: {target_file}", Colors.GREEN)
-    Colors.print_msg(f"Source Dir: {src_dir}", Colors.GREEN)
-    if use_llm:
-        Colors.print_msg("LLM Analysis: ENABLED (see run_llm_documentation.py for config)", Colors.YELLOW)
-    if use_lenient:
-        Colors.print_msg("Lenient Mode: ENABLED (will continue despite parsing errors)", Colors.YELLOW)
-    if ignore_copybooks:
-        Colors.print_msg("Ignore Copybooks: ENABLED (All copybooks will be DUMMY)", Colors.MAGENTA)
-    if use_sandbox:
-        Colors.print_msg("Sandbox Mode: ENABLED (isolated environment with auto-stubbing)", Colors.YELLOW)
-    Colors.print_msg("---------------------------------------------------", Colors.BLUE)
-
-    # Set up sandbox environment if enabled
-    sandbox = None
-    effective_src_dir = src_dir
-    effective_copybooks_dir = copybooks_dir
-    effective_target_file = target_file
+class AnalysisPipeline:
+    """Orchestrates the COBOL analysis pipeline."""
     
-    if use_sandbox:
+    def __init__(self, config: Config, target_path: Path, options: dict):
+        self.config = config
+        self.target_path = target_path
+        self.options = options
+        
+        # Effective paths (may be overridden by sandbox)
+        self.src_dir = target_path.parent
+        self.copybooks_dir = target_path.parent
+        self.target_file = target_path.name
+        self.report_subdir = config.report_dir / f"{self.target_file}.report"
+        
+        # Detect dialect
+        self.dialect, self.needs_idms = detect_dialect(target_path)
+        self.dialect_jar = config.idms_dialect_jar
+        
+        # Sandbox reference
+        self.sandbox = None
+    
+    def setup_sandbox(self):
+        """Set up isolated sandbox environment."""
+        if not self.options.get('use_sandbox', True):
+            Colors.print_msg("[0/7] Resolving Copybook Dependencies...", Colors.BLUE)
+            copybook_resolver.resolve_copybooks_recursively(
+                self.target_path, self.copybooks_dir, self.src_dir,
+                ignore_mode=self.options.get('ignore_copybooks', False)
+            )
+            return
+        
         Colors.print_msg("[0/7] Setting up Sandbox Environment...", Colors.BLUE)
-        # Create sandbox with auto-stub enabled (unless ignore_copybooks is set)
-        sandbox = SandboxEnvironment(
-            source_file=target_path,
-            copybook_dirs=[copybooks_dir],
-            auto_stub=not ignore_copybooks,
+        self.sandbox = SandboxEnvironment(
+            source_file=self.target_path,
+            copybook_dirs=[self.copybooks_dir],
+            auto_stub=not self.options.get('ignore_copybooks', False),
             verbose=True
         )
-        sandbox.__enter__()
+        self.sandbox.__enter__()
         
-        # Use sandbox paths for analysis
-        effective_src_dir = sandbox.sandbox_source_dir
-        effective_copybooks_dir = sandbox.sandbox_copybooks
-        effective_target_file = sandbox.sandbox_source.name
+        # Update paths to sandbox
+        self.src_dir = self.sandbox.sandbox_source_dir
+        self.copybooks_dir = self.sandbox.sandbox_copybooks
+        self.target_file = self.sandbox.sandbox_source.name
         
-        if sandbox.stubs_created:
-            Colors.print_msg(f"  Auto-created {len(sandbox.stubs_created)} stub copybooks", Colors.YELLOW)
-    else:
-        # Legacy mode: resolve copybooks in-place
-        Colors.print_msg("[0/7] Resolving Copybook Dependencies...", Colors.BLUE)
-        copybook_resolver.resolve_copybooks_recursively(target_path, copybooks_dir, src_dir, ignore_mode=ignore_copybooks)
-
-    # Pre-validation: Try a quick parse to detect problematic copybooks
-    if use_sandbox:
-        Colors.print_msg("[0.5/7] Pre-validating syntax (detecting problematic copybooks)...", Colors.BLUE)
+        if self.sandbox.stubs_created:
+            Colors.print_msg(f"  Auto-created {len(self.sandbox.stubs_created)} stubs", Colors.YELLOW)
+    
+    def pre_validate(self):
+        """Pre-validation: detect and stub broken copybooks."""
+        if not self.options.get('use_sandbox', True):
+            return
+        
+        Colors.print_msg("[0.5/7] Pre-validating syntax...", Colors.BLUE)
+        lenient = "--lenient" if self.options.get('lenient') else ""
         problematic = pre_validate_and_stub(
-            smojol_cli, effective_target_file, effective_src_dir,
-            effective_copybooks_dir, dialect_jar, lenient_flag
+            self.config.smojol_cli, self.target_file, self.src_dir,
+            self.copybooks_dir, self.dialect_jar, lenient
         )
         if problematic:
-            Colors.print_msg(f"  Stubbed {len(problematic)} problematic copybooks: {', '.join(problematic)}", Colors.YELLOW)
-
-    # 1. Core Structures
-    Colors.print_msg("[1/7] Generating Core Structures (AST, CFG)...", Colors.GREEN)
-    cmd_core = (
-        f'java -jar "{smojol_cli}" run "{effective_target_file}" '
-        f'--commands="WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES" '
-        f'--srcDir "{effective_src_dir}" '
-        f'--copyBooksDir "{effective_copybooks_dir}" '
-        f'--dialectJarPath "{dialect_jar}" '
-        f'--dialect COBOL '
-        f'--reportDir "{report_dir}" '
-        f'--generation=PROGRAM '
-        f'{lenient_flag}'
-    )
-    run_command(cmd_core)
-
-    # 2. Advanced Analysis
-    Colors.print_msg("[2/7] Generating Advanced Analysis (Transpiler, Unified, GraphML)...", Colors.GREEN)
-    cmd_adv = (
-        f'java -jar "{smojol_cli}" run "{effective_target_file}" '
-        f'--commands="BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML" '
-        f'--srcDir "{effective_src_dir}" '
-        f'--copyBooksDir "{effective_copybooks_dir}" '
-        f'--dialectJarPath "{dialect_jar}" '
-        f'--dialect COBOL '
-        f'--reportDir "{report_dir}" '
-        f'--generation=PROGRAM '
-        f'{lenient_flag}'
-    )
-    # Allow this to fail without stopping
-    run_command(cmd_adv, check=False)
-
-    # 3. Mermaid Flowchart
-    Colors.print_msg("[3/7] Attempting Mermaid Flowchart Generation (Section-based)...", Colors.GREEN)
-    cmd_mermaid = (
-        f'java -jar "{smojol_cli}" run "{effective_target_file}" '
-        f'--commands="EXPORT_MERMAID" '
-        f'--srcDir "{effective_src_dir}" '
-        f'--copyBooksDir "{effective_copybooks_dir}" '
-        f'--dialectJarPath "{dialect_jar}" '
-        f'--dialect COBOL '
-        f'--reportDir "{report_dir}" '
-        f'--generation=SECTION '
-        f'{lenient_flag}'
-    )
-    run_command(cmd_mermaid)
-
-    if use_graphviz:
-        Colors.print_msg("[3.5/7] Generating Graphviz Flowchart (DOT/SVG)...", Colors.GREEN)
-        cmd_graphviz = (
-            f'java -jar "{smojol_cli}" run "{effective_target_file}" '
-            f'--commands="EXPORT_GRAPHVIZ" '
-            f'--srcDir "{effective_src_dir}" '
-            f'--copyBooksDir "{effective_copybooks_dir}" '
-            f'--dialectJarPath "{dialect_jar}" '
-            f'--dialect COBOL '
-            f'--reportDir "{report_dir}" '
-            f'--generation=PROGRAM '
-            f'{lenient_flag}'
+            Colors.print_msg(f"  Stubbed {len(problematic)} problematic copybooks", Colors.YELLOW)
+    
+    def _build_smojol_cmd(self, commands: str, generation: str = "PROGRAM") -> str:
+        """Build smojol-cli command string."""
+        lenient = "--lenient" if self.options.get('lenient') else ""
+        return (
+            f'java -jar "{self.config.smojol_cli}" run "{self.target_file}" '
+            f'--commands="{commands}" '
+            f'--srcDir "{self.src_dir}" --copyBooksDir "{self.copybooks_dir}" '
+            f'--dialectJarPath "{self.dialect_jar}" --dialect COBOL '
+            f'--reportDir "{self.config.report_dir}" --generation={generation} {lenient}'
         )
-        run_command(cmd_graphviz)
-
-        # 3.5.1 Generate LLM Input
-        report_subdir_gv = Path(report_dir) / f"{target_file}.report" / "graphviz"
-        llm_input_dir = Path(report_dir) / f"{target_file}.report" / "llm_input"
+    
+    def step1_core_structures(self):
+        """Generate AST, CFG, data structures."""
+        Colors.print_msg("[1/7] Generating Core Structures (AST, CFG)...", Colors.GREEN)
+        run_command(self._build_smojol_cmd(
+            "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
+        ))
+    
+    def step2_advanced_analysis(self):
+        """Generate transpiler flowgraph, unified model, GraphML."""
+        Colors.print_msg("[2/7] Generating Advanced Analysis...", Colors.GREEN)
+        run_command(self._build_smojol_cmd(
+            "BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES "
+            "EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML"
+        ), check=False)
+    
+    def step3_mermaid(self):
+        """Generate Mermaid flowcharts."""
+        Colors.print_msg("[3/7] Generating Mermaid Flowchart...", Colors.GREEN)
+        run_command(self._build_smojol_cmd("EXPORT_MERMAID", generation="SECTION"))
+    
+    def step3b_graphviz(self):
+        """Generate Graphviz diagrams and LLM input text."""
+        if not self.options.get('graphviz'):
+            return
         
-        if report_subdir_gv.exists():
+        Colors.print_msg("[3.5/7] Generating Graphviz Flowchart...", Colors.GREEN)
+        run_command(self._build_smojol_cmd("EXPORT_GRAPHVIZ"))
+        
+        # Convert DOT to LLM input
+        gv_dir = self.report_subdir / "graphviz"
+        llm_dir = self.report_subdir / "llm_input"
+        
+        if gv_dir.exists():
             Colors.print_msg("[3.6/7] Generating LLM Input Text...", Colors.GREEN)
-            os.makedirs(llm_input_dir, exist_ok=True)
-            for dot_file in report_subdir_gv.glob("*.dot"):
-                out_txt = llm_input_dir / f"{dot_file.stem}.txt"
-                Colors.print_msg(f"  Converting {dot_file.name} -> {out_txt.name}", Colors.GREEN)
+            llm_dir.mkdir(exist_ok=True)
+            for dot_file in gv_dir.glob("*.dot"):
+                out_txt = llm_dir / f"{dot_file.stem}.txt"
                 nodes, edges = graph_to_text.parse_dot(str(dot_file))
-
                 if nodes:
                     graph_to_text.generate_llm_text(nodes, edges, str(out_txt))
-
-
-
-
-
-    report_subdir = Path(report_dir) / f"{target_file}.report"
     
-    # 4. Custom CFG to Mermaid
-    Colors.print_msg("[4/7] Converting CFG to Mermaid (Custom Program-wide Flowchart)...", Colors.GREEN)
-    cfg_json = report_subdir / "cfg" / f"cfg-{target_file}.json"
-    mermaid_out = report_subdir / "mermaid" / "program_flow.md"
-    os.makedirs(mermaid_out.parent, exist_ok=True)
-
-    if cfg_json.exists():
-        run_command(f'"{sys.executable}" json_to_mermaid.py "{cfg_json}" "{mermaid_out}"')
-    else:
-        Colors.print_msg(f"Warning: CFG JSON not found at {cfg_json}", Colors.YELLOW)
-
-    # 5. Variable Static Values Analysis
-    Colors.print_msg("[5/7] Running Variable Static Values Analysis...", Colors.GREEN)
-    ast_json = report_subdir / "ast" / f"cobol-{target_file}.json"
-    values_out = report_subdir / "variable_values.json"
-
-    if ast_json.exists():
-        env = os.environ.copy()
-        # Add python module path to PYTHONPATH
-        env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}{os.pathsep}{current_dir / python_dir}"
-        run_command(f'"{sys.executable}" -m src.analysis.variable_static_values "{ast_json}" --output="{values_out}"', env=env)
-    else:
-        Colors.print_msg(f"Warning: AST JSON not found at {ast_json}", Colors.YELLOW)
-
-    # 6. Data Dependency Graph
-    Colors.print_msg("[6/7] Generating Data Dependency Graph...", Colors.GREEN)
-    unified_json = report_subdir / "unified_model" / f"{target_file}-unified.json"
-    dep_mermaid = report_subdir / "mermaid" / "data_dependencies.md"
-    
-    if unified_json.exists():
-        run_command(f'"{sys.executable}" convert_dependencies.py "{unified_json}" "{dep_mermaid}"')
-    else:
-        Colors.print_msg(f"Warning: Unified JSON not found at {unified_json}", Colors.YELLOW)
-
-    # 7. HTML Viewer
-    Colors.print_msg("[7/7] Generating HTML Visualizer...", Colors.GREEN)
-    cmd_viewer = (
-        f'"{sys.executable}" generate_viewer.py '
-        f'--mermaid-dir "{report_subdir / "mermaid"}" '
-        f'--output "{report_subdir / "visualize_graphs.html"}" '
-        f'--title "{target_file}" '
-        f'--source "{target_path}"'
-    )
-    if use_graphviz:
-        cmd_viewer += ' --graphviz'
-
-    run_command(cmd_viewer)
-
-
-    # 8. LLM Documentation (Optional)
-    if use_llm:
-        Colors.print_msg("[8/8] Running LLM Documentation Generation...", Colors.GREEN)
+    def step4_cfg_to_mermaid(self):
+        """Convert CFG JSON to Mermaid."""
+        Colors.print_msg("[4/7] Converting CFG to Mermaid...", Colors.GREEN)
+        cfg_json = self.report_subdir / "cfg" / f"cfg-{self.target_file}.json"
+        mermaid_out = self.report_subdir / "mermaid" / "program_flow.md"
+        mermaid_out.parent.mkdir(exist_ok=True)
         
-        # LLM input directory from graphviz conversion
-        llm_input_dir = report_subdir / "llm_input"
-        
-        if llm_input_dir.exists():
-            # Call run_llm_documentation.py - it owns all model/port/endpoint config
-            run_command(f'"{sys.executable}" run_llm_documentation.py "{llm_input_dir}" --verbose')
+        if cfg_json.exists():
+            run_command(f'"{sys.executable}" json_to_mermaid.py "{cfg_json}" "{mermaid_out}"')
         else:
-            Colors.print_msg(f"Warning: LLM input directory not found at {llm_input_dir}", Colors.YELLOW)
-            Colors.print_msg("Tip: Use --graphviz flag to generate LLM input files.", Colors.YELLOW)
+            Colors.print_msg(f"  Warning: CFG JSON not found", Colors.YELLOW)
+    
+    def step5_variable_analysis(self):
+        """Run variable static values analysis."""
+        Colors.print_msg("[5/7] Running Variable Analysis...", Colors.GREEN)
+        ast_json = self.report_subdir / "ast" / f"cobol-{self.target_file}.json"
+        values_out = self.report_subdir / "variable_values.json"
+        
+        if ast_json.exists():
+            env = os.environ.copy()
+            env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}{os.pathsep}{self.config.python_dir}"
+            run_command(
+                f'"{sys.executable}" -m src.analysis.variable_static_values "{ast_json}" '
+                f'--output="{values_out}"', env=env
+            )
+        else:
+            Colors.print_msg("  Warning: AST JSON not found", Colors.YELLOW)
+    
+    def step6_data_dependencies(self):
+        """Generate data dependency graph."""
+        Colors.print_msg("[6/7] Generating Data Dependency Graph...", Colors.GREEN)
+        unified_json = self.report_subdir / "unified_model" / f"{self.target_file}-unified.json"
+        dep_mermaid = self.report_subdir / "mermaid" / "data_dependencies.md"
+        
+        if unified_json.exists():
+            run_command(f'"{sys.executable}" convert_dependencies.py "{unified_json}" "{dep_mermaid}"')
+        else:
+            Colors.print_msg("  Warning: Unified JSON not found", Colors.YELLOW)
+    
+    def step7_html_viewer(self):
+        """Generate HTML visualization."""
+        Colors.print_msg("[7/7] Generating HTML Visualizer...", Colors.GREEN)
+        cmd = (
+            f'"{sys.executable}" generate_viewer.py '
+            f'--mermaid-dir "{self.report_subdir / "mermaid"}" '
+            f'--output "{self.report_subdir / "visualize_graphs.html"}" '
+            f'--title "{self.target_file}" --source "{self.target_path}"'
+        )
+        if self.options.get('graphviz'):
+            cmd += ' --graphviz'
+        run_command(cmd)
+    
+    
+    def cleanup(self):
+        """Cleanup sandbox and finalize."""
+        # Convert additional JSON graphs
+        run_command(f'"{sys.executable}" convert_json_graphs.py "{self.report_subdir}"')
+        
+        # Regenerate viewer with all graphs
+        self.step7_html_viewer()
+        
+        # Cleanup sandbox
+        if self.sandbox:
+            Colors.print_msg("[Cleanup] Removing sandbox...", Colors.BLUE)
+            self.sandbox.__exit__(None, None, None)
+        
+        Colors.print_msg("=" * 60, Colors.BLUE)
+        Colors.print_msg("Analysis complete. View results at:", Colors.GREEN)
+        Colors.print_msg(f"  {self.report_subdir / 'visualize_graphs.html'}")
+        Colors.print_msg("=" * 60, Colors.BLUE)
+    
+    def run(self):
+        """Execute the full analysis pipeline."""
+        self.setup_sandbox()
+        self.pre_validate()
+        self.step1_core_structures()
+        self.step2_advanced_analysis()
+        self.step3_mermaid()
+        self.step3b_graphviz()
+        self.step4_cfg_to_mermaid()
+        self.step5_variable_analysis()
+        self.step6_data_dependencies()
+        self.step7_html_viewer()
+        self.cleanup()
 
-    Colors.print_msg("[Optional] Converting AST and Data Structures to Graphs...", Colors.GREEN)
-    run_command(f'"{sys.executable}" convert_json_graphs.py "{report_subdir}"')
+# ============================================================================
+# Main Entry Point
+# ============================================================================
 
-    # Regenerate Viewer to include new graphs
-    Colors.print_msg("[Refresing] Generating HTML Visualizer...", Colors.GREEN)
-    run_command(cmd_viewer)
-
-    # Cleanup sandbox if used
-    if sandbox is not None:
-        Colors.print_msg("[Cleanup] Removing sandbox environment...", Colors.BLUE)
-        sandbox.__exit__(None, None, None)
-
-    Colors.print_msg("===================================================", Colors.BLUE)
-    Colors.print_msg("Analysis complete. View results at:", Colors.GREEN)
-    Colors.print_msg(f"  {report_subdir / 'visualize_graphs.html'}")
-    Colors.print_msg("===================================================", Colors.BLUE)
+def main():
+    os.system('')  # Enable ANSI on Windows
+    
+    if len(sys.argv) < 2:
+        print(__doc__)
+        sys.exit(1)
+    
+    target_path = Path(sys.argv[1]).resolve()
+    if not target_path.exists():
+        Colors.print_msg(f"Error: File not found: {target_path}", Colors.RED)
+        sys.exit(1)
+    
+    # Parse options (graphviz enabled by default)
+    options = {
+        'graphviz': "--no-graphviz" not in sys.argv,
+        'lenient': "--lenient" in sys.argv,
+        'ignore_copybooks': "--ignore-copybooks" in sys.argv,
+        'use_sandbox': "--no-sandbox" not in sys.argv,
+    }
+    
+    config = Config()
+    config.report_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Print banner
+    Colors.print_msg("-" * 60, Colors.BLUE)
+    Colors.print_msg(f"COBOL Analysis: {target_path.name}", Colors.GREEN)
+    dialect, needs_idms = detect_dialect(target_path)
+    Colors.print_msg(f"Dialect: {dialect}" + (" (IDMS)" if needs_idms else ""), Colors.BLUE)
+    if options['graphviz']:
+        Colors.print_msg("Graphviz: ENABLED", Colors.YELLOW)
+    if options['llm']:
+        Colors.print_msg("LLM Documentation: ENABLED", Colors.YELLOW)
+    if options['use_sandbox']:
+        Colors.print_msg("Sandbox: ENABLED", Colors.YELLOW)
+    Colors.print_msg("-" * 60, Colors.BLUE)
+    
+    # Run pipeline
+    pipeline = AnalysisPipeline(config, target_path, options)
+    pipeline.run()
 
 if __name__ == "__main__":
     try:
