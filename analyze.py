@@ -300,27 +300,11 @@ class AnalysisPipeline:
         else:
             Colors.print_msg("  Warning: Unified JSON not found", Colors.YELLOW)
     
-    def step7_html_viewer(self):
-        """Generate HTML visualization."""
-        Colors.print_msg("[7/7] Generating HTML Visualizer...", Colors.GREEN)
-        cmd = (
-            f'"{sys.executable}" generate_viewer.py '
-            f'--mermaid-dir "{self.report_subdir / "mermaid"}" '
-            f'--output "{self.report_subdir / "visualize_graphs.html"}" '
-            f'--title "{self.target_file}" --source "{self.target_path}"'
-        )
-        if self.options.get('graphviz'):
-            cmd += ' --graphviz'
-        run_command(cmd)
-    
     
     def cleanup(self):
         """Cleanup sandbox and finalize."""
         # Convert additional JSON graphs
         run_command(f'"{sys.executable}" convert_json_graphs.py "{self.report_subdir}"')
-        
-        # Regenerate viewer with all graphs
-        self.step7_html_viewer()
         
         # Cleanup sandbox
         if self.sandbox:
@@ -328,8 +312,8 @@ class AnalysisPipeline:
             self.sandbox.__exit__(None, None, None)
         
         Colors.print_msg("=" * 60, Colors.BLUE)
-        Colors.print_msg("Analysis complete. View results at:", Colors.GREEN)
-        Colors.print_msg(f"  {self.report_subdir / 'visualize_graphs.html'}")
+        Colors.print_msg("Analysis complete. Results at:", Colors.GREEN)
+        Colors.print_msg(f"  {self.report_subdir}")
         Colors.print_msg("=" * 60, Colors.BLUE)
     
     def run(self):
@@ -343,7 +327,6 @@ class AnalysisPipeline:
         self.step4_cfg_to_mermaid()
         self.step5_variable_analysis()
         self.step6_data_dependencies()
-        self.step7_html_viewer()
         self.cleanup()
 
 # ============================================================================
