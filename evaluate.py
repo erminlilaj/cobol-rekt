@@ -129,6 +129,115 @@ def extract_copybook_name(suggestion):
         return match.group(1)
     return None
 
+def scan_source_for_copybooks(file_path):
+    """
+    Scans the source file to find all COPY statements.
+    Returns a set of expected copybook names.
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            
+        # Regex for COPY NAME. or COPY 'NAME'. or COPY "NAME".
+        # Also handles COPY NAME OF LIBRARY.
+        pattern = re.compile(
+            r'COPY\s+[\'"]?([A-Za-z0-9_-]+)[\'"]?(?:\s+(?:OF|IN)\s+[A-Za-z0-9_-]+)?',
+            re.IGNORECASE
+        )
+        return set(pattern.findall(content))
+    except Exception:
+        return set()
+
+def analyze_copybook_health(target_file, copybooks_dir, parser_errors):
+    """
+    Analyzes the status of all referenced copybooks.
+    Classifies them as: OK, Broken, Missing, or Stub/Empty.
+    """
+    if not copybooks_dir or not Path(copybooks_dir).exists():
+        return None
+
+    # 1. Identify what SHOULD be there
+    expected_copybooks = scan_source_for_copybooks(target_file)
+    
+    # 2. Identify what failed in parsing
+    broken_copybooks = set()
+    missing_copybooks = set()
+    
+    # Extract broken/missing names from error logs
+    for err in parser_errors:
+        suggestion = err.get('suggestion', '').lower()
+        # Direct broken reference
+        if 'errors inside the copybook' in suggestion:
+            # Try to get ID from location if available
+            cb_id = err.get('copybook_id')
+            if cb_id:
+                broken_copybooks.add(cb_id)
+            # Or from filename in location
+            elif err.get('file') and err.get('file') != Path(target_file).name:
+                broken_copybooks.add(err.get('file').split('.')[0])
+                
+        # Direct missing reference
+        if 'copybook not found' in suggestion:
+            cb_id = extract_copybook_name(err['suggestion'])
+            if cb_id:
+                missing_copybooks.add(cb_id)
+
+    # 3. Check physical files
+    stats = {
+        'ok': [],
+        'broken': [],
+        'missing': [],
+        'stub': []
+    }
+
+    # Helper to find file case-insensitively
+    def find_file(name, directory):
+        p = Path(directory)
+        for ext in ['', '.cpy', '.cbl', '.CPY', '.CBL']:
+            target = p / f"{name}{ext}"
+            if target.exists(): return target
+            # Try lowercase match
+            target_lower = p / f"{name.lower()}{ext}"
+            if target_lower.exists(): return target_lower
+        return None
+
+    for cb_name in expected_copybooks:
+        file_path = find_file(cb_name, copybooks_dir)
+        
+        # CATEGORY: MISSING
+        if not file_path:
+            stats['missing'].append(cb_name)
+            continue
+            
+        # CATEGORY: STUB / EMPTY
+        try:
+            size = file_path.stat().st_size
+            content = file_path.read_text(errors='ignore')
+            # Check for empty or specific "STUB" marker from our sandbox tool
+            if size < 50 or "STUB COPYBOOK" in content:
+                stats['stub'].append(cb_name)
+                continue
+        except:
+            pass # Treat as existing if we can't read it
+            
+        # CATEGORY: BROKEN (Found in parser errors)
+        # Check if this name appears in our broken list (fuzzy match)
+        is_broken = False
+        for broken in broken_copybooks:
+            if cb_name.upper() == broken.upper() or cb_name.upper() in broken.upper():
+                stats['broken'].append(cb_name)
+                is_broken = True
+                break
+        
+        if is_broken:
+            continue
+            
+        # CATEGORY: OK
+        # If it exists, isn't empty, and didn't crash the parser -> It's OK
+        stats['ok'].append(cb_name)
+        
+    return stats
+
 def run_evaluation(target_file, copybooks_dir, verbose=False):
     """Run smojol-cli and capture diagnostic output."""
     current_dir = Path.cwd()
@@ -173,21 +282,60 @@ def run_evaluation(target_file, copybooks_dir, verbose=False):
     
     return result.returncode, result.stdout, result.stderr
 
-def generate_report(errors, exec_context, target_file, verbose=False):
+def generate_report(errors, exec_context, target_file, copybook_stats, verbose=False):
     """Generate a privacy-safe diagnostic report."""
     Colors.print_msg("\n" + "=" * 60, Colors.BLUE)
     Colors.print_msg(f"  COBOL SYNTAX EVALUATION REPORT", Colors.BOLD)
     Colors.print_msg(f"  File: {Path(target_file).name}", Colors.CYAN)
     Colors.print_msg("=" * 60, Colors.BLUE)
     
+    # 1. COPYBOOK HEALTH SECTION
+    if copybook_stats:
+        Colors.print_msg("\n" + "-" * 60, Colors.BLUE)
+        Colors.print_msg("COPYBOOK HEALTH CHECK:", Colors.CYAN)
+        Colors.print_msg("-" * 60, Colors.BLUE)
+        
+        n_ok = len(copybook_stats['ok'])
+        n_stub = len(copybook_stats['stub'])
+        n_broken = len(copybook_stats['broken'])
+        n_missing = len(copybook_stats['missing'])
+        total = n_ok + n_stub + n_broken + n_missing
+        
+        Colors.print_msg(f"  Total Referenced: {total}", Colors.BOLD)
+        
+        # Progress Bar Visual
+        if total > 0:
+            bar_len = 40
+            ok_chars = int((n_ok / total) * bar_len)
+            stub_chars = int((n_stub / total) * bar_len)
+            broken_chars = int((n_broken / total) * bar_len)
+            missing_chars = bar_len - (ok_chars + stub_chars + broken_chars)
+            
+            bar = (f"{Colors.GREEN}{'█' * ok_chars}"
+                   f"{Colors.YELLOW}{'▒' * stub_chars}"
+                   f"{Colors.RED}{'▓' * broken_chars}"
+                   f"{Colors.RED}{'░' * missing_chars}{Colors.RESET}")
+            print(f"  [{bar}]")
+        
+        print("")
+        Colors.print_msg(f"  ✅ OK (Healthy):      {n_ok}", Colors.GREEN)
+        Colors.print_msg(f"  ⚠️  STUBBED (Empty):   {n_stub}", Colors.YELLOW)
+        Colors.print_msg(f"  ❌ BROKEN (Errors):   {n_broken}", Colors.RED)
+        Colors.print_msg(f"  🚫 MISSING:           {n_missing}", Colors.RED)
+        
+        if n_broken > 0:
+            Colors.print_msg(f"\n  Broken files: {', '.join(copybook_stats['broken'][:5])}" + ("..." if n_broken > 5 else ""), Colors.RED)
+        if n_missing > 0:
+            Colors.print_msg(f"  Missing files: {', '.join(copybook_stats['missing'][:5])}" + ("..." if n_missing > 5 else ""), Colors.RED)
+
+    # 2. SYNTAX ERROR SECTION
     if not errors:
-        Colors.print_msg("\n✅ No parsing errors detected!", Colors.GREEN)
-        Colors.print_msg("   The file parsed successfully.\n", Colors.GREEN)
+        Colors.print_msg("\n✅ No parsing errors detected in main program!", Colors.GREEN)
         return 0
     
     categories = categorize_errors(errors)
     
-    Colors.print_msg(f"\n❌ Found {len(errors)} issue(s):\n", Colors.RED)
+    Colors.print_msg(f"\n❌ Found {len(errors)} parsing issue(s):\n", Colors.RED)
     
     # Summary
     Colors.print_msg("SUMMARY BY CATEGORY:", Colors.YELLOW)
@@ -230,44 +378,14 @@ def generate_report(errors, exec_context, target_file, verbose=False):
                 if copybook_id:
                     Colors.print_msg(f"  │  Inside copybook: {copybook_id}", Colors.YELLOW)
                 Colors.print_msg(f"  │  Unexpected token: '{token}'", Colors.YELLOW)
-                Colors.print_msg(f"  └─ Span length: {end_char - start_char if isinstance(start_char, int) and isinstance(end_char, int) else '?'} characters", Colors.YELLOW)
                 
                 # Provide specific guidance based on token
                 if token == '(':
                     Colors.print_msg(f"    DIAGNOSIS: Parenthesis appeared where parser didn't expect it", Colors.CYAN)
-                    Colors.print_msg(f"    LOCATION HINT: Check what keyword is at column {start_char - 10 if isinstance(start_char, int) else '?'}-{start_char}", Colors.CYAN)
-                    Colors.print_msg(f"    COMMON CAUSES:", Colors.GREEN)
-                    Colors.print_msg(f"      1. Space before '(' in CICS/SQL command", Colors.GREEN)
-                    Colors.print_msg(f"         BAD:  EXEC CICS SEND FROM (VAR)", Colors.RED)
-                    Colors.print_msg(f"         GOOD: EXEC CICS SEND FROM(VAR)", Colors.GREEN)
-                    Colors.print_msg(f"      2. Missing LENGTH clause in CICS SEND", Colors.GREEN)
-                    Colors.print_msg(f"         BAD:  EXEC CICS SEND FROM(VAR) END-EXEC", Colors.RED)
-                    Colors.print_msg(f"         GOOD: EXEC CICS SEND FROM(VAR) LENGTH(LEN) END-EXEC", Colors.GREEN)
-                    Colors.print_msg(f"      3. Preprocessor macro not expanded", Colors.GREEN)
-                    Colors.print_msg(f"      4. Reference modification issue: VAR(1:5)", Colors.GREEN)
-                elif token in ('WHEN', 'ELSE', 'END-IF', 'END-EVALUATE', 'END-PERFORM'):
-                    Colors.print_msg(f"    DIAGNOSIS: Control structure keyword found outside its block", Colors.CYAN)
-                    Colors.print_msg(f"    ROOT CAUSE: An earlier error broke the parser's understanding", Colors.GREEN)
-                    Colors.print_msg(f"    FIX: Scroll UP and fix the FIRST error - this one will disappear", Colors.GREEN)
-                elif token == 'CONDITION':
-                    Colors.print_msg(f"    DIAGNOSIS: 'CONDITION' is a reserved word in CICS", Colors.CYAN)
-                    Colors.print_msg(f"    CAUSE: Used as variable name OR in unsupported HANDLE CONDITION", Colors.GREEN)
-                    Colors.print_msg(f"    FIX: Rename the variable OR check CICS HANDLE syntax", Colors.GREEN)
+                    Colors.print_msg(f"    FIX: Check for space before '(' in CICS/SQL commands", Colors.GREEN)
                 elif token in ('EXEC', 'END-EXEC'):
                     Colors.print_msg(f"    DIAGNOSIS: Embedded SQL/CICS block boundary issue", Colors.CYAN)
-                    Colors.print_msg(f"    CAUSE: Nested EXEC blocks or unclosed previous EXEC", Colors.GREEN)
                     Colors.print_msg(f"    FIX: Ensure each EXEC has exactly one matching END-EXEC", Colors.GREEN)
-                else:
-                    Colors.print_msg(f"    DIAGNOSIS: Token '{token}' not expected in this context", Colors.CYAN)
-                    Colors.print_msg(f"    POSSIBLE CAUSES:", Colors.GREEN)
-                    Colors.print_msg(f"      • Vendor-specific extension not in standard grammar", Colors.GREEN)
-                    Colors.print_msg(f"      • Typo or missing punctuation on previous line", Colors.GREEN)
-                    Colors.print_msg(f"      • Preprocessor macro that wasn't expanded", Colors.GREEN)
-            
-            Colors.print_msg("\n  GENERAL SYNTAX ERROR TIPS:", Colors.MAGENTA)
-            Colors.print_msg("  • Fix errors from TOP to BOTTOM (first error causes cascade)", Colors.GREEN)
-            Colors.print_msg("  • Check column alignment (code must be in columns 8-72)", Colors.GREEN)
-            Colors.print_msg("  • Ensure all statements end with periods where required", Colors.GREEN)
         
         elif cat == 'Missing Period/Statement Boundary':
             lines = [str(err.get('line', '?')) for err in cat_errors]
@@ -277,44 +395,26 @@ def generate_report(errors, exec_context, target_file, verbose=False):
         elif cat == 'Copybook Internal Errors':
             files = set(err.get('file', '?') for err in cat_errors)
             Colors.print_msg(f"  Affected copybooks: {', '.join(files)}", Colors.YELLOW)
-            Colors.print_msg("  → Fix errors in the copybook files first", Colors.GREEN)
+            Colors.print_msg("  → See 'Copybook Health Check' above for details", Colors.GREEN)
         
         else:
             for err in cat_errors[:3]:  # Show first 3
                 Colors.print_msg(f"  Line {err.get('line', '?')}: {err['suggestion'][:60]}...", Colors.YELLOW)
-            if len(cat_errors) > 3:
-                Colors.print_msg(f"  ... and {len(cat_errors) - 3} more", Colors.YELLOW)
     
     # Recommendations
     Colors.print_msg("\n" + "-" * 60, Colors.BLUE)
     Colors.print_msg("RECOMMENDED ACTIONS:", Colors.GREEN)
     Colors.print_msg("-" * 60, Colors.BLUE)
     
-    if 'Missing Copybooks' in categories:
-        Colors.print_msg("1. Provide missing copybooks or use --ignore-copybooks flag", Colors.GREEN)
+    if copybook_stats and len(copybook_stats['missing']) > 0:
+        Colors.print_msg("1. Run with --auto-stub to create placeholders for missing files", Colors.GREEN)
+    
+    if copybook_stats and len(copybook_stats['broken']) > 0:
+        Colors.print_msg("2. Run the preprocessor to fix CICS syntax in broken copybooks", Colors.GREEN)
     
     if 'Syntax Errors (Unexpected Token)' in categories:
-        Colors.print_msg("2. Check for dialect-specific syntax (CICS/SQL/IDMS)", Colors.GREEN)
-        Colors.print_msg("   • CICS: Ensure no spaces before '(' in commands", Colors.GREEN)
-        Colors.print_msg("   • SQL: Ensure EXEC SQL blocks are complete", Colors.GREEN)
-    
-    if 'Missing Period/Statement Boundary' in categories:
-        Colors.print_msg("3. Fix the FIRST error - later errors are often cascading", Colors.GREEN)
-    
-    # Show EXEC context if available
-    if exec_context:
-        Colors.print_msg("\n" + "-" * 60, Colors.BLUE)
-        Colors.print_msg("DETECTED EXEC BLOCKS (for context):", Colors.CYAN)
-        Colors.print_msg("-" * 60, Colors.BLUE)
-        cics_count = sum(1 for e in exec_context if e['type'] == 'CICS')
-        sql_count = sum(1 for e in exec_context if e['type'] == 'SQL')
-        Colors.print_msg(f"  Total EXEC blocks found: {len(exec_context)}", Colors.YELLOW)
-        Colors.print_msg(f"    • CICS blocks: {cics_count}", Colors.YELLOW)
-        Colors.print_msg(f"    • SQL blocks: {sql_count}", Colors.YELLOW)
-        if verbose:
-            for ex in exec_context[:5]:
-                Colors.print_msg(f"    [{ex['number']}] {ex['type']}: {ex['preview']}", Colors.CYAN)
-    
+         Colors.print_msg("3. Check for correct dialect (IDMS vs COBOL) configuration", Colors.GREEN)
+
     Colors.print_msg("\n" + "=" * 60 + "\n", Colors.BLUE)
     
     return len(errors)
@@ -335,6 +435,10 @@ def main():
         if arg == "--copybooks" and i + 1 < len(sys.argv):
             copybooks_dir = sys.argv[i + 1]
     
+    # If not provided, assume same dir as source
+    if not copybooks_dir:
+        copybooks_dir = str(Path(target_file).parent)
+
     Colors.print_msg("\n🔍 Evaluating COBOL syntax...\n", Colors.CYAN)
     
     returncode, stdout, stderr = run_evaluation(target_file, copybooks_dir, verbose)
@@ -345,7 +449,11 @@ def main():
         Colors.print_msg("--- End Raw Output ---\n", Colors.CYAN)
     
     errors, exec_context = parse_error_output(stderr)
-    error_count = generate_report(errors, exec_context, target_file, verbose)
+    
+    # Run Copybook Health Check
+    copybook_stats = analyze_copybook_health(target_file, copybooks_dir, errors)
+    
+    error_count = generate_report(errors, exec_context, target_file, copybook_stats, verbose)
     
     # Cleanup temp directory
     import shutil

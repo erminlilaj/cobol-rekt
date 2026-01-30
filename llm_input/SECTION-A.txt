@@ -1,0 +1,140 @@
+FLOW DOCUMENTATION
+==================
+
+FLOW LOGIC:
+  [SECTION-A] --> [SECTION-B]
+  [SECTION-A] --> [para-group:]
+  [SECTION-B] --> [SECTION-B1]
+  [SECTION-B] --> [para-group:]
+  [SECTION-B1] --> [SECTION-C]
+  [SECTION-B1] --> [para-group:]
+  [SECTION-C] --> [para-group:]
+  [para-group:] --> [P9]
+  [P9] --> [P10]
+  [P10] --> [IF(LINKED-SCORE]
+  [IF(LINKED-SCORE] --> [IFLINKED-SCORES]
+  [IF(LINKED-SCORE] --> [IS (LINKED-SCORES(1) = 10) OR > 20 AND PASS?]
+  [IFLINKED-SCORES] --> [STOPRUN.]
+  [IFLINKED-SCORES] --> [IS LINKED-SCORES(1) = 100 OR 30 OR 50?]
+  [STOPRUN.] --> [STOPRUN]
+  [IS LINKED-SCORES(1) = 100 OR 30 OR 50?] --> [Yes]
+  [IS (LINKED-SCORES(1) = 10) OR > 20 AND PASS?] --> [Yes]
+  [para-group:] --> [P7]
+  [P7] --> [P8]
+  [IF(CALCULATED-G] --> [IS (CALCULATED-GPA) = "3.0" OR "4.0"?]
+  [IS (CALCULATED-GPA) = "3.0" OR "4.0"?] --> [Yes]
+  [IS (CALCULATED-GPA) = "3.0" OR "4.0"?] --> [No]
+  [para-group:] --> [P5]
+  [P5] --> [P6]
+  [IF(CALCULATED-G] --> [IS (CALCULATED-GPA) = "3.0" OR "4.0"?]
+  [IS (CALCULATED-GPA) = "3.0" OR "4.0"?] --> [Yes]
+  [IS (CALCULATED-GPA) = "3.0" OR "4.0"?] --> [No]
+  [para-group:] --> [P2]
+  [P2] --> [P3]
+  [P3] --> [P4]
+
+NODE DETAILS (CODE CONTENT):
+----------------------------
+
+[NODE: 7284c77f-da4f-449a-adc9-12c8c9152640]
+SECTION-A
+
+[NODE: 94b13b6c-51b6-4a0f-90fb-ba310cf90a02]
+SECTION-B
+
+[NODE: d1e1b058-1e39-4db4-94d6-ce4ff4da209d]
+para-group:
+
+[NODE: bdcacc22-b617-4762-8e3d-eadb2695f2af]
+SECTION-B1
+
+[NODE: ae0de153-3af6-45d2-9ae1-2c7d50657e9a]
+para-group:
+
+[NODE: 01ef0de4-b495-4965-9cb2-1c238d910631]
+SECTION-C
+
+[NODE: 4517705a-eac0-417f-a4cd-12cf7ba3d91d]
+para-group:
+
+[NODE: 4b4562b6-42c2-487e-98cd-ac433e0f2066]
+para-group:
+
+[NODE: dd5945c7-a7f5-4691-9ff6-449a861b60b2]
+P9
+
+[NODE: c9754d60-daee-4554-8e58-cbf7c2b49d9f]
+P10
+
+[NODE: 932351a1-6261-40a2-a033-f450e08b4827]
+IF(LINKED-SCORE
+
+[NODE: d15b96cb-cae3-4cdd-bd39-53dc9a28fb4b]
+IFLINKED-SCORES
+
+[NODE: 7ef86e2a-1685-463b-b6d1-415ed5c26712]
+IS
+(LINKED-SCORES(1) = 10) OR > 20 AND PASS?
+
+[NODE: 1c3041e5-bffe-4fda-9e2b-ed45bc23274a]
+STOPRUN.
+
+[NODE: 3ca9d1ad-192b-4e35-b8bb-cfee06552f64]
+IS
+LINKED-SCORES(1) = 100 OR 30 OR 50?
+
+[NODE: 54e5d673-92ed-4a3f-993b-ff369ba90f2e]
+STOPRUN
+
+[NODE: 7ca3bf16-7237-4aa9-b781-96746315851e]
+Yes
+
+[NODE: ab61f0c7-cda4-443f-8b91-1dd0bfc4bbda]
+Yes
+
+[NODE: ff8a76e2-0442-4502-9882-0b6f685d51eb]
+P7
+
+[NODE: 4b7ddf7a-3cf6-4ab8-a091-cb5ac8f2e033]
+P8
+
+[NODE: ea14aa1e-e8ea-4685-b284-ca781f29221b]
+IF(CALCULATED-G
+
+[NODE: 459f1fd0-8c07-42f5-96b1-bb9794ac848c]
+IS
+(CALCULATED-GPA) = "3.0" OR "4.0"?
+
+[NODE: 95d52520-757a-45a8-bfcd-51a49eef9371]
+Yes
+
+[NODE: 0ebcdaf7-d979-4e93-b545-f585678721ff]
+No
+
+[NODE: def8d497-a9d2-4a7d-b5d4-65d7ccee8440]
+P5
+
+[NODE: ca2d2aaf-b228-4b51-8a0d-cad287811e5d]
+P6
+
+[NODE: 0657a607-c91c-49b5-9954-1f82d2dece9a]
+IF(CALCULATED-G
+
+[NODE: b6ff311b-b767-4521-ab07-a2195e3a3923]
+IS
+(CALCULATED-GPA) = "3.0" OR "4.0"?
+
+[NODE: 4d6b532c-e497-4deb-a469-de0ad267619c]
+Yes
+
+[NODE: 23523633-34f9-41fe-9737-55953689661a]
+No
+
+[NODE: 31f07ee2-62e4-4ebf-b5e9-1d2a7fc317ac]
+P2
+
+[NODE: fd7f00f0-b7c0-44c3-9ca2-e77ed3ce1283]
+P3
+
+[NODE: 52322de1-d30d-4979-a43e-408e911e8c8e]
+P4

@@ -15,8 +15,8 @@ DEFAULT_MODEL = "granite-code:8b"
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 11434
 # Chunking settings for large inputs
-MAX_CHUNK_LINES = 200  # Max lines per chunk (keeps each chunk ~4-6KB)
-CHUNK_OVERLAP_LINES = 10  # Overlap to maintain context between chunks
+MAX_CHUNK_LINES = 100  # Max lines per chunk (smaller = faster processing)
+CHUNK_OVERLAP_LINES = 5  # Overlap to maintain context between chunks
 
 DEFAULT_PROMPT = """
 You are a Mainframe Modernization Architect performing static analysis on COBOL programs.
@@ -72,6 +72,20 @@ OUTPUT FORMAT (Markdown):
 - <Potential refactoring targets, code smells, or migration risks>
 
 INPUT CONTEXT:
+"""
+
+# Simpler prompt for individual chunks (faster processing)
+CHUNK_PROMPT = """
+Analyze this COBOL code section and provide:
+1. **Summary**: What does this section do?
+2. **Key Variables**: List important variables with their purpose
+3. **Control Flow**: Describe branching/looping logic
+4. **External Calls**: List CALLs, file I/O, SQL, or CICS operations
+5. **Business Rules**: Translate conditions to simple IF-THEN rules
+
+Keep response concise. Format as Markdown.
+
+CODE:
 """
 
 def save_performance_report(metrics, output_dir_path):
@@ -210,9 +224,9 @@ def generate_documentation(input_dir, output_dir, model, port, prompt_override=N
                 if verbose:
                     print(f"  Sending request to {api_url}...")
                 
-                # Add chunk context to prompt for multi-chunk files
+                # Use simpler prompt for multi-chunk files (faster processing)
                 if num_chunks > 1:
-                    chunk_prompt = f"{prompt_template}\n\n[This is part {chunk_idx + 1} of {num_chunks} of a large program. Focus on documenting this section.]\n\n{chunk}"
+                    chunk_prompt = f"{CHUNK_PROMPT}\n\n{chunk}"
                 else:
                     chunk_prompt = f"{prompt_template}\n\n{chunk}"
                 
