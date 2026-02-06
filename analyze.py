@@ -30,6 +30,7 @@ from pathlib import Path
 import graph_to_text
 import copybook_resolver
 import knowledge_base_builder
+import comment_extractor
 from analysis import SandboxEnvironment, Colors
 
 # ============================================================================
@@ -304,6 +305,18 @@ class AnalysisPipeline:
     def step7_knowledge_base(self):
         """Build LLM-optimized knowledge base."""
         Colors.print_msg("[7/7] Building Knowledge Base...", Colors.GREEN)
+        
+        # Extract comments from original source file
+        try:
+            comments_output = self.report_subdir / "comments.json"
+            comment_extractor.extract_comments_to_json(
+                self.target_path, comments_output, verbose=False
+            )
+            if self.verbose:
+                Colors.print_msg("  Extracted source comments", Colors.GREEN)
+        except Exception as e:
+            Colors.print_msg(f"  Warning: Comment extraction failed: {e}", Colors.YELLOW)
+        
         try:
             kb_path = knowledge_base_builder.build_knowledge_base(
                 self.report_subdir, self.target_file, verbose=True

@@ -31,6 +31,7 @@ class KnowledgeBaseBuilder:
         # Cached data
         self._cfg_data = None
         self._data_structures = None
+        self._comments = None
     
     def build(self) -> Path:
         """Build complete knowledge base. Returns output directory."""
@@ -186,9 +187,17 @@ class KnowledgeBaseBuilder:
 
 This document describes the program flow in a linear, readable format.
 
----
-
 """
+        
+        # Inject program summary at top if available
+        comments = self._load_comments()
+        if comments and '_PROGRAM_SUMMARY' in comments:
+            content += "## Program Overview\n\n"
+            for line in comments['_PROGRAM_SUMMARY']:
+                content += f"> {line}\n"
+            content += "\n---\n\n"
+        else:
+            content += "---\n\n"
         
         # Process paragraphs/sections
         processed = set()
@@ -198,6 +207,14 @@ This document describes the program flow in a linear, readable format.
         for para in paragraphs:
             para_name = para.get('name', para.get('label', 'Unknown'))
             content += f"## {para_name}\n\n"
+            
+            # Inject comments as blockquotes
+            comments = self._load_comments()
+            para_key = para_name.upper()
+            if comments and para_key in comments:
+                for comment_line in comments[para_key]:
+                    content += f"> {comment_line}\n"
+                content += "\n"
             
             # Get statements in this paragraph
             statements = self._get_paragraph_statements(para['id'], nodes, outgoing)
@@ -526,6 +543,21 @@ This document describes the program flow in a linear, readable format.
             except Exception as e:
                 if self.verbose:
                     print(f"  [WARN] Failed to load data structures: {e}")
+        return None
+    
+    def _load_comments(self) -> Optional[dict]:
+        """Load comments JSON."""
+        if self._comments is not None:
+            return self._comments
+        
+        comments_path = self.report_dir / "comments.json"
+        if comments_path.exists():
+            try:
+                self._comments = json.loads(comments_path.read_text(encoding='utf-8'))
+                return self._comments
+            except Exception as e:
+                if self.verbose:
+                    print(f"  [WARN] Failed to load comments: {e}")
         return None
 
 
