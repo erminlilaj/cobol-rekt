@@ -544,7 +544,7 @@ class SandboxEnvironment:
         Fixes common issues like spaces before parentheses.
         """
         try:
-            from cobol_preprocessor import preprocess_directory, preprocess_file
+            from .cobol_preprocessor import preprocess_directory, preprocess_file
         except ImportError:
             if self._verbose:
                 Colors.print_msg("  [WARN] cobol_preprocessor not found, skipping syntax normalization", Colors.YELLOW)

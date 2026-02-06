@@ -29,6 +29,7 @@ from pathlib import Path
 # Local imports
 import graph_to_text
 import copybook_resolver
+import knowledge_base_builder
 from analysis import SandboxEnvironment, Colors
 
 # ============================================================================
@@ -300,6 +301,17 @@ class AnalysisPipeline:
         else:
             Colors.print_msg("  Warning: Unified JSON not found", Colors.YELLOW)
     
+    def step7_knowledge_base(self):
+        """Build LLM-optimized knowledge base."""
+        Colors.print_msg("[7/7] Building Knowledge Base...", Colors.GREEN)
+        try:
+            kb_path = knowledge_base_builder.build_knowledge_base(
+                self.report_subdir, self.target_file, verbose=True
+            )
+            Colors.print_msg(f"  Output: {kb_path}", Colors.GREEN)
+        except Exception as e:
+            Colors.print_msg(f"  Warning: Knowledge base generation failed: {e}", Colors.YELLOW)
+    
     
     def cleanup(self):
         """Cleanup sandbox and finalize."""
@@ -327,6 +339,7 @@ class AnalysisPipeline:
         self.step4_cfg_to_mermaid()
         self.step5_variable_analysis()
         self.step6_data_dependencies()
+        self.step7_knowledge_base()
         self.cleanup()
 
 # ============================================================================
@@ -363,8 +376,6 @@ def main():
     Colors.print_msg(f"Dialect: {dialect}" + (" (IDMS)" if needs_idms else ""), Colors.BLUE)
     if options['graphviz']:
         Colors.print_msg("Graphviz: ENABLED", Colors.YELLOW)
-    if options['llm']:
-        Colors.print_msg("LLM Documentation: ENABLED", Colors.YELLOW)
     if options['use_sandbox']:
         Colors.print_msg("Sandbox: ENABLED", Colors.YELLOW)
     Colors.print_msg("-" * 60, Colors.BLUE)
