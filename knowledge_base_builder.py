@@ -117,12 +117,6 @@ class KnowledgeBaseBuilder:
         nodes = cfg.get('nodes', [])
         edges = cfg.get('edges', [])
         
-        # Count decision points (IF, EVALUATE)
-        decisions = sum(1 for n in nodes if n.get('type') in ('IF', 'EVALUATE', 'CONDITION'))
-        
-        # Count loops (PERFORM)
-        loops = sum(1 for n in nodes if 'PERFORM' in n.get('type', ''))
-        
         # Cyclomatic-ish: edges - nodes + 2
         cyclomatic = max(1, len(edges) - len(nodes) + 2)
         
@@ -315,8 +309,8 @@ This document describes the program flow in a linear, readable format.
         # Remove newlines, collapse whitespace
         clean = ' '.join(text.split())
         # Truncate if too long
-        if len(clean) > 100:
-            clean = clean[:97] + "..."
+        if len(clean) > 300:
+            clean = clean[:297] + "..."
         return clean
     
     def _extract_condition(self, text: str) -> str:
@@ -328,7 +322,7 @@ This document describes the program flow in a linear, readable format.
     
     def _extract_perform_target(self, text: str) -> str:
         """Extract target paragraph from PERFORM."""
-        match = re.search(r'PERFORM\s+([A-Za-z0-9-]+)', text, re.IGNORECASE)
+        match = re.search(r'PERFORM\s+([A-Za-z0-9-]+(?:\s+(?:THRU|THROUGH)\s+[A-Za-z0-9-]+)?)', text, re.IGNORECASE)
         if match:
             return match.group(1)
         return "Unknown"
