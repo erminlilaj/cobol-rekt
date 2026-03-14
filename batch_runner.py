@@ -24,10 +24,11 @@ def run_analysis(filepath):
         # Run with --lenient and --ignore-copybooks to focus on parsing stability
         # We assume for batch testing we don't have all system copybooks set up
         cmd = [
-            sys.executable, "analyze.py", 
-            str(filepath), 
-            "--lenient", 
-            "--ignore-copybooks" 
+            sys.executable, "analyze.py",
+            str(filepath),
+            "--lenient",
+            "--ignore-copybooks",
+            "--no-graphviz",
         ]
         
         # Capture output to avoid console spam
@@ -41,8 +42,8 @@ def run_analysis(filepath):
         duration = time.time() - start_time
         success = (result.returncode == 0)
         
-        # Check if HTML was actually generated (strict success)
-        report_dir = Path("out/report") / f"{filepath.name}.report" / "visualize_graphs.html"
+        # Check if knowledge base was actually generated (strict success)
+        report_dir = Path("out/report") / f"{filepath.name}.report" / "knowledge_base"
         generated = report_dir.exists()
         
         return {
@@ -121,7 +122,7 @@ def main():
     print(f"Total: {total_files}")
     print(f"Passed (Exit 0): {passed}")
     print(f"Failed (Exit 1): {failed}")
-    print(f"HTML Generated:  {generated}")
+    print(f"Knowledge Base Generated: {generated}")
     print("\nSee batch_error_*.log files for failure details.")
 
 if __name__ == "__main__":

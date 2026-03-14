@@ -22,8 +22,6 @@ def variable_static_values(root: ASTNode) -> dict[str, set]:
         for n
         in
         final_nodes]
-    value = path(final_nodes[0],
-                 [recursive(node_type("MoveToSendingAreaContext")), recursive(node_type("LiteralContext"))])
     static_assignments: dict[str, set] = {}
     for variable, value in static_assignment_pairs:
         if variable not in static_assignments:

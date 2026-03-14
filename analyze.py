@@ -157,6 +157,7 @@ class AnalysisPipeline:
         self.target_path = target_path
         self.options = options
         
+        self.verbose = options.get('verbose', False)
         # Effective paths (may be overridden by sandbox)
         self.src_dir = target_path.parent
         self.copybooks_dir = target_path.parent
