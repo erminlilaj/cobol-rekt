@@ -450,8 +450,10 @@ This document describes the program flow in a linear, readable format.
                         deps['cics'].append(cics_cmd)
         
         # Deduplicate
-        deps['database']['tables_read'] = list(set(deps['database']['tables_read']))
-        deps['database']['tables_updated'] = list(set(deps['database']['tables_updated']))
+        deps['database']['tables_read'] = sorted(set(deps['database']['tables_read']))
+        deps['database']['tables_updated'] = sorted(set(deps['database']['tables_updated']))
+        deps['database']['sql_statements'] = sorted(set(deps['database']['sql_statements']))
+        deps['cics'] = sorted(set(deps['cics']))
         
         # Remove empty sections
         if not deps['database']['tables_read'] and not deps['database']['tables_updated']:
@@ -477,10 +479,10 @@ This document describes the program flow in a linear, readable format.
     def _extract_tables(self, text: str) -> list:
         """Extract table names from SQL."""
         tables = []
-        # FROM clause
-        match = re.search(r'FROM\s+([A-Za-z0-9_]+)', text, re.IGNORECASE)
-        if match:
-            tables.append(match.group(1))
+        # FROM clause (may have multiple tables in a JOIN query)
+        tables.extend(re.findall(r'FROM\s+([A-Za-z0-9_]+)', text, re.IGNORECASE))
+        # JOIN clause
+        tables.extend(re.findall(r'JOIN\s+([A-Za-z0-9_]+)', text, re.IGNORECASE))
         # INTO clause (for INSERT)
         match = re.search(r'INTO\s+([A-Za-z0-9_]+)', text, re.IGNORECASE)
         if match:
