@@ -13,10 +13,11 @@ Usage:
     python analyze.py <file.cbl> [options]
 
 Options:
-    --no-graphviz       Skip Graphviz DOT/SVG and LLM input generation
-    --lenient           Continue despite parsing errors
-    --ignore-copybooks  Stub all copybooks
-    --no-sandbox        Skip sandbox (modify files in-place)
+    --no-graphviz             Skip Graphviz DOT/SVG and LLM input generation
+    --lenient                 Continue despite parsing errors
+    --ignore-copybooks        Stub all copybooks
+    --no-sandbox              Skip sandbox (modify files in-place)
+    --no-comment-enrichment   Skip Italian comment translation via Ollama (step 7b)
 """
 
 import os
@@ -31,6 +32,7 @@ import graph_to_text
 import copybook_resolver
 import knowledge_base_builder
 import comment_extractor
+import comment_enricher
 from analysis import SandboxEnvironment, Colors
 
 # ============================================================================
@@ -327,6 +329,33 @@ class AnalysisPipeline:
             Colors.print_msg(f"  Warning: Knowledge base generation failed: {e}", Colors.YELLOW)
     
     
+    def step7b_comment_enrichment(self):
+        """Translate and categorize Italian COBOL comments via Ollama (optional)."""
+        if not self.options.get('comment_enrichment', True):
+            Colors.print_msg("[7b] Comment enrichment skipped (--no-comment-enrichment)", Colors.BLUE)
+            return
+
+        comments_json = self.report_subdir / "comments.json"
+        if not comments_json.exists():
+            Colors.print_msg("[7b] Comment enrichment skipped: comments.json not found", Colors.YELLOW)
+            return
+
+        if not comment_enricher.check_ollama(port=11434):
+            Colors.print_msg("[7b] Comment enrichment skipped: Ollama not reachable at localhost:11434", Colors.YELLOW)
+            return
+
+        Colors.print_msg("[7b] Enriching comments (translate + categorize)...", Colors.GREEN)
+        try:
+            out = comment_enricher.enrich_comments(
+                comments_json,
+                model=comment_enricher.DEFAULT_MODEL,
+                port=comment_enricher.DEFAULT_PORT,
+                verbose=self.verbose,
+            )
+            Colors.print_msg(f"  Output: {out}", Colors.GREEN)
+        except Exception as e:
+            Colors.print_msg(f"  Warning: Comment enrichment failed: {e}", Colors.YELLOW)
+
     def cleanup(self):
         """Cleanup sandbox and finalize."""
         # Convert additional JSON graphs
@@ -354,6 +383,7 @@ class AnalysisPipeline:
         self.step5_variable_analysis()
         self.step6_data_dependencies()
         self.step7_knowledge_base()
+        self.step7b_comment_enrichment()
         self.cleanup()
 
 # ============================================================================
@@ -378,6 +408,7 @@ def main():
         'lenient': "--lenient" in sys.argv,
         'ignore_copybooks': "--ignore-copybooks" in sys.argv,
         'use_sandbox': "--no-sandbox" not in sys.argv,
+        'comment_enrichment': "--no-comment-enrichment" not in sys.argv,
     }
     
     config = Config()
