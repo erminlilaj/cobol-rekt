@@ -7,7 +7,7 @@ Accepts either a COBOL report directory or a JCL report directory (or both).
 Each chunk is a JSON file with {"text": "...", "metadata": {...}}.
 
 Usage:
-    python3 chunk_pipeline.py out/report/PDCBVC.CBL.report [--verbose]
+    python3 chunk_pipeline.py out/report/TEST.CBL.report [--verbose]
     python3 chunk_pipeline.py out/report/MYJOB.jcl.report  [--verbose]
 """
 
@@ -23,7 +23,7 @@ import yaml
 # Constants
 # =============================================================================
 
-CHUNK_SCHEMA_VERSION = "1.0"
+CHUNK_SCHEMA_VERSION = "1.1"
 
 # CFG JSON field names (NOT source/target/label as CLAUDE.md incorrectly states)
 EDGE_SOURCE = "fromNodeID"
@@ -257,6 +257,9 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
     # Get valid paragraph names from CFG
     cfg_paragraphs = _get_cfg_paragraph_names(report_dir)
 
+    # Build paragraph → section map for metadata
+    section_map = _build_paragraph_section_map(report_dir)
+
     # Load enriched comments if available
     enriched = _load_enriched_comments(report_dir)
 
@@ -291,13 +294,15 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
         chunk_text = "\n".join(parts)
 
         # Extract metadata from body
-        calls = re.findall(r"\*\*PERFORM\*\*\s+`(.+?)`", body)
+        raw_calls = re.findall(r"\*\*PERFORM\*\*\s+`(.+?)`", body)
+        calls = [_normalize_call_target(c) for c in raw_calls]
         has_comments = bool(comment_english)
 
         metadata = {
             "chunk_type": "paragraph_logic",
             "program": program,
             "paragraph": heading,
+            "section": section_map.get(heading, ""),
             "calls": calls,
             "has_comments": has_comments,
             "comment_english": comment_english if has_comments else None,
@@ -331,6 +336,62 @@ def _get_cfg_paragraph_names(report_dir: Path) -> set[str]:
         n["name"] for n in data.get("nodes", [])
         if n.get("type") == "PARAGRAPH" and "/" not in n.get("name", "")
     }
+
+
+def _build_paragraph_section_map(report_dir: Path) -> dict[str, str]:
+    """Return {paragraph_name: enclosing_section_name} from CFG STARTS_WITH edges.
+
+    Traverses upward from each PARAGRAPH node via reverse STARTS_WITH edges
+    until a node of type SECTION is found.
+    """
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return {}
+    cfg_files = list(cfg_dir.glob("cfg-*.json"))
+    if not cfg_files:
+        return {}
+    data = load_json(cfg_files[0])
+    if not data:
+        return {}
+
+    nodes = data.get("nodes", [])
+    edges = data.get("edges", [])
+    node_by_id = {n["id"]: n for n in nodes}
+
+    # Build reverse STARTS_WITH: child_id → parent_id
+    parent_of: dict[str, str] = {}
+    for e in edges:
+        if e.get(EDGE_TYPE) == "STARTS_WITH":
+            parent_of[e[EDGE_TARGET]] = e[EDGE_SOURCE]
+
+    result: dict[str, str] = {}
+    for n in nodes:
+        if n.get("type") != "PARAGRAPH" or "/" in n.get("name", ""):
+            continue
+        # Walk up until we hit a SECTION node or exhaust parents
+        current_id = n["id"]
+        section_name = ""
+        visited = set()
+        while current_id in parent_of and current_id not in visited:
+            visited.add(current_id)
+            current_id = parent_of[current_id]
+            parent_node = node_by_id.get(current_id, {})
+            if parent_node.get("type") == "SECTION":
+                section_name = parent_node.get("name", "")
+                break
+        result[n.get("name", "")] = section_name
+
+    return result
+
+
+def _normalize_call_target(raw: str) -> str:
+    """Strip THRU/THROUGH suffix from PERFORM target string.
+
+    'PREPARA-MAP   THRU PREPARA-MAP-EXIT' → 'PREPARA-MAP'
+    'SINGLE-PARA' → 'SINGLE-PARA'
+    """
+    return re.split(r"\s+(?:THRU|THROUGH)\s+", raw, maxsplit=1,
+                    flags=re.IGNORECASE)[0].strip()
 
 
 def _load_enriched_comments(report_dir: Path) -> dict:
@@ -444,14 +505,17 @@ def generate_variable_groups(report_dir: Path, chunks_dir: Path,
 # =============================================================================
 
 def _build_paragraph_subgraphs(report_dir: Path) -> dict[str, dict]:
-    """Build per-paragraph metadata from CFG: local complexity.
+    """Build per-paragraph metadata from CFG: local complexity, sql/cics ops.
 
     The CFG links paragraph content via FOLLOWED_BY chains, not
     STARTS_WITH containment. A paragraph's subgraph = its PARAGRAPH_NAME
     node + all FOLLOWED_BY-reachable nodes until the chain reaches
     another PARAGRAPH node or terminates.
 
-    Returns {paragraph_name: {"complexity_local": int, "node_count": int}}.
+    Returns {paragraph_name: {
+        "complexity_local": int, "node_count": int,
+        "sql_operations": list[str], "cics_commands": list[str]
+    }}.
     """
     cfg_dir = report_dir / "cfg"
     if not cfg_dir.is_dir():
@@ -537,9 +601,25 @@ def _build_paragraph_subgraphs(report_dir: Path) -> dict[str, dict]:
         complexity = decisions + 1
         internal_nodes = len(subgraph)
 
+        # Extract SQL and CICS operations from DIALECT nodes in the subgraph
+        sql_ops: list[str] = []
+        cics_cmds: list[str] = []
+        for nid in subgraph:
+            orig = node_by_id.get(nid, {}).get("originalText", "").upper()
+            if "EXEC SQL" in orig:
+                m = re.search(r"EXEC\s+SQL\s+(\w+)", orig)
+                if m:
+                    sql_ops.append(m.group(1).capitalize())
+            if "EXEC CICS" in orig:
+                m = re.search(r"EXEC\s+CICS\s+(\w+)", orig)
+                if m:
+                    cics_cmds.append(m.group(1).capitalize())
+
         result[pname] = {
             "complexity_local": complexity,
             "node_count": internal_nodes,
+            "sql_operations": sorted(set(sql_ops)),
+            "cics_commands": sorted(set(cics_cmds)),
         }
 
     return result
@@ -559,11 +639,13 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
         para_name = data["metadata"].get("paragraph", "")
         changed = False
 
-        # CFG complexity
+        # CFG complexity + SQL/CICS ops
         sg = subgraphs.get(para_name)
         if sg:
             data["metadata"]["complexity_local"] = sg["complexity_local"]
             data["metadata"]["node_count"] = sg["node_count"]
+            data["metadata"]["sql_operations"] = sg.get("sql_operations", [])
+            data["metadata"]["cics_commands"] = sg.get("cics_commands", [])
             changed = True
 
         # Variable values: find variables mentioned in chunk text
@@ -1016,7 +1098,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         return {}
 
     # Derive program name from directory name
-    dir_name = report_dir.name  # e.g. "PDCBVC.CBL.report" or "MYJOB.jcl.report"
+    dir_name = report_dir.name  # e.g. "TEST.CBL.report" or "TEST.jcl.report"
     program = dir_name.replace(".report", "")
 
     chunks_dir = report_dir / "chunks"

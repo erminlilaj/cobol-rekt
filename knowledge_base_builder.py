@@ -357,11 +357,11 @@ This document describes the program flow in a linear, readable format.
         for var in ws_vars:
             level = var.get('level', '')
             name = var.get('name', '')
-            pic = self._extract_pic(var.get('raw', ''))
+            pic = self._extract_pic(var.get('rawText', ''))
             dtype = var.get('dataType', '')
             section = var.get('section', '')
             content += f"| {level:02d} | {name} | {pic} | {dtype} | {section} |\n"
-        
+
         # Linkage section
         ls_vars = [v for v in variables if v.get('section') == 'LINKAGE_SECTION']
         if ls_vars:
@@ -371,7 +371,7 @@ This document describes the program flow in a linear, readable format.
             for var in ls_vars:
                 level = var.get('level', '')
                 name = var.get('name', '')
-                pic = self._extract_pic(var.get('raw', ''))
+                pic = self._extract_pic(var.get('rawText', ''))
                 dtype = var.get('dataType', '')
                 content += f"| {level:02d} | {name} | {pic} | {dtype} |\n"
         
