@@ -68,7 +68,7 @@ public class ParsePipeline {
     @Getter private ParserRuleContext tree;
     @Getter private List<ParseTree> transfersOfControl;
     @Getter private List<ParseTree> subroutineCalls;
-    private boolean lenient = false;
+    @Getter private boolean lenient = false;
     @Getter private List<SyntaxError> parseErrors = new ArrayList<>();
     @Getter private int totalTreeNodes = 0;
     @Getter private int sourceLineCount = 0;

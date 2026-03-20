@@ -18,8 +18,10 @@ import com.mojo.algorithms.task.AnalysisTask;
 import com.mojo.algorithms.task.AnalysisTaskResult;
 
 import java.io.IOException;
+import java.util.logging.Logger;
 
 public class BuildBaseModelTask implements AnalysisTask {
+    private static final Logger LOGGER = Logger.getLogger(BuildBaseModelTask.class.getName());
     private final ParsePipeline pipeline;
     private final IdProvider idProvider;
 
@@ -41,7 +43,13 @@ public class BuildBaseModelTask implements AnalysisTask {
             FlowNode flowRoot = new BuildFlowNodesTask(nodeService).run(rawAST);
 //            flowcharter.buildFlowAST(rawAST).buildControlFlow().buildOverlay();
 //            FlowNode flowRoot = flowcharter.getRoot();
-            flowRoot.resolve(symbolTable, dataStructures);
+            try {
+                flowRoot.resolve(symbolTable, dataStructures);
+            } catch (RuntimeException e) {
+                if (!pipeline.isLenient()) throw e;
+                LOGGER.warning("LENIENT MODE: Expression resolution failed on partial parse tree: "
+                    + e.getMessage() + ". Continuing with unresolved expressions.");
+            }
             return AnalysisTaskResult.OK("BUILD_SEED_MODEL", new BaseAnalysisModel(navigator, rawAST, dataStructures,
                     symbolTable, flowRoot, serialisableAST));
         } catch (IOException e) {

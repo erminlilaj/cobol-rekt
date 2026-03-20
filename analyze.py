@@ -506,15 +506,15 @@ class AnalysisPipeline:
     def step3_mermaid(self):
         """Generate Mermaid flowcharts."""
         Colors.print_msg("[3/7] Generating Mermaid Flowchart...", Colors.GREEN)
-        run_command(self._build_smojol_cmd("EXPORT_MERMAID", generation="SECTION"))
-    
+        run_command(self._build_smojol_cmd("EXPORT_MERMAID", generation="SECTION"), check=False)
+
     def step3b_graphviz(self):
         """Generate Graphviz diagrams and LLM input text."""
         if not self.options.get('graphviz'):
             return
-        
+
         Colors.print_msg("[3.5/7] Generating Graphviz Flowchart...", Colors.GREEN)
-        run_command(self._build_smojol_cmd("EXPORT_GRAPHVIZ"))
+        run_command(self._build_smojol_cmd("EXPORT_GRAPHVIZ"), check=False)
         
         # Convert DOT to LLM input
         gv_dir = self.report_subdir / "graphviz"
