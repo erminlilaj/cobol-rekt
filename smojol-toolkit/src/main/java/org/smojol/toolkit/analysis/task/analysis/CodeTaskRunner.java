@@ -191,10 +191,18 @@ public class CodeTaskRunner {
                 mermaidOutputConfig, graphvizOutputConfig, transpilerModelOutputConfig,
                 llmOutputConfig, idProvider, resourceOperations, new Neo4JDriverBuilder());
 
-        List<AnalysisTaskResult> taskResults = tasks.getFirst() != CommandLineAnalysisTask.BUILD_BASE_ANALYSIS
-                ? pipelineTasks.run(
-                        Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS), tasks.stream()).toList())
-                : pipelineTasks.run(tasks);
+        List<CommandLineAnalysisTask> effectiveTasks = tasks.getFirst() != CommandLineAnalysisTask.BUILD_BASE_ANALYSIS
+                ? Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS), tasks.stream()).toList()
+                : tasks;
+
+        List<AnalysisTaskResult> taskResults;
+        try {
+            taskResults = pipelineTasks.run(effectiveTasks);
+        } catch (RuntimeException e) {
+            if (!lenient) throw e;
+            LOGGER.warning("LENIENT MODE: Task execution failed after partial parse: " + e.getMessage());
+            taskResults = List.of(AnalysisTaskResult.ERROR(e, "LENIENT_TASK_EXECUTION"));
+        }
 
         if (lenient && !pipeline.getParseErrors().isEmpty()) {
             writeParseDiagnostics(pipeline, programFilename, reportRootDir);

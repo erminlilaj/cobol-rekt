@@ -400,24 +400,40 @@ class AnalysisPipeline:
             Colors.print_msg(f"  [{source}] {loc}: {suggestion}", Colors.YELLOW)
 
     def _parse_stderr_errors(self, stderr: str) -> list[dict]:
-        """Parse Java CLI stderr to extract structured error info."""
+        """Parse Java CLI stderr to extract actual parse error info.
+
+        Only captures lines that contain SyntaxError records, parse error
+        messages, or exception stack traces — NOT regular [INFO] log lines.
+        """
         errors = []
         for line in stderr.splitlines():
+            # Skip normal log lines (they all start with timestamp + [INFO]/[WARNING] etc.)
+            # We only want actual error content: SyntaxError records, exceptions, etc.
+            is_error_line = bool(re.search(
+                r'SyntaxError|ParseDiagnostic|Exception|'
+                r'parsing error|LENIENT MODE|severity=ERROR',
+                line, re.IGNORECASE
+            ))
+            if not is_error_line:
+                continue
+
             err = {}
-            line_match = re.search(r'(?:line[=:\s]+)(\d+)', line, re.IGNORECASE)
+            line_match = re.search(r'(?:line\s*=\s*)(\d+)', line)
             if line_match:
                 err["line"] = int(line_match.group(1))
-            sev_match = re.search(r'\b(ERROR|WARNING|INFO|HINT)\b', line, re.IGNORECASE)
+            sev_match = re.search(r'severity[=\s]+(\w+)', line, re.IGNORECASE)
             if sev_match:
                 err["severity"] = sev_match.group(1).upper()
-            cpb_match = re.search(r'copybookId["\s:=]+([A-Za-z0-9_-]+)', line, re.IGNORECASE)
+            suggestion_match = re.search(r'suggestion[=\s]+(.*?)(?:,\s*severity|$)', line)
+            if suggestion_match:
+                err["suggestion"] = suggestion_match.group(1).strip()
+            cpb_match = re.search(r'copybookId[=\s]+([A-Za-z0-9_-]+)', line, re.IGNORECASE)
             if cpb_match:
                 name = cpb_match.group(1)
                 if name.lower() not in ('null', 'none'):
                     err["copybook"] = name
-            if err:
-                err["message"] = line.strip()
-                errors.append(err)
+            err["message"] = line.strip()
+            errors.append(err)
         return errors
 
     def _write_parse_failure_report(self, stderr: str, mode: str):
@@ -449,7 +465,7 @@ class AnalysisPipeline:
             Colors.print_msg(f"  {len(errors)} error(s) detected:", Colors.RED)
             for err in errors[:10]:
                 line = err.get("line", "?")
-                msg = err.get("message", "Unknown error")
+                msg = err.get("suggestion", err.get("message", "Unknown error"))
                 cpb = err.get("copybook")
                 loc = f"line {line}" + (f" (copybook {cpb})" if cpb else "")
                 Colors.print_msg(f"    {loc}: {msg}", Colors.RED)
