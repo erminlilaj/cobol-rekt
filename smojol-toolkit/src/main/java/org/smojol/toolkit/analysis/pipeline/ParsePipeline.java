@@ -37,6 +37,7 @@ import org.smojol.common.navigation.CobolEntityNavigator;
 import org.smojol.common.navigation.EntityNavigatorBuilder;
 import org.smojol.common.dialect.LanguageDialect;
 import org.smojol.common.vm.structure.CobolDataStructure;
+import org.smojol.common.vm.structure.NullDataStructure;
 import org.smojol.toolkit.analysis.error.ParseDiagnosticRuntimeError;
 import org.smojol.toolkit.analysis.pipeline.config.SourceConfig;
 import org.smojol.toolkit.analysis.validation.DataStructureValidation;
@@ -177,7 +178,14 @@ public class ParsePipeline {
 
         // TODO: The navigator itself can probably determine these things,
         navigator = navigatorBuilder.navigator(tree);
-        dataStructures = dataStructureValidation.run(ops.getDataStructureBuilder(navigator));
+        try {
+            dataStructures = dataStructureValidation.run(ops.getDataStructureBuilder(navigator));
+        } catch (RuntimeException e) {
+            if (!lenient) throw e;
+            LOGGER.warning("LENIENT MODE: Data structure validation failed: " + e.getMessage()
+                + ". Using NullDataStructure as fallback.");
+            dataStructures = new NullDataStructure("LENIENT_FALLBACK");
+        }
         LOGGER.info(gson.toJson(timingResult));
         return navigator;
     }
