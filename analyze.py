@@ -315,18 +315,11 @@ class AnalysisPipeline:
         stdout = result.stdout or ""
 
         if self.options.get('lenient'):
-            # Already running with --lenient and it still failed
-            Colors.print_msg(
-                "[FATAL] Parse failed even with --lenient mode.",
-                Colors.RED
-            )
-            self._print_stderr_summary(stderr)
-            self._write_parse_failure_report(stderr, "lenient")
-            Colors.print_msg(
-                f"  Failure report written to: "
-                f"{self.report_subdir / 'parse_failure_report.json'}",
-                Colors.YELLOW
-            )
+            # Already running with --lenient — check if parse_diagnostics.json
+            # was written. If so, the parse succeeded but a downstream task
+            # crashed on the partial tree. We can still continue.
+            if self._check_lenient_partial_success(stderr, "lenient"):
+                return
             sys.exit(1)
 
         # Auto-retry with --lenient
@@ -357,19 +350,10 @@ class AnalysisPipeline:
             self._log_parse_diagnostics()
             return
 
-        # Even lenient failed
+        # Even lenient returned non-zero — check if diagnostics were written
         stderr2 = result2.stderr or ""
-        Colors.print_msg(
-            "[FATAL] Parse failed even with --lenient mode.",
-            Colors.RED
-        )
-        self._print_stderr_summary(stderr2)
-        self._write_parse_failure_report(stderr2, "lenient-auto-retry")
-        Colors.print_msg(
-            f"  Failure report written to: "
-            f"{self.report_subdir / 'parse_failure_report.json'}",
-            Colors.YELLOW
-        )
+        if self._check_lenient_partial_success(stderr2, "lenient-auto-retry"):
+            return
         sys.exit(1)
 
     def _log_parse_diagnostics(self):
@@ -398,6 +382,41 @@ class AnalysisPipeline:
             cpb = err.get("copybook")
             loc = f"line {line}" + (f" (copybook {cpb})" if cpb else "")
             Colors.print_msg(f"  [{source}] {loc}: {suggestion}", Colors.YELLOW)
+
+    def _check_lenient_partial_success(self, stderr: str, mode: str) -> bool:
+        """Check if lenient mode produced diagnostics despite non-zero exit code.
+
+        The Java CLI may exit with code 1 even when lenient parsing succeeds,
+        because a downstream task (e.g. WRITE_CFG) crashed on the partial tree.
+        If parse_diagnostics.json exists, the parse DID succeed and we can
+        continue with whatever output files were produced.
+
+        Returns True if we can continue, False if it's a real failure.
+        """
+        diag_path = self.report_subdir / "parse_diagnostics.json"
+        if diag_path.is_file():
+            # Parse succeeded, downstream task failed — partial success
+            Colors.print_msg(
+                "  Lenient parse succeeded (some downstream tasks may have failed). "
+                "Continuing with available output.",
+                Colors.YELLOW
+            )
+            self._log_parse_diagnostics()
+            return True
+
+        # No diagnostics — real failure
+        Colors.print_msg(
+            "[FATAL] Parse failed even with --lenient mode.",
+            Colors.RED
+        )
+        self._print_stderr_summary(stderr)
+        self._write_parse_failure_report(stderr, mode)
+        Colors.print_msg(
+            f"  Failure report written to: "
+            f"{self.report_subdir / 'parse_failure_report.json'}",
+            Colors.YELLOW
+        )
+        return False
 
     def _parse_stderr_errors(self, stderr: str) -> list[dict]:
         """Parse Java CLI stderr to extract actual parse error info.
