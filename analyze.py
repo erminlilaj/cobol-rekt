@@ -65,6 +65,23 @@ def run_command(command, cwd=None, env=None, check=True):
         if check:
             sys.exit(1)
 
+def run_command_captured(command, cwd=None, env=None):
+    """Execute a shell command and return the CompletedProcess with captured output.
+
+    Unlike run_command(), this does NOT call sys.exit() on failure.
+    The caller is responsible for checking the return code.
+    """
+    return subprocess.run(command, cwd=cwd, env=env, shell=True,
+                          capture_output=True, text=True)
+
+def _count_parse_errors(output: str) -> int:
+    """Count parse errors from Java CLI output."""
+    count = 0
+    for line in output.splitlines():
+        if re.search(r'SyntaxError|parsing error|ParseDiagnostic', line, re.IGNORECASE):
+            count += 1
+    return max(count, 1)  # At least 1 if we got here
+
 def detect_dialect(source_file: Path) -> tuple:
     """
     Detect COBOL dialect by scanning source for IDMS keywords.
@@ -271,12 +288,89 @@ class AnalysisPipeline:
         )
     
     def step1_core_structures(self):
-        """Generate AST, CFG, data structures."""
+        """Generate AST, CFG, data structures.
+
+        Smart behavior:
+        1. Try strict parse first
+        2. If strict fails and --lenient was not passed, auto-retry with --lenient
+        3. If lenient succeeds, continue pipeline (Java wrote parse_diagnostics.json)
+        4. If lenient also fails, write parse_failure_report.json from stderr
+           and abort pipeline with structured error output
+        5. Always log diagnostics before continuing or aborting
+        """
         Colors.print_msg("[1/7] Generating Core Structures (AST, CFG)...", Colors.GREEN)
-        run_command(self._build_smojol_cmd(
+
+        cmd = self._build_smojol_cmd(
             "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
-        ))
-        self._log_parse_diagnostics()
+        )
+
+        result = run_command_captured(cmd)
+
+        if result.returncode == 0:
+            self._log_parse_diagnostics()
+            return
+
+        # Parse failed
+        stderr = result.stderr or ""
+        stdout = result.stdout or ""
+
+        if self.options.get('lenient'):
+            # Already running with --lenient and it still failed
+            Colors.print_msg(
+                "[FATAL] Parse failed even with --lenient mode.",
+                Colors.RED
+            )
+            self._print_stderr_summary(stderr)
+            self._write_parse_failure_report(stderr, "lenient")
+            Colors.print_msg(
+                f"  Failure report written to: "
+                f"{self.report_subdir / 'parse_failure_report.json'}",
+                Colors.YELLOW
+            )
+            sys.exit(1)
+
+        # Auto-retry with --lenient
+        err_count = _count_parse_errors(stderr + stdout)
+        Colors.print_msg(
+            f"  Strict parse failed ({err_count} parse error(s)). "
+            f"Auto-retrying with --lenient...",
+            Colors.YELLOW
+        )
+        Colors.print_msg(
+            "  Lenient mode uses ANTLR error recovery — only errored tokens "
+            "are skipped, rest is fully analyzed.",
+            Colors.YELLOW
+        )
+
+        # Enable lenient for this and all subsequent smojol commands
+        self.options['lenient'] = True
+        cmd_lenient = self._build_smojol_cmd(
+            "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
+        )
+        result2 = run_command_captured(cmd_lenient)
+
+        if result2.returncode == 0:
+            Colors.print_msg(
+                "  Lenient parse succeeded. Continuing with partial analysis.",
+                Colors.GREEN
+            )
+            self._log_parse_diagnostics()
+            return
+
+        # Even lenient failed
+        stderr2 = result2.stderr or ""
+        Colors.print_msg(
+            "[FATAL] Parse failed even with --lenient mode.",
+            Colors.RED
+        )
+        self._print_stderr_summary(stderr2)
+        self._write_parse_failure_report(stderr2, "lenient-auto-retry")
+        Colors.print_msg(
+            f"  Failure report written to: "
+            f"{self.report_subdir / 'parse_failure_report.json'}",
+            Colors.YELLOW
+        )
+        sys.exit(1)
 
     def _log_parse_diagnostics(self):
         """Read parse_diagnostics.json if it exists and log a summary."""
@@ -304,6 +398,67 @@ class AnalysisPipeline:
             cpb = err.get("copybook")
             loc = f"line {line}" + (f" (copybook {cpb})" if cpb else "")
             Colors.print_msg(f"  [{source}] {loc}: {suggestion}", Colors.YELLOW)
+
+    def _parse_stderr_errors(self, stderr: str) -> list[dict]:
+        """Parse Java CLI stderr to extract structured error info."""
+        errors = []
+        for line in stderr.splitlines():
+            err = {}
+            line_match = re.search(r'(?:line[=:\s]+)(\d+)', line, re.IGNORECASE)
+            if line_match:
+                err["line"] = int(line_match.group(1))
+            sev_match = re.search(r'\b(ERROR|WARNING|INFO|HINT)\b', line, re.IGNORECASE)
+            if sev_match:
+                err["severity"] = sev_match.group(1).upper()
+            cpb_match = re.search(r'copybookId["\s:=]+([A-Za-z0-9_-]+)', line, re.IGNORECASE)
+            if cpb_match:
+                name = cpb_match.group(1)
+                if name.lower() not in ('null', 'none'):
+                    err["copybook"] = name
+            if err:
+                err["message"] = line.strip()
+                errors.append(err)
+        return errors
+
+    def _write_parse_failure_report(self, stderr: str, mode: str):
+        """Write parse_failure_report.json from Python-side stderr parsing.
+
+        This is the fallback when Java CLI crashes and doesn't write
+        parse_diagnostics.json itself.
+        """
+        import json as _json
+        errors = self._parse_stderr_errors(stderr)
+        report = {
+            "program": self.target_file,
+            "mode": mode,
+            "status": "failed",
+            "reason": "Java CLI exited with non-zero return code",
+            "errors_extracted_from_stderr": errors,
+            "error_count": len(errors),
+            "raw_stderr_tail": "\n".join(stderr.splitlines()[-20:]) if stderr else "",
+        }
+        out_path = self.report_subdir / "parse_failure_report.json"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(_json.dumps(report, indent=2))
+        return report
+
+    def _print_stderr_summary(self, stderr: str):
+        """Print a structured summary of Java CLI stderr to the console."""
+        errors = self._parse_stderr_errors(stderr)
+        if errors:
+            Colors.print_msg(f"  {len(errors)} error(s) detected:", Colors.RED)
+            for err in errors[:10]:
+                line = err.get("line", "?")
+                msg = err.get("message", "Unknown error")
+                cpb = err.get("copybook")
+                loc = f"line {line}" + (f" (copybook {cpb})" if cpb else "")
+                Colors.print_msg(f"    {loc}: {msg}", Colors.RED)
+            if len(errors) > 10:
+                Colors.print_msg(f"    ... and {len(errors) - 10} more", Colors.RED)
+        else:
+            tail = stderr.strip().splitlines()[-5:]
+            for line in tail:
+                Colors.print_msg(f"    {line}", Colors.RED)
 
     def step2_advanced_analysis(self):
         """Generate transpiler flowgraph, unified model, GraphML."""
