@@ -23,8 +23,10 @@ import com.mojo.algorithms.task.CommandLineAnalysisTask;
 import org.smojol.toolkit.task.SmojolTasks;
 import org.smojol.toolkit.task.TaskRunnerMode;
 
+import com.google.gson.*;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -100,8 +102,9 @@ public class CodeTaskRunner {
                             sourceDir));
                     continue;
                 }
+                boolean lenient = (runnerMode == TaskRunnerMode.LENIENT_MODE);
                 List<AnalysisTaskResult> analysisTaskResults = runForProgram(programFilename, programPath.getRight(),
-                        reportRootDir, this.dialect, runnerMode.tasks(tasks));
+                        reportRootDir, this.dialect, runnerMode.tasks(tasks), lenient);
                 results.put(programFilename, analysisTaskResults);
             } catch (ParseDiagnosticRuntimeError e) {
                 errorMap.put(programFilename, e.getErrors());
@@ -117,7 +120,7 @@ public class CodeTaskRunner {
     }
 
     private List<AnalysisTaskResult> runForProgram(String programFilename, String sourceDir, String reportRootDir,
-            LanguageDialect dialect, List<CommandLineAnalysisTask> tasks) throws IOException {
+            LanguageDialect dialect, List<CommandLineAnalysisTask> tasks, boolean lenient) throws IOException {
         String programReportDir = String.format("%s.report", programFilename);
         Path astOutputDir = Paths.get(reportRootDir, programReportDir, AST_DIR).toAbsolutePath().normalize();
         Path dataStructuresOutputDir = Paths.get(reportRootDir, programReportDir, DATA_STRUCTURES_DIR).toAbsolutePath()
@@ -175,6 +178,7 @@ public class CodeTaskRunner {
                 new EntityNavigatorBuilder(), new UnresolvedReferenceThrowStrategy(),
                 format1DataStructureBuilder, idProvider, resourceOperations);
         ParsePipeline pipeline = new ParsePipeline(sourceConfig, ops, dialect);
+        pipeline.setLenient(lenient);
         GraphBuildConfig graphBuildConfig = new GraphBuildConfig(
                 NodeReferenceStrategy.EXISTING_CFG_NODE,
                 NodeReferenceStrategy.EXISTING_CFG_NODE);
@@ -187,12 +191,87 @@ public class CodeTaskRunner {
                 mermaidOutputConfig, graphvizOutputConfig, transpilerModelOutputConfig,
                 llmOutputConfig, idProvider, resourceOperations, new Neo4JDriverBuilder());
 
-        return tasks.getFirst() != CommandLineAnalysisTask.BUILD_BASE_ANALYSIS
+        List<AnalysisTaskResult> taskResults = tasks.getFirst() != CommandLineAnalysisTask.BUILD_BASE_ANALYSIS
                 ? pipelineTasks.run(
                         Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS), tasks.stream()).toList())
                 : pipelineTasks.run(tasks);
-        // return
-        // pipelineTasks.run(Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS),
-        // tasks.stream()).toList());
+
+        if (lenient && !pipeline.getParseErrors().isEmpty()) {
+            writeParseDiagnostics(pipeline, programFilename, reportRootDir);
+        }
+        return taskResults;
+    }
+
+    private void writeParseDiagnostics(ParsePipeline pipeline, String programFilename,
+            String reportRootDir) {
+        String programReportDir = String.format("%s.report", programFilename);
+        Path diagnosticsPath = Paths.get(reportRootDir, programReportDir, "parse_diagnostics.json")
+                .toAbsolutePath().normalize();
+        try {
+            JsonObject root = new JsonObject();
+            root.addProperty("program", programFilename);
+            root.addProperty("mode", "lenient");
+            root.addProperty("source_lines", pipeline.getSourceLineCount());
+            root.addProperty("total_tree_nodes", pipeline.getTotalTreeNodes());
+
+            Set<Integer> errorLines = new HashSet<>();
+            JsonArray errorsArray = new JsonArray();
+            for (SyntaxError e : pipeline.getParseErrors()) {
+                JsonObject err = new JsonObject();
+                if (e.getLocation() != null && e.getLocation().getLocation() != null) {
+                    var range = e.getLocation().getLocation().getRange();
+                    int line = range.getStart().getLine() + 1;
+                    err.addProperty("line", line);
+                    err.addProperty("column", range.getStart().getCharacter());
+                    err.addProperty("end_line", range.getEnd().getLine() + 1);
+                    err.addProperty("end_column", range.getEnd().getCharacter());
+                    for (int l = range.getStart().getLine(); l <= range.getEnd().getLine(); l++) {
+                        errorLines.add(l);
+                    }
+                }
+                err.addProperty("severity",
+                    e.getSeverity() != null ? e.getSeverity().name() : "UNKNOWN");
+                err.addProperty("source",
+                    e.getErrorSource() != null ? e.getErrorSource().getText() : "UNKNOWN");
+                err.addProperty("suggestion",
+                    e.getSuggestion() != null ? e.getSuggestion() : "No suggestion");
+                String copybookId = (e.getLocation() != null) ? e.getLocation().getCopybookId() : null;
+                if (copybookId != null) {
+                    err.addProperty("copybook", copybookId);
+                } else {
+                    err.add("copybook", JsonNull.INSTANCE);
+                }
+                errorsArray.add(err);
+            }
+            root.add("errors", errorsArray);
+
+            int sourceLines = pipeline.getSourceLineCount();
+            int affectedLines = errorLines.size();
+            double coverage = sourceLines > 0
+                ? ((sourceLines - affectedLines) * 100.0 / sourceLines) : 0.0;
+            root.addProperty("coverage_percentage", Math.round(coverage * 100.0) / 100.0);
+            root.addProperty("affected_lines", affectedLines);
+
+            JsonObject summary = new JsonObject();
+            summary.addProperty("total_errors", pipeline.getParseErrors().size());
+            Map<String, Integer> bySeverity = new HashMap<>();
+            Map<String, Integer> bySource = new HashMap<>();
+            for (SyntaxError e : pipeline.getParseErrors()) {
+                String sev = e.getSeverity() != null ? e.getSeverity().name() : "UNKNOWN";
+                bySeverity.merge(sev, 1, Integer::sum);
+                String src = e.getErrorSource() != null ? e.getErrorSource().getText() : "UNKNOWN";
+                bySource.merge(src, 1, Integer::sum);
+            }
+            summary.add("by_severity", new Gson().toJsonTree(bySeverity));
+            summary.add("by_source", new Gson().toJsonTree(bySource));
+            root.add("error_summary", summary);
+
+            Files.createDirectories(diagnosticsPath.getParent());
+            Files.writeString(diagnosticsPath,
+                new GsonBuilder().setPrettyPrinting().create().toJson(root));
+            LOGGER.info("Parse diagnostics written to " + diagnosticsPath);
+        } catch (Exception ex) {
+            LOGGER.warning("Failed to write parse diagnostics: " + ex.getMessage());
+        }
     }
 }

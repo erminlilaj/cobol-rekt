@@ -199,7 +199,52 @@ class AnalysisPipeline:
         
         if self.sandbox.stubs_created:
             Colors.print_msg(f"  Auto-created {len(self.sandbox.stubs_created)} stubs", Colors.YELLOW)
-    
+        self._write_copybook_manifest()
+
+    def _write_copybook_manifest(self):
+        """Write copybook resolution report to report directory."""
+        import json as _json
+        cpb_dir = self.copybooks_dir
+        if not Path(cpb_dir).is_dir():
+            return
+        stubbed = [s.upper() for s in getattr(self.sandbox, 'stubs_created', [])]
+        manifest = {"program": self.target_file, "copybooks": {}, "summary": {}}
+
+        for cpf in sorted(Path(cpb_dir).glob("*")):
+            if not cpf.is_file():
+                continue
+            name = cpf.stem.upper()
+            is_stub = name in stubbed
+            try:
+                lines = len(cpf.read_text(errors='replace').splitlines())
+            except Exception:
+                lines = 0
+            manifest["copybooks"][name] = {
+                "file": cpf.name,
+                "is_stub": is_stub,
+                "lines": lines,
+                "status": "stubbed" if is_stub else "resolved",
+            }
+
+        total = len(manifest["copybooks"])
+        stub_count = sum(1 for c in manifest["copybooks"].values() if c["is_stub"])
+        manifest["summary"] = {
+            "total_copybooks": total,
+            "resolved": total - stub_count,
+            "stubbed": stub_count,
+            "resolved_percentage": round((total - stub_count) * 100.0 / total, 1) if total > 0 else 100.0,
+        }
+
+        out_path = self.report_subdir / "copybook_manifest.json"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(_json.dumps(manifest, indent=2))
+        if stub_count > 0:
+            Colors.print_msg(
+                f"  Copybooks: {manifest['summary']['resolved_percentage']}% resolved "
+                f"({total - stub_count}/{total}), {stub_count} stubbed",
+                Colors.YELLOW
+            )
+
     def pre_validate(self):
         """Pre-validation: detect and stub broken copybooks."""
         if not self.options.get('use_sandbox', True):
@@ -231,7 +276,35 @@ class AnalysisPipeline:
         run_command(self._build_smojol_cmd(
             "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
         ))
-    
+        self._log_parse_diagnostics()
+
+    def _log_parse_diagnostics(self):
+        """Read parse_diagnostics.json if it exists and log a summary."""
+        import json as _json
+        diag_path = self.report_subdir / "parse_diagnostics.json"
+        if not diag_path.is_file():
+            return
+        try:
+            diag = _json.loads(diag_path.read_text())
+        except Exception:
+            return
+        coverage = diag.get("coverage_percentage", 0)
+        errors = diag.get("error_summary", {}).get("total_errors", 0)
+        affected = diag.get("affected_lines", 0)
+        source_lines = diag.get("source_lines", 0)
+        Colors.print_msg(
+            f"[LENIENT] Parse coverage: {coverage}% "
+            f"({errors} error(s) affecting {affected}/{source_lines} lines)",
+            Colors.YELLOW
+        )
+        for err in diag.get("errors", []):
+            line = err.get("line", "?")
+            suggestion = err.get("suggestion", "Unknown error")
+            source = err.get("source", "?")
+            cpb = err.get("copybook")
+            loc = f"line {line}" + (f" (copybook {cpb})" if cpb else "")
+            Colors.print_msg(f"  [{source}] {loc}: {suggestion}", Colors.YELLOW)
+
     def step2_advanced_analysis(self):
         """Generate transpiler flowgraph, unified model, GraphML."""
         Colors.print_msg("[2/7] Generating Advanced Analysis...", Colors.GREEN)

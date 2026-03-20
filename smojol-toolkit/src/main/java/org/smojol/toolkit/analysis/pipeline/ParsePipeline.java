@@ -43,6 +43,7 @@ import org.smojol.toolkit.analysis.validation.DataStructureValidation;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -66,6 +67,10 @@ public class ParsePipeline {
     @Getter private ParserRuleContext tree;
     @Getter private List<ParseTree> transfersOfControl;
     @Getter private List<ParseTree> subroutineCalls;
+    private boolean lenient = false;
+    @Getter private List<SyntaxError> parseErrors = new ArrayList<>();
+    @Getter private int totalTreeNodes = 0;
+    @Getter private int sourceLineCount = 0;
 
     public ParsePipeline(SourceConfig sourceConfig, ComponentsBuilder ops, LanguageDialect dialect) {
         this.src = sourceConfig.source();
@@ -74,6 +79,19 @@ public class ParsePipeline {
         this.dialect = dialect;
         cpyExt = new String[]{"", ".cpy"};
         this.dialectJarPath = sourceConfig.dialectJarPath();
+    }
+
+    public void setLenient(boolean lenient) {
+        this.lenient = lenient;
+    }
+
+    private int countTreeNodes(ParseTree tree) {
+        if (tree == null) return 0;
+        int count = 1;
+        for (int i = 0; i < tree.getChildCount(); i++) {
+            count += countTreeNodes(tree.getChild(i));
+        }
+        return count;
     }
 
     public CobolEntityNavigator parse() throws IOException {
@@ -136,10 +154,18 @@ public class ParsePipeline {
 
         if (!ctx.getAccumulatedErrors().isEmpty()) {
             ctx.getAccumulatedErrors().forEach(e -> LOGGER.info(e.toString()));
-            throw new ParseDiagnosticRuntimeError("There were parsing errors!", ctx.getAccumulatedErrors());
+            if (!lenient) {
+                throw new ParseDiagnosticRuntimeError("There were parsing errors!", ctx.getAccumulatedErrors());
+            }
+            parseErrors = new ArrayList<>(ctx.getAccumulatedErrors());
+            LOGGER.warning("LENIENT MODE: " + parseErrors.size() +
+                " parse error(s) found but continuing with partial parse tree. " +
+                "ANTLR error recovery was applied.");
         }
 
         tree = lastStageResult.getData().getTree();
+        sourceLineCount = text.split("\n", -1).length;
+        totalTreeNodes = countTreeNodes(tree);
         ParseTreeWalker walker = new ParseTreeWalker();
         EntityNavigatorBuilder navigatorBuilder = ops.getCobolEntityNavigatorBuilder();
         dialect.verifyNoNullDialectStatements(tree, navigatorBuilder);
