@@ -147,6 +147,7 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
 
     metadata = {
         "chunk_type": "program_summary",
+        "chunk_id": f"{program}:program_summary",
         "program": program,
         "node_count": node_count,
         "edge_count": edge_count,
@@ -217,6 +218,7 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
 
     metadata = {
         "chunk_type": "dependencies",
+        "chunk_id": f"{program}:dependencies",
         "program": program,
         "sql_tables_read": tables_read,
         "sql_tables_updated": tables_updated,
@@ -283,6 +285,46 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
         # Remove horizontal rules
         body = re.sub(r"^---\s*$", "", body, flags=re.MULTILINE).strip()
 
+        # Extract PERFORM calls from the FULL body (before stripping reverse
+        # section) because bold **PERFORM** markers only appear there.
+        # Also extract from forward-section `PERFORM ...` inside backticks.
+        raw_calls_bold = re.findall(r"\*\*PERFORM\*\*\s+`(.+?)`", body)
+        raw_calls_inline = re.findall(
+            r"- `(?:PERFORM\s+)([A-Za-z0-9_-]+(?:\s+(?:THRU|THROUGH)\s+[A-Za-z0-9_-]+)?)",
+            body, re.IGNORECASE,
+        )
+        # Merge both sources, deduplicate by target name
+        seen_targets = set()
+        raw_calls = []
+        for c in raw_calls_bold + raw_calls_inline:
+            target = re.split(r"\s+(?:THRU|THROUGH)\s+", c, maxsplit=1,
+                              flags=re.IGNORECASE)[0].strip().upper()
+            if target not in seen_targets:
+                seen_targets.add(target)
+                raw_calls.append(c)
+
+        # Remove duplicate reverse-order content (7b.5).
+        # The knowledge_base_builder traverses FOLLOWED_BY + STARTS_WITH edges,
+        # producing forward-order statements (period-terminated backtick lines)
+        # followed by reverse-order duplicates (bold **PERFORM** or no-period
+        # backtick lines).  Keep only up to the last period-terminated line.
+        body_lines = body.split("\n")
+        last_fwd_idx = -1
+        for i, ln in enumerate(body_lines):
+            # Forward-order lines: - `...TEXT.` (period before closing backtick)
+            if re.match(r"^- `.*\.\s*`$", ln):
+                last_fwd_idx = i
+        if last_fwd_idx >= 0:
+            # Keep everything up to and including the last forward line,
+            # plus any non-statement lines (blockquotes, blanks) that follow.
+            kept = body_lines[: last_fwd_idx + 1]
+            # Also keep trailing blockquote / blank lines (not statement lines)
+            for ln in body_lines[last_fwd_idx + 1 :]:
+                if ln.startswith("- "):
+                    break  # start of reverse section
+                kept.append(ln)
+            body = "\n".join(kept).strip()
+
         # Build chunk text: comment_english (if available) + heading + body
         parts = []
         comment_meta = enriched.get(heading, {})
@@ -293,13 +335,15 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
         parts.append(body)
         chunk_text = "\n".join(parts)
 
-        # Extract metadata from body
-        raw_calls = re.findall(r"\*\*PERFORM\*\*\s+`(.+?)`", body)
-        calls = [_normalize_call_target(c) for c in raw_calls]
+        # raw_calls already extracted above (before body strip)
+        # Normalize THRU whitespace (7b.7): collapse multiple spaces
+        calls = [re.sub(r"\s+", " ", c).strip() for c in raw_calls]
         has_comments = bool(comment_english)
 
         metadata = {
             "chunk_type": "paragraph_logic",
+            "chunk_id": f"{program}:paragraph_logic:{heading}",
+            "parent_program_chunk": f"{program}:program_summary",
             "program": program,
             "paragraph": heading,
             "section": section_map.get(heading, ""),
@@ -480,13 +524,20 @@ def generate_variable_groups(report_dir: Path, chunks_dir: Path,
 
         chunk_text = "\n".join(lines)
 
+        # Filter FILLER from field_names (7b.6): keep named fields, count fillers
+        named_fields = [fn for fn in field_names if fn != "FILLER"]
+        filler_count = len(field_names) - len(named_fields)
+
         metadata = {
             "chunk_type": "variable_group",
+            "chunk_id": f"{program}:variable_group:{name}",
+            "parent_program_chunk": f"{program}:program_summary",
             "program": program,
             "group_name": name,
             "section": section,
             "child_count": len(rec_children),
-            "field_names": field_names[:50],  # cap for metadata size
+            "field_names": named_fields[:50],  # cap for metadata size
+            "filler_count": filler_count,
         }
         safe_name = re.sub(r"[^\w\-]", "_", name)
         write_chunk(
@@ -738,6 +789,7 @@ def generate_job_flow(report_dir: Path, chunks_dir: Path,
 
     metadata = {
         "chunk_type": "job_flow",
+        "chunk_id": f"{job_name}:job_flow",
         "job_name": job_name,
         "step_count": step_count,
         "programs_invoked": programs,
@@ -819,6 +871,7 @@ def generate_step_details(report_dir: Path, chunks_dir: Path,
 
         metadata = {
             "chunk_type": "step_detail",
+            "chunk_id": f"{job_name}:step_detail:{step_name}",
             "job_name": job_name,
             "step_name": step_name,
             "program": pgm,

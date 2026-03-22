@@ -1059,40 +1059,55 @@ class JCLCOBOLReportBuilder:
         job_name = self.jcl_summary.get("job_name", "UNKNOWN")
         chunk_files = []
 
-        # --- jcl_cobol_overview chunk ---
-        programs = self.jcl_summary.get("programs_invoked", [])
-        user_programs = [p for p in programs if p.upper() not in _SYSTEM_PGMS]
-
-        overview_parts = [
-            f"Job {job_name} executes {len(self.step_relationships)} steps "
-            f"invoking {len(user_programs)} user programs: {', '.join(user_programs)}.",
-        ]
-
-        # Add health summary
-        analyzed = sum(1 for h in self.program_health.values() if h.status != "missing")
-        overview_parts.append(
-            f"Analysis coverage: {analyzed}/{len(user_programs)} programs analyzed."
-        )
-
-        # Add dataset flow summary
+        # Classify dataset flows once for reuse
         ext = [f for f in self.dataset_flows if f.flow_type == "external_input"]
         inter = [f for f in self.dataset_flows if f.flow_type == "inter_step"]
         final = [f for f in self.dataset_flows if f.flow_type == "final_output"]
-        overview_parts.append(
-            f"Dataset flow: {len(ext)} external inputs, "
-            f"{len(inter)} inter-step flows, {len(final)} final outputs."
-        )
 
-        # Step sequence
-        step_seq = " -> ".join(
-            f"{r.step_name}({r.program})" for r in self.step_relationships
-        )
-        overview_parts.append(f"Step sequence: {step_seq}")
+        programs = self.jcl_summary.get("programs_invoked", [])
+        user_programs = [p for p in programs if p.upper() not in _SYSTEM_PGMS]
+        analyzed = sum(1 for h in self.program_health.values() if h.status != "missing")
+
+        # --- jcl_cobol_overview chunk (with natural language flow narration) ---
+        overview_parts = [
+            f"Job {job_name} executes {len(self.step_relationships)} steps "
+            f"invoking {len(user_programs)} user programs: {', '.join(user_programs)}.",
+            f"Analysis coverage: {analyzed}/{len(user_programs)} programs analyzed.",
+            f"Dataset flow: {len(ext)} external inputs, "
+            f"{len(inter)} inter-step flows, {len(final)} final outputs.",
+        ]
+
+        # Natural language flow narration (7b.11)
+        narration_parts = []
+        for i, rel in enumerate(self.step_relationships):
+            input_dds = [d for d in rel.dd_mappings
+                         if d.access == "read" and d.role == "data"
+                         and d.dsn not in ("(none)", "", None) and not d.is_null]
+            output_dds = [d for d in rel.dd_mappings
+                          if d.access in ("write", "pass") and d.role == "data"
+                          and d.dsn not in ("(none)", "", None) and not d.is_null]
+            desc = f"{rel.step_name} executes {rel.program}"
+            if rel.is_system_utility:
+                desc += " (system utility)"
+            elif not rel.program_in_corpus:
+                desc += " (not analyzed)"
+            if rel.parm:
+                desc += f" with PARM={rel.parm}"
+            if input_dds:
+                desc += f", reading {', '.join(d.dsn for d in input_dds)}"
+            if output_dds:
+                desc += f", writing {', '.join(d.dsn for d in output_dds)}"
+            narration_parts.append(desc)
+        if narration_parts:
+            overview_parts.append(
+                "Execution flow: " + ". ".join(narration_parts) + "."
+            )
 
         overview_text = " ".join(overview_parts)
 
         overview_meta = {
             "chunk_type": "jcl_cobol_overview",
+            "chunk_id": f"{job_name}:jcl_cobol_overview",
             "program": job_name,
             "job_name": job_name,
             "step_count": len(self.step_relationships),
@@ -1107,30 +1122,41 @@ class JCLCOBOLReportBuilder:
         _write_chunk(chunks_dir, overview_file, overview_text, overview_meta)
         chunk_files.append({"file": overview_file, "chunk_type": "jcl_cobol_overview", "program": job_name})
 
-        # --- jcl_cobol_step_relationship chunks (one per analyzed step) ---
+        # --- jcl_cobol_step_relationship chunks (one per EVERY step) ---
         for rel in self.step_relationships:
-            if not rel.program_in_corpus:
-                continue
-
             parts = [
                 f"Step {rel.step_name} (index {rel.step_index}) executes "
                 f"program {rel.program}.",
             ]
 
-            if rel.complexity_label:
-                parts.append(f"Complexity: {rel.complexity_label} ({rel.complexity_score}).")
+            if rel.is_system_utility:
+                parts.append("This is a system utility.")
+            elif not rel.program_in_corpus:
+                parts.append("Program not analyzed (report missing).")
+
+            if rel.condition:
+                cond_text = f"Condition: {rel.condition}"
+                if rel.cond_modifier:
+                    cond_text += f" ({rel.cond_modifier})"
+                parts.append(cond_text + ".")
             if rel.parm:
                 parts.append(f"Parameters: {rel.parm}.")
 
-            # DD summary
-            input_dds = [d for d in rel.dd_mappings if d.access == "read" and d.role == "data"]
-            output_dds = [d for d in rel.dd_mappings if d.access in ("write", "pass") and d.role == "data"]
+            # DD summary (exclude DDs with no real DSN)
+            input_dds = [d for d in rel.dd_mappings
+                         if d.access == "read" and d.role == "data"
+                         and d.dsn not in ("(none)", "", None) and not d.is_null]
+            output_dds = [d for d in rel.dd_mappings
+                          if d.access in ("write", "pass") and d.role == "data"
+                          and d.dsn not in ("(none)", "", None) and not d.is_null]
             if input_dds:
                 parts.append(f"Input datasets: {', '.join(d.dsn for d in input_dds)}.")
             if output_dds:
                 parts.append(f"Output datasets: {', '.join(d.dsn for d in output_dds)}.")
 
-            # COBOL details
+            # COBOL details (only present if program_in_corpus)
+            if rel.complexity_label:
+                parts.append(f"Complexity: {rel.complexity_label} ({rel.complexity_score}).")
             if rel.sql_tables_read:
                 parts.append(f"SQL tables read: {', '.join(rel.sql_tables_read)}.")
             if rel.sql_tables_updated:
@@ -1143,12 +1169,38 @@ class JCLCOBOLReportBuilder:
                 parts.append(f"Full call chain: {' -> '.join(rel.transitive_call_chain)}.")
 
             step_text = " ".join(parts)
+
+            # Determine analysis status
+            if rel.is_system_utility:
+                analysis_status = "system_utility"
+            elif rel.program_in_corpus:
+                analysis_status = "analyzed"
+            else:
+                analysis_status = "missing"
+
+            # Cross-references to COBOL chunks (7b.3)
+            related_cobol = []
+            if rel.program_in_corpus and rel.program:
+                canonical = normalize_program_name(rel.program)
+                health = self.program_health.get(canonical)
+                if health and health.report_dir:
+                    # Check which COBOL report extensions exist
+                    rdir = Path(health.report_dir)
+                    for ext_suffix in (".cbl", ".CBL", ".cob", ".COB"):
+                        prog_name = canonical + ext_suffix
+                        if (rdir / "knowledge_base" / "00_Executive_Summary.md").exists():
+                            related_cobol.append(f"{prog_name}:program_summary")
+                            related_cobol.append(f"{prog_name}:dependencies")
+                            break
+
             step_meta = {
                 "chunk_type": "jcl_cobol_step_relationship",
+                "chunk_id": f"{job_name}:step_relationship:{rel.step_name}",
                 "program": job_name,
                 "job_name": job_name,
                 "step_name": rel.step_name,
                 "step_program": rel.program,
+                "analysis_status": analysis_status,
                 "complexity_score": rel.complexity_score,
                 "sql_tables_read": rel.sql_tables_read,
                 "sql_tables_updated": rel.sql_tables_updated,
@@ -1157,6 +1209,8 @@ class JCLCOBOLReportBuilder:
                 "input_datasets": [d.dsn for d in input_dds],
                 "output_datasets": [d.dsn for d in output_dds],
             }
+            if related_cobol:
+                step_meta["related_cobol_chunks"] = related_cobol
 
             step_file = f"{job_name}__step_relationship__{rel.step_name}.json"
             _write_chunk(chunks_dir, step_file, step_text, step_meta)
@@ -1166,15 +1220,139 @@ class JCLCOBOLReportBuilder:
                 "program": job_name,
             })
 
+        # --- jcl_dataset_flow chunks (7b.4) ---
+        for flow in self.dataset_flows:
+            if flow.flow_type == "unused":
+                continue
+            flow_parts = [f"Dataset {flow.dataset}"]
+            if flow.producer_step:
+                flow_parts.append(f"is written by step {flow.producer_step}")
+            else:
+                flow_parts.append("is an external input (not written by any step)")
+            if flow.consumer_steps:
+                flow_parts.append(
+                    f"and read by step{'s' if len(flow.consumer_steps) > 1 else ''} "
+                    f"{', '.join(flow.consumer_steps)}"
+                )
+            else:
+                flow_parts.append("and is not read by any subsequent step")
+            temp_label = "temporary" if flow.is_temporary else "permanent"
+            flow_parts.append(f". It is a {temp_label} {flow.flow_type.replace('_', ' ')} dataset.")
+            flow_text = " ".join(flow_parts)
+
+            flow_meta = {
+                "chunk_type": "jcl_dataset_flow",
+                "chunk_id": f"{job_name}:dataset_flow:{flow.dataset}",
+                "program": job_name,
+                "job_name": job_name,
+                "dataset": flow.dataset,
+                "producer_step": flow.producer_step,
+                "consumer_steps": flow.consumer_steps,
+                "flow_type": flow.flow_type,
+                "is_temporary": flow.is_temporary,
+            }
+            safe_dsn = re.sub(r"[^\w\-]", "_", flow.dataset)[:60]
+            flow_file = f"{job_name}__dataset_flow__{safe_dsn}.json"
+            _write_chunk(chunks_dir, flow_file, flow_text, flow_meta)
+            chunk_files.append({
+                "file": flow_file,
+                "chunk_type": "jcl_dataset_flow",
+                "program": job_name,
+            })
+
+        # --- jcl_analysis_health chunk (7b.8) ---
+        missing_progs = [k for k, v in self.program_health.items() if v.status == "missing"]
+        total_user = len(user_programs)
+        pct = round(analyzed / total_user * 100) if total_user else 0
+
+        health_parts = [
+            f"Analysis health for job {job_name}: "
+            f"{analyzed}/{total_user} programs analyzed ({pct}% coverage).",
+        ]
+        if missing_progs:
+            health_parts.append(f"Missing programs: {', '.join(missing_progs)}.")
+        # Collect quality flags across all programs
+        all_flags = {}
+        for canonical, health in self.program_health.items():
+            if health.quality_flags:
+                all_flags[canonical] = health.quality_flags
+        if all_flags:
+            for prog, flags in all_flags.items():
+                health_parts.append(f"{prog}: {'; '.join(flags)}.")
+        if not missing_progs and not all_flags:
+            health_parts.append("All programs fully analyzed with no quality issues.")
+
+        health_text = " ".join(health_parts)
+        health_meta = {
+            "chunk_type": "jcl_analysis_health",
+            "chunk_id": f"{job_name}:analysis_health",
+            "program": job_name,
+            "job_name": job_name,
+            "coverage_pct": pct,
+            "programs_analyzed": analyzed,
+            "programs_total": total_user,
+            "missing_programs": missing_progs,
+            "quality_flags_by_program": all_flags,
+        }
+        health_file = f"{job_name}__analysis_health.json"
+        _write_chunk(chunks_dir, health_file, health_text, health_meta)
+        chunk_files.append({
+            "file": health_file,
+            "chunk_type": "jcl_analysis_health",
+            "program": job_name,
+        })
+
+        # --- jcl_condition_flow chunk (7b.9) ---
+        cond_steps = [
+            r for r in self.step_relationships
+            if r.condition or r.cond_modifier
+        ]
+        if cond_steps:
+            cond_parts = [f"Job {job_name} has {len(cond_steps)} conditional step(s)."]
+            for cs in cond_steps:
+                desc = f"Step {cs.step_name} ({cs.program})"
+                if cs.condition:
+                    desc += f" runs if {cs.condition}"
+                if cs.cond_modifier:
+                    desc += f" (modifier: {cs.cond_modifier})"
+                cond_parts.append(desc + ".")
+        else:
+            cond_parts = [
+                f"Job {job_name} has no conditional steps. "
+                f"All {len(self.step_relationships)} steps execute "
+                f"unconditionally in sequence."
+            ]
+
+        cond_text = " ".join(cond_parts)
+        cond_meta = {
+            "chunk_type": "jcl_condition_flow",
+            "chunk_id": f"{job_name}:condition_flow",
+            "program": job_name,
+            "job_name": job_name,
+            "has_conditions": bool(cond_steps),
+            "condition_steps": [cs.step_name for cs in cond_steps],
+        }
+        cond_file = f"{job_name}__condition_flow.json"
+        _write_chunk(chunks_dir, cond_file, cond_text, cond_meta)
+        chunk_files.append({
+            "file": cond_file,
+            "chunk_type": "jcl_condition_flow",
+            "program": job_name,
+        })
+
         # --- Update manifest ---
         manifest_path = chunks_dir / "chunks_manifest.json"
         existing_manifest = _load_json(manifest_path) or {}
         existing_chunks = existing_manifest.get("chunks", [])
 
-        # Remove old jcl_cobol chunks
+        # Remove old jcl_cobol chunks (all types we generate)
+        jcl_cobol_types = {
+            "jcl_cobol_overview", "jcl_cobol_step_relationship",
+            "jcl_dataset_flow", "jcl_analysis_health", "jcl_condition_flow",
+        }
         existing_chunks = [
             c for c in existing_chunks
-            if c.get("chunk_type") not in ("jcl_cobol_overview", "jcl_cobol_step_relationship")
+            if c.get("chunk_type") not in jcl_cobol_types
         ]
         all_chunks = existing_chunks + chunk_files
 
