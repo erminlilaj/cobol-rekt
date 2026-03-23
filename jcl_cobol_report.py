@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -40,6 +41,7 @@ from build_call_graph import (
 # =============================================================================
 
 CHUNK_SCHEMA_VERSION = "1.1"
+PIPELINE_VERSION = "1.2"
 
 # Expected artifacts in a COBOL report directory
 _COBOL_ARTIFACTS = {
@@ -205,6 +207,9 @@ def _load_yaml(path: Path):
 def _write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     """Write a single chunk JSON file."""
     metadata["schema_version"] = CHUNK_SCHEMA_VERSION
+    metadata["pipeline_version"] = PIPELINE_VERSION
+    metadata["analysis_timestamp"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    metadata["content_hash"] = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
     chunk = {"text": text, "metadata": metadata}
     (chunks_dir / filename).write_text(
         json.dumps(chunk, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
