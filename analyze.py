@@ -105,8 +105,8 @@ def detect_dialect(source_file: Path) -> tuple:
     
     return ('COBOL', False)
 
-def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir, 
-                          dialect_jar, lenient_flag, max_retries=3):
+def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir,
+                          dialect_jar, lenient_flag, max_retries=5):
     """
     Pre-validation loop: parse, detect broken copybooks, stub them, retry.
     """

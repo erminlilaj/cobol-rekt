@@ -236,6 +236,9 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
     diag = _get_parse_diagnostics(report_dir)
     parse_coverage_pct = _compute_parse_coverage(diag)
 
+    # R7.3 — confidence score
+    confidence = _compute_confidence_score(report_dir)
+
     metadata = {
         "chunk_type": "program_summary",
         "chunk_id": f"{program}:program_summary",
@@ -244,14 +247,23 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
         "edge_count": edge_count,
         "variable_count": variable_count,
         "complexity_score": complexity_score,
+        "confidence": confidence,
     }
     if parse_coverage_pct is not None:
         metadata["parse_coverage_pct"] = parse_coverage_pct
 
+    # Append confidence label to text
+    chunk_text += (
+        f"\nAnalysis confidence: {confidence['label']} ({confidence['score']:.2f})."
+    )
+    if confidence.get("flags"):
+        chunk_text += " Notes: " + "; ".join(confidence["flags"]) + "."
+
     write_chunk(chunks_dir, f"{program}__program_summary.json", chunk_text, metadata)
     if verbose:
         print(f"  program_summary: complexity={complexity_score}, "
-              f"nodes={node_count}, vars={variable_count}")
+              f"nodes={node_count}, vars={variable_count}, "
+              f"confidence={confidence['label']} ({confidence['score']:.2f})")
     return 1
 
 
@@ -273,6 +285,127 @@ def _extract_program_overview(report_dir: Path) -> str:
     content = re.sub(r"^>\s*", "", content, flags=re.MULTILINE)
     content = re.sub(r"^---\s*$", "", content, flags=re.MULTILINE)
     return content.strip()
+
+
+def _compute_confidence_score(report_dir: Path) -> dict:
+    """R7.3 — Compute a weighted confidence score for a COBOL analysis.
+
+    Returns {"score": float, "label": str, "sub_scores": dict, "flags": list[str]}.
+
+    Sub-scores (each 0.0–1.0):
+      parse_quality (0.30) — from parse_diagnostics.json
+      copybook_coverage (0.25) — resolved / total from copybook_manifest.json
+      data_dictionary_coverage (0.20) — fields with PIC / total fields in data_structures
+      dependency_completeness (0.15) — no dynamic SQL / no UNKNOWN calls
+      narrative_quality (0.10) — paragraphs with comments / total paragraphs
+    """
+    flags: list[str] = []
+
+    # --- parse_quality sub-score ---
+    diag = _get_parse_diagnostics(report_dir)
+    pq = _compute_parse_quality(diag)
+    parse_score = {"full": 1.0, "partial": 0.6, "degraded": 0.2, "unknown": 0.8}[pq]
+    if pq == "degraded":
+        flags.append("degraded parse quality")
+    elif pq == "partial":
+        flags.append("partial parse quality")
+
+    # --- copybook_coverage sub-score ---
+    cpb_path = report_dir / "copybook_manifest.json"
+    if cpb_path.exists():
+        cpb = load_json(cpb_path) or {}
+        s = cpb.get("summary", {})
+        total_cpb = s.get("total_copybooks", 0)
+        resolved_cpb = s.get("resolved", 0)
+        stub_count = total_cpb - resolved_cpb
+        cpb_score = (resolved_cpb / total_cpb) if total_cpb > 0 else 1.0
+        if stub_count > 0:
+            flags.append(f"{stub_count} copybook(s) stubbed")
+    else:
+        cpb_score = 1.0  # no copybooks required
+        stub_count = 0
+
+    # --- data_dictionary_coverage sub-score ---
+    ds_dir = report_dir / "data_structures"
+    dd_score = 0.8  # default if file absent
+    if ds_dir.is_dir():
+        ds_files = list(ds_dir.glob("*-data.json"))
+        if ds_files:
+            ds_data = load_json(ds_files[0])
+            if ds_data:
+                total_fields = 0
+                typed_fields = 0
+                def _count(node: dict) -> None:
+                    nonlocal total_fields, typed_fields
+                    name = node.get("name", "")
+                    if name and name not in ("FILLER", "[ROOT]") and node.get("levelNumber", 0) > 0:
+                        total_fields += 1
+                        if node.get("dataType") and node.get("dataType") != "OBJECT":
+                            typed_fields += 1
+                    for c in node.get("children", []):
+                        _count(c)
+                for r in ds_data.get("children", []):
+                    _count(r)
+                dd_score = (typed_fields / total_fields) if total_fields > 0 else 1.0
+
+    # --- dependency_completeness sub-score ---
+    deps_path = report_dir / "knowledge_base" / "03_Dependencies.yaml"
+    dep_score = 1.0
+    if deps_path.exists():
+        deps = load_yaml(deps_path)
+        if deps:
+            db = deps.get("database", {})
+            if db.get("dynamic_sql"):
+                dep_score -= 0.2
+                flags.append("dynamic SQL detected")
+            calls = deps.get("calls", [])
+            unknown_calls = [c for c in calls if c.get("target") == "UNKNOWN"]
+            if unknown_calls:
+                dep_score -= 0.15 * min(len(unknown_calls), 2)
+                flags.append(f"{len(unknown_calls)} unresolved dynamic CALL target(s)")
+    dep_score = max(0.0, dep_score)
+
+    # --- narrative_quality sub-score ---
+    comments_path = report_dir / "comments.json"
+    narr_score = 0.5  # default with no comments file
+    if comments_path.exists():
+        comments_data = load_json(comments_path)
+        if isinstance(comments_data, dict):
+            total_paras = len(comments_data)
+            commented = sum(1 for v in comments_data.values() if v)
+            narr_score = (commented / total_paras) if total_paras > 0 else 0.5
+        elif isinstance(comments_data, list):
+            narr_score = 0.7 if comments_data else 0.3
+
+    # --- Weighted composite ---
+    score = (
+        0.30 * parse_score
+        + 0.25 * cpb_score
+        + 0.20 * dd_score
+        + 0.15 * dep_score
+        + 0.10 * narr_score
+    )
+    score = round(min(1.0, max(0.0, score)), 3)
+
+    if score >= 0.85:
+        label = "high"
+    elif score >= 0.65:
+        label = "medium"
+    else:
+        label = "low"
+
+    return {
+        "score": score,
+        "label": label,
+        "sub_scores": {
+            "parse_quality": round(parse_score, 3),
+            "copybook_coverage": round(cpb_score, 3),
+            "data_dictionary_coverage": round(dd_score, 3),
+            "dependency_completeness": round(dep_score, 3),
+            "narrative_quality": round(narr_score, 3),
+        },
+        "flags": flags,
+    }
 
 
 def _build_program_nl_summary(report_dir: Path, program: str,
@@ -1260,6 +1393,44 @@ def generate_job_flow(report_dir: Path, chunks_dir: Path,
     return 1
 
 
+_COND_OP_INVERSE = {
+    "LT": ">=", "LE": ">", "EQ": "!=", "NE": "=", "GT": "<=", "GE": "<",
+}
+
+
+def _interpret_cond(cond: str | None, cond_modifier: str | None) -> str:
+    """R8.4 — Convert raw JCL COND= to a human-readable 'runs only if...' clause.
+
+    COND logic is inverted: step is SKIPPED when condition is TRUE.
+    Returns the positive form so readers know when the step runs.
+    """
+    if cond_modifier == "EVEN":
+        return "runs even if a prior step abended"
+    if cond_modifier == "ONLY":
+        return "runs only if a prior step abended"
+    if not cond:
+        return ""
+    raw = cond.strip()
+
+    def _single(token: str) -> str:
+        token = token.strip().strip("()")
+        parts = [p.strip() for p in token.split(",")]
+        if len(parts) < 2:
+            return f"COND={token}"
+        code, op = parts[0], parts[1].upper()
+        step_ref = parts[2] if len(parts) >= 3 else None
+        inv = _COND_OP_INVERSE.get(op, f"!{op}")
+        if step_ref:
+            return f"{step_ref} returned RC {inv} {code}"
+        return f"all prior steps return RC {inv} {code}"
+
+    inner = raw.strip("()")
+    if re.search(r"\)\s*,\s*\(", inner):
+        singles = re.findall(r"\(([^)]+)\)", inner)
+        return "runs only if: " + " AND ".join(_single(s) for s in singles) if singles else f"COND={raw}"
+    return "runs only if " + _single(raw)
+
+
 def generate_step_details(report_dir: Path, chunks_dir: Path,
                           verbose: bool) -> int:
     """Generate one step_detail chunk per JCL step."""
@@ -1299,7 +1470,7 @@ def generate_step_details(report_dir: Path, chunks_dir: Path,
             access = dd.get("access", "")
             if access == "read":
                 input_ds.append(dsn)
-            elif access == "write":
+            elif access in ("write", "append"):  # R8.2: append = MOD
                 output_ds.append(dsn)
             else:
                 # Classify by DISP if access not pre-classified
@@ -1312,11 +1483,15 @@ def generate_step_details(report_dir: Path, chunks_dir: Path,
 
         # Build text
         lines = [f"Step {step_name} executes program {pgm or proc or 'unknown'}."]
-        if cond:
-            cond_str = cond
+        if cond or cond_mod:
+            interp = _interpret_cond(cond, cond_mod)
+            raw_cond = cond or ""
             if cond_mod:
-                cond_str += f" ({cond_mod})"
-            lines.append(f"Condition: {cond_str}.")
+                raw_cond = f"{raw_cond} {cond_mod}".strip()
+            if interp:
+                lines.append(f"Condition (COND={raw_cond}): {interp}.")
+            else:
+                lines.append(f"Condition: {raw_cond}.")
         else:
             lines.append("Condition: unconditional.")
         if parm:

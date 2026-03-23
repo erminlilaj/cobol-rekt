@@ -706,8 +706,10 @@ class JCLParser:
         s = status.upper()
         if s in ('SHR', 'OLD'):
             return 'read'
-        if s in ('NEW', 'MOD'):
+        if s == 'NEW':
             return 'write'
+        if s == 'MOD':
+            return 'append'   # R8.2: MOD = write(append) — open existing or create
         if s == 'PASS':
             return 'pass'
         return 'special'
@@ -951,7 +953,7 @@ class JCLParser:
                                         pgm if isinstance(pgm, str) else '', access)
                     if access == 'read':
                         datasets_read.append(dsn)
-                    elif access == 'write':
+                    elif access in ('write', 'append'):
                         datasets_written.append(dsn)
                 elif isinstance(dsn, dict):
                     key = dsn.get('dsn') or dsn.get('base', '')
@@ -999,7 +1001,7 @@ class JCLParser:
         entry = index[dsn]
         if access == 'read' and step not in entry['read_by']:
             entry['read_by'].append(step)
-        elif access == 'write' and step not in entry['written_by']:
+        elif access in ('write', 'append') and step not in entry['written_by']:
             entry['written_by'].append(step)
         if pgm and pgm not in entry['programs']:
             entry['programs'].append(pgm)

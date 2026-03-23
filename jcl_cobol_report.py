@@ -68,7 +68,7 @@ MAX_CALL_DEPTH = 5
 class DDMapping:
     dd_name: str
     dsn: str
-    access: str        # read, write, pass, special
+    access: str        # read, write, append, pass, special
     role: str          # data, library_override, program_input, system_print, system_output, diagnostic_dump
     is_temporary: bool = False
     is_null: bool = False
@@ -145,6 +145,70 @@ def _extract_dsn_string(dsn_field) -> tuple[str, bool]:
             return (f"{dsn_field['base']}({gen})", False)
         return (dsn_field.get("dsn", str(dsn_field)), False)
     return (str(dsn_field), False)
+
+
+_COND_OP_INVERSE = {
+    "LT": ">=", "LE": ">", "EQ": "!=", "NE": "=", "GT": "<=", "GE": "<",
+}
+_COND_OP_WORDS = {
+    "LT": "less than", "LE": "less than or equal to",
+    "EQ": "equal to", "NE": "not equal to",
+    "GT": "greater than", "GE": "greater than or equal to",
+}
+
+
+def _interpret_cond(cond: str | None, cond_modifier: str | None) -> str:
+    """R8.4 — Convert raw COND= value to a human-readable 'runs when...' clause.
+
+    JCL COND semantics (confusing!): the step is SKIPPED when the condition is TRUE.
+    This function returns the positive form ("runs only if...").
+
+    Examples:
+      COND=(4,LT)         → "runs only if all prior steps return RC >= 4"
+      COND=(0,NE,STEP1)   → "runs only if STEP1 returned RC = 0"
+      COND=EVEN           → "runs even if a prior step abended"
+      COND=ONLY           → "runs only if a prior step abended"
+    """
+    if cond_modifier == "EVEN":
+        return "runs even if a prior step abended"
+    if cond_modifier == "ONLY":
+        return "runs only if a prior step abended"
+    if not cond:
+        return ""
+
+    raw = cond.strip()
+    if not raw:
+        return ""
+
+    # Normalise: strip outer parens
+    def _parse_single(token: str) -> str:
+        """Parse one condition tuple like '4,LT' or '4,LT,STEP1'."""
+        token = token.strip().strip("()")
+        parts = [p.strip() for p in token.split(",")]
+        if len(parts) < 2:
+            return f"COND={token}"
+        code, op = parts[0], parts[1].upper()
+        step_ref = parts[2] if len(parts) >= 3 else None
+        inv_sym = _COND_OP_INVERSE.get(op, f"!{op}")
+        if step_ref:
+            return f"{step_ref} returned RC {inv_sym} {code}"
+        else:
+            return f"all prior steps return RC {inv_sym} {code}"
+
+    # Handle multiple conditions: ((4,LT),(0,NE,STEP1))
+    # Strip outer extra parens to detect multi-condition
+    inner = raw.strip("()")
+    # If inner contains nested parens, it's multi-condition
+    if re.search(r"\)\s*,\s*\(", inner):
+        # Multiple conditions joined by OR (skip if ANY is true)
+        singles = re.findall(r"\(([^)]+)\)", inner)
+        if not singles:
+            return f"COND={raw}"
+        parts = [_parse_single(s) for s in singles]
+        return "runs only if: " + " AND ".join(parts)
+    else:
+        # Single condition
+        return "runs only if " + _parse_single(raw)
 
 
 def _classify_dd_role(dd: dict) -> str:
@@ -490,8 +554,10 @@ class JCLCOBOLReportBuilder:
                         access = "pass"
                     elif status in ("SHR", "OLD"):
                         access = "read"
+                    elif status == "MOD":
+                        access = "append"  # R8.2
                     else:
-                        access = "write"  # default for NEW/MOD with CATLG
+                        access = "write"  # default for NEW with CATLG
 
                 dd_mappings.append(DDMapping(
                     dd_name=dd.get("dd_name", ""),
@@ -916,7 +982,7 @@ class JCLCOBOLReportBuilder:
         lines.append("|------|---------|----------|----------|")
         for rel in self.step_relationships:
             inputs = [d.dsn for d in rel.dd_mappings if d.access == "read" and d.role == "data"]
-            outputs = [d.dsn for d in rel.dd_mappings if d.access in ("write", "pass") and d.role == "data"]
+            outputs = [d.dsn for d in rel.dd_mappings if d.access in ("write", "append", "pass") and d.role == "data"]
             inputs_str = ", ".join(inputs) if inputs else "-"
             outputs_str = ", ".join(outputs) if outputs else "-"
             lines.append(f"| {rel.step_name} | {rel.program} | {inputs_str} | {outputs_str} |")
@@ -1089,7 +1155,7 @@ class JCLCOBOLReportBuilder:
                          if d.access == "read" and d.role == "data"
                          and d.dsn not in ("(none)", "", None) and not d.is_null]
             output_dds = [d for d in rel.dd_mappings
-                          if d.access in ("write", "pass") and d.role == "data"
+                          if d.access in ("write", "append", "pass") and d.role == "data"
                           and d.dsn not in ("(none)", "", None) and not d.is_null]
             desc = f"{rel.step_name} executes {rel.program}"
             if rel.is_system_utility:
@@ -1139,11 +1205,15 @@ class JCLCOBOLReportBuilder:
             elif not rel.program_in_corpus:
                 parts.append("Program not analyzed (report missing).")
 
-            if rel.condition:
-                cond_text = f"Condition: {rel.condition}"
+            if rel.condition or rel.cond_modifier:
+                interp = _interpret_cond(rel.condition, rel.cond_modifier)
+                raw_cond = rel.condition or ""
                 if rel.cond_modifier:
-                    cond_text += f" ({rel.cond_modifier})"
-                parts.append(cond_text + ".")
+                    raw_cond = f"{raw_cond} {rel.cond_modifier}".strip()
+                if interp:
+                    parts.append(f"Condition (COND={raw_cond}): {interp}.")
+                else:
+                    parts.append(f"Condition: {raw_cond}.")
             if rel.parm:
                 parts.append(f"Parameters: {rel.parm}.")
 
@@ -1152,12 +1222,17 @@ class JCLCOBOLReportBuilder:
                          if d.access == "read" and d.role == "data"
                          and d.dsn not in ("(none)", "", None) and not d.is_null]
             output_dds = [d for d in rel.dd_mappings
-                          if d.access in ("write", "pass") and d.role == "data"
+                          if d.access in ("write", "append", "pass") and d.role == "data"
                           and d.dsn not in ("(none)", "", None) and not d.is_null]
             if input_dds:
                 parts.append(f"Input datasets: {', '.join(d.dsn for d in input_dds)}.")
             if output_dds:
-                parts.append(f"Output datasets: {', '.join(d.dsn for d in output_dds)}.")
+                write_dds = [d for d in output_dds if d.access != "append"]
+                append_dds = [d for d in output_dds if d.access == "append"]
+                if write_dds:
+                    parts.append(f"Output datasets: {', '.join(d.dsn for d in write_dds)}.")
+                if append_dds:
+                    parts.append(f"Appended datasets (DISP=MOD): {', '.join(d.dsn for d in append_dds)}.")
 
             # COBOL details (only present if program_in_corpus)
             if rel.complexity_label:
@@ -1316,10 +1391,11 @@ class JCLCOBOLReportBuilder:
             cond_parts = [f"Job {job_name} has {len(cond_steps)} conditional step(s)."]
             for cs in cond_steps:
                 desc = f"Step {cs.step_name} ({cs.program})"
-                if cs.condition:
-                    desc += f" runs if {cs.condition}"
-                if cs.cond_modifier:
-                    desc += f" (modifier: {cs.cond_modifier})"
+                interp = _interpret_cond(cs.condition, cs.cond_modifier)
+                if interp:
+                    desc += f": {interp}"
+                elif cs.condition:
+                    desc += f" runs if COND={cs.condition}"
                 cond_parts.append(desc + ".")
         else:
             cond_parts = [
