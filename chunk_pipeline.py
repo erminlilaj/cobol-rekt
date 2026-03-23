@@ -12,9 +12,11 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -24,30 +26,69 @@ import yaml
 # =============================================================================
 
 CHUNK_SCHEMA_VERSION = "1.1"
+PIPELINE_VERSION = "1.2"
 
 # CFG JSON field names (NOT source/target/label as CLAUDE.md incorrectly states)
 EDGE_SOURCE = "fromNodeID"
 EDGE_TARGET = "toNodeID"
 EDGE_TYPE = "edgeType"
 
-# Chunk size thresholds (in whitespace-delimited tokens)
+# Chunk size thresholds — overridable via CLI flags (--min-tokens / --max-tokens / --overlap-tokens).
+# When tiktoken is active the unit is BPE tokens; otherwise whitespace tokens.
 MIN_CHUNK_TOKENS = 20
 MAX_CHUNK_TOKENS = 512
 OVERLAP_TOKENS = 50
+
+# Parse quality for the current program being chunked.
+# Set by run_pipeline() from parse_diagnostics.json before any write_chunk() call.
+_CURRENT_PARSE_QUALITY: str = "unknown"
 
 
 # =============================================================================
 # Utilities
 # =============================================================================
 
+# Tiktoken BPE counter (cl100k_base = GPT-4 / text-embedding-3 tokenizer).
+# Falls back to whitespace splitting if tiktoken is not installed.
+try:
+    import tiktoken as _tiktoken
+    _BPE_ENCODING = _tiktoken.get_encoding("cl100k_base")
+    def _bpe_count(text: str) -> int:
+        return len(_BPE_ENCODING.encode(text))
+    _TIKTOKEN_AVAILABLE = True
+except Exception:
+    _BPE_ENCODING = None
+    _TIKTOKEN_AVAILABLE = False
+
+# Active counter — can be overridden by --token-counter flag via set_token_counter()
+_USE_BPE: bool = _TIKTOKEN_AVAILABLE
+
+
+def set_token_counter(mode: str) -> None:
+    """Select token counting strategy: 'bpe' (default) or 'whitespace'."""
+    global _USE_BPE
+    if mode == "bpe":
+        if not _TIKTOKEN_AVAILABLE:
+            print("Warning: tiktoken not installed; falling back to whitespace counting.")
+        _USE_BPE = _TIKTOKEN_AVAILABLE
+    else:
+        _USE_BPE = False
+
+
 def token_count(text: str) -> int:
-    """Approximate token count by whitespace split."""
+    """Count tokens using BPE (cl100k_base) if available, else whitespace split."""
+    if _USE_BPE:
+        return _bpe_count(text)
     return len(text.split())
 
 
 def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     """Write a single chunk JSON file."""
     metadata["schema_version"] = CHUNK_SCHEMA_VERSION
+    metadata["pipeline_version"] = PIPELINE_VERSION
+    metadata["analysis_timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    metadata["content_hash"] = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    metadata["parse_quality"] = _CURRENT_PARSE_QUALITY
     chunk = {"text": text, "metadata": metadata}
     (chunks_dir / filename).write_text(
         json.dumps(chunk, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -68,6 +109,48 @@ def load_yaml(path: Path) -> dict | None:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+# =============================================================================
+# Parse quality helpers (R7.1, R7.2)
+# =============================================================================
+
+def _get_parse_diagnostics(report_dir: Path) -> dict:
+    """Load parse_diagnostics.json. Returns empty dict if absent."""
+    path = report_dir / "parse_diagnostics.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _compute_parse_quality(diag: dict) -> str:
+    """Map parse diagnostics to a quality label: full / partial / degraded / unknown."""
+    if not diag:
+        return "unknown"
+    errors = diag.get("error_summary", {}).get("total_errors", 0)
+    if errors == 0:
+        return "full"
+    if errors <= 5:
+        return "partial"
+    return "degraded"
+
+
+def _compute_parse_coverage(diag: dict) -> float | None:
+    """Return coverage_percentage from diagnostics, or None if unavailable."""
+    if not diag:
+        return None
+    cov = diag.get("coverage_percentage")
+    if cov is not None:
+        return float(cov)
+    # Derive from line counts if coverage_percentage absent
+    total = diag.get("source_lines", 0)
+    affected = diag.get("affected_lines", 0)
+    if total > 0:
+        return round((total - affected) / total * 100, 2)
+    return None
 
 
 # =============================================================================
@@ -145,6 +228,10 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
     if overview_text:
         chunk_text += "\n" + overview_text
 
+    # Parse coverage from diagnostics (R7.2)
+    diag = _get_parse_diagnostics(report_dir)
+    parse_coverage_pct = _compute_parse_coverage(diag)
+
     metadata = {
         "chunk_type": "program_summary",
         "chunk_id": f"{program}:program_summary",
@@ -154,6 +241,9 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
         "variable_count": variable_count,
         "complexity_score": complexity_score,
     }
+    if parse_coverage_pct is not None:
+        metadata["parse_coverage_pct"] = parse_coverage_pct
+
     write_chunk(chunks_dir, f"{program}__program_summary.json", chunk_text, metadata)
     if verbose:
         print(f"  program_summary: complexity={complexity_score}, "
@@ -717,6 +807,10 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
                 changed = True
 
         if changed:
+            # Recompute content_hash if text was extended
+            data["metadata"]["content_hash"] = hashlib.sha256(
+                data["text"].encode("utf-8")
+            ).hexdigest()[:16]
             chunk_file.write_text(
                 json.dumps(data, indent=2, ensure_ascii=False),
                 encoding="utf-8",
@@ -880,6 +974,7 @@ def generate_step_details(report_dir: Path, chunks_dir: Path,
             "cond_modifier": cond_mod,
             "input_datasets": input_ds,
             "output_datasets": output_ds,
+            "datasets": list(dict.fromkeys(input_ds + output_ds)),  # R2.6: unified list, deduped
         }
         safe_name = re.sub(r"[^\w\-]", "_", step_name)
         write_chunk(
@@ -945,6 +1040,7 @@ def apply_size_guard(chunks_dir: Path, program_or_job: str,
                     [parent_data["metadata"]["paragraph"]])
         paras.append(exit_data["metadata"].get("paragraph", ""))
         parent_data["metadata"]["paragraphs"] = paras
+        _refresh_hash(parent_data)
         parent_f.write_text(
             json.dumps(parent_data, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -993,6 +1089,7 @@ def apply_size_guard(chunks_dir: Path, program_or_job: str,
                 first_meta["paragraph"] = merged_paragraphs[0]
                 data["text"] = merged_text
                 data["metadata"] = first_meta
+                _refresh_hash(data)
                 suffix = f"+{len(merged_paragraphs) - 1}"
                 safe_name = re.sub(r"[^\w\-]", "_", merged_paragraphs[0])
                 new_name = f"{program_or_job}__paragraph__{safe_name}{suffix}.json"
@@ -1030,6 +1127,7 @@ def apply_size_guard(chunks_dir: Path, program_or_job: str,
                      [data["metadata"].get("paragraph", "?")])
         prev_paras.extend(cur_paras)
         prev_data["metadata"]["paragraphs"] = prev_paras
+        _refresh_hash(prev_data)
         prev_f.write_text(
             json.dumps(prev_data, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -1071,10 +1169,11 @@ def _split_if_needed(filepath: Path, chunks_dir: Path,
     stem = filepath.stem
     filepath.unlink()
     for idx, part_text in enumerate(parts, 1):
-        part_data = {
-            "text": part_text,
-            "metadata": {**data["metadata"], "part": idx, "total_parts": len(parts)},
-        }
+        part_meta = {**data["metadata"], "part": idx, "total_parts": len(parts)}
+        part_meta["content_hash"] = hashlib.sha256(
+            part_text.encode("utf-8")
+        ).hexdigest()[:16]
+        part_data = {"text": part_text, "metadata": part_meta}
         (chunks_dir / f"{stem}__part{idx}.json").write_text(
             json.dumps(part_data, indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -1095,12 +1194,16 @@ def generate_manifest(chunks_dir: Path, verbose: bool) -> dict:
         if not data:
             continue
         meta = data.get("metadata", {})
-        entries.append({
+        text = data.get("text", "")
+        entry = {
             "file": f.name,
             "chunk_type": meta.get("chunk_type", "unknown"),
             "program": meta.get("program") or meta.get("job_name", "unknown"),
-            "token_count": token_count(data.get("text", "")),
-        })
+            "token_count": len(text.split()),
+        }
+        if _TIKTOKEN_AVAILABLE:
+            entry["token_count_bpe"] = _bpe_count(text)
+        entries.append(entry)
 
     # Summary by type
     type_counts = {}
@@ -1134,6 +1237,240 @@ def _parse_int(val: str) -> int:
     return 0
 
 
+def _refresh_hash(data: dict) -> None:
+    """Recompute content_hash from current data['text'] in-place."""
+    text = data.get("text", "")
+    if "metadata" in data:
+        data["metadata"]["content_hash"] = hashlib.sha256(
+            text.encode("utf-8")
+        ).hexdigest()[:16]
+
+
+# =============================================================================
+# Phase 2 post-processing enrichments (R2.4, R3.2, R3.3) + R7.4 health chunk
+# =============================================================================
+
+def enrich_called_by(chunks_dir: Path, program: str, verbose: bool) -> int:
+    """R2.4 — Add called_by to paragraph_logic chunks.
+
+    Builds a reverse call index from all paragraph chunks' `calls` lists,
+    then writes the `called_by` field onto each target paragraph's chunk.
+    Returns the number of chunks that received a non-empty called_by list.
+    """
+    # First pass: collect {para_name: [callers]} from all paragraph chunks
+    reverse: dict[str, list[str]] = {}
+    para_files = list(chunks_dir.glob(f"{program}__paragraph__*.json"))
+
+    for f in para_files:
+        data = load_json(f)
+        if not data:
+            continue
+        meta = data.get("metadata", {})
+        caller = meta.get("paragraph", "")
+        for callee_raw in meta.get("calls", []):
+            # calls may be bare names or "prog:paragraph_logic:name" at this point
+            callee = callee_raw.split(":")[-1] if ":" in callee_raw else callee_raw
+            # Strip THRU targets
+            callee = re.split(r"\s+(?:THRU|THROUGH)\s+", callee, maxsplit=1,
+                              flags=re.IGNORECASE)[0].strip().upper()
+            if callee:
+                reverse.setdefault(callee, [])
+                if caller and caller not in reverse[callee]:
+                    reverse[callee].append(caller)
+
+    # Second pass: write called_by to each paragraph chunk
+    updated = 0
+    for f in para_files:
+        data = load_json(f)
+        if not data:
+            continue
+        meta = data.get("metadata", {})
+        para_name = meta.get("paragraph", "").upper()
+        callers = reverse.get(para_name, [])
+        if meta.get("called_by") != callers:
+            meta["called_by"] = callers
+            data["metadata"] = meta
+            f.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            if callers:
+                updated += 1
+
+    if verbose:
+        print(f"  enrich_called_by: {updated} paragraphs have non-empty called_by")
+    return updated
+
+
+def enrich_calls_chunk_ids(chunks_dir: Path, program: str, verbose: bool) -> int:
+    """R3.2 — Convert paragraph `calls` from bare names to chunk_ids.
+
+    Keeps original bare names in `calls_names` for backward compatibility.
+    Searches the manifest for matching chunk_ids (handles merged +N suffixes).
+    """
+    # Build lookup: para_name_upper → chunk_id from manifest
+    manifest_path = chunks_dir / "chunks_manifest.json"
+    if not manifest_path.exists():
+        return 0
+    manifest = load_json(manifest_path) or {}
+    # Also build from live files (pre-manifest case)
+    name_to_id: dict[str, str] = {}
+    for f in chunks_dir.glob(f"{program}__paragraph__*.json"):
+        data = load_json(f)
+        if not data:
+            continue
+        meta = data.get("metadata", {})
+        para = meta.get("paragraph", "").upper()
+        cid = meta.get("chunk_id", "")
+        if para and cid:
+            name_to_id[para] = cid
+
+    updated = 0
+    for f in chunks_dir.glob(f"{program}__paragraph__*.json"):
+        data = load_json(f)
+        if not data:
+            continue
+        meta = data.get("metadata", {})
+        raw_calls = meta.get("calls", [])
+        if not raw_calls:
+            continue
+
+        # Skip if already chunk_ids (contains ":")
+        if all(":" in c for c in raw_calls):
+            continue
+
+        meta["calls_names"] = list(raw_calls)  # backward compat
+        resolved = []
+        for callee_raw in raw_calls:
+            callee_bare = re.split(r"\s+(?:THRU|THROUGH)\s+", callee_raw, maxsplit=1,
+                                   flags=re.IGNORECASE)[0].strip().upper()
+            cid = name_to_id.get(callee_bare)
+            resolved.append(cid if cid else callee_raw)
+        meta["calls"] = resolved
+        data["metadata"] = meta
+        f.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        updated += 1
+
+    if verbose:
+        print(f"  enrich_calls_chunk_ids: {updated} paragraph chunks updated")
+    return updated
+
+
+def enrich_program_summary_links(chunks_dir: Path, program: str, verbose: bool) -> bool:
+    """R3.3 — Add paragraph_chunks and variable_group_chunks lists to program_summary.
+
+    Must be called after all paragraph and variable_group chunks exist.
+    """
+    summary_path = chunks_dir / f"{program}__program_summary.json"
+    if not summary_path.exists():
+        return False
+
+    para_ids = []
+    for f in sorted(chunks_dir.glob(f"{program}__paragraph__*.json")):
+        data = load_json(f)
+        if not data:
+            continue
+        cid = data.get("metadata", {}).get("chunk_id")
+        if cid:
+            para_ids.append(cid)
+
+    vg_ids = []
+    for f in sorted(chunks_dir.glob(f"{program}__variable_group__*.json")):
+        data = load_json(f)
+        if not data:
+            continue
+        cid = data.get("metadata", {}).get("chunk_id")
+        if cid:
+            vg_ids.append(cid)
+
+    summary = load_json(summary_path)
+    if not summary:
+        return False
+
+    summary["metadata"]["paragraph_chunks"] = para_ids
+    summary["metadata"]["variable_group_chunks"] = vg_ids
+    summary_path.write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    if verbose:
+        print(f"  enrich_program_summary_links: "
+              f"{len(para_ids)} paragraph_chunks, {len(vg_ids)} variable_group_chunks")
+    return True
+
+
+def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
+                                   program: str, verbose: bool) -> int:
+    """R7.4 — Generate one cobol_analysis_health chunk per COBOL program.
+
+    Aggregates parse coverage, stubbed copybooks, and quality flags into a
+    single self-describing chunk so consumers can assess analysis reliability
+    without reading multiple artifact files.
+    """
+    diag = _get_parse_diagnostics(report_dir)
+    coverage_pct = _compute_parse_coverage(diag) or 100.0
+    error_count = diag.get("error_summary", {}).get("total_errors", 0) if diag else 0
+
+    # Copybook data
+    cpb_manifest_path = report_dir / "copybook_manifest.json"
+    stubbed_copybooks: list[str] = []
+    total_copybooks = 0
+    resolved_copybooks = 0
+    if cpb_manifest_path.exists():
+        cpb = load_json(cpb_manifest_path) or {}
+        summary_cpb = cpb.get("summary", {})
+        total_copybooks = summary_cpb.get("total_copybooks", 0)
+        resolved_copybooks = summary_cpb.get("resolved", 0)
+        for name, info in (cpb.get("copybooks") or {}).items():
+            if info.get("is_stub"):
+                stubbed_copybooks.append(name)
+
+    stubbed_count = len(stubbed_copybooks)
+
+    # Quality flags
+    quality_flags: list[str] = []
+    if diag:
+        quality_flags.append(
+            f"analyzed with --lenient: {coverage_pct}% coverage "
+            f"({error_count} parse error(s) skipped)"
+        )
+    if stubbed_count > 0:
+        quality_flags.append(f"{stubbed_count} copybook(s) stubbed")
+
+    # Overall confidence label
+    if coverage_pct >= 99 and stubbed_count == 0:
+        confidence_label = "high"
+    elif coverage_pct >= 90 or stubbed_count <= 3:
+        confidence_label = "medium"
+    else:
+        confidence_label = "low"
+
+    # Human-readable text
+    stub_note = (f" {stubbed_count} copybook(s) were stubbed."
+                 if stubbed_count else "")
+    parse_note = (f" Parse coverage: {coverage_pct}% ({error_count} error(s))."
+                  if diag else " Parse completed without errors.")
+    text = (
+        f"Analysis health for {program}:{parse_note}{stub_note} "
+        f"Overall confidence: {confidence_label}."
+    )
+
+    metadata = {
+        "chunk_type": "cobol_analysis_health",
+        "chunk_id": f"{program}:analysis_health",
+        "program": program,
+        "parse_coverage_pct": coverage_pct,
+        "parse_error_count": error_count,
+        "stubbed_copybooks": stubbed_copybooks,
+        "stubbed_copybook_count": stubbed_count,
+        "total_copybooks": total_copybooks,
+        "resolved_copybooks": resolved_copybooks,
+        "quality_flags": quality_flags,
+        "confidence": confidence_label,
+    }
+    write_chunk(chunks_dir, f"{program}__analysis_health.json", text, metadata)
+    if verbose:
+        print(f"  cobol_analysis_health: confidence={confidence_label}, "
+              f"coverage={coverage_pct}%, stubs={stubbed_count}")
+    return 1
+
+
 # =============================================================================
 # Main orchestrator
 # =============================================================================
@@ -1165,6 +1502,11 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
     print(f"Mode: {' + '.join(mode)} | Schema: v{CHUNK_SCHEMA_VERSION}")
     print(f"Output: {chunks_dir}")
 
+    # Set parse quality for this program (R7.1 — stamped into every chunk)
+    global _CURRENT_PARSE_QUALITY
+    _diag = _get_parse_diagnostics(report_dir)
+    _CURRENT_PARSE_QUALITY = _compute_parse_quality(_diag)
+
     summary = {}
 
     # --- COBOL chunks ---
@@ -1179,6 +1521,8 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
             report_dir, chunks_dir, program, verbose)
         summary["variable_group"] = generate_variable_groups(
             report_dir, chunks_dir, program, verbose)
+        summary["cobol_analysis_health"] = generate_cobol_analysis_health(
+            report_dir, chunks_dir, program, verbose)
 
         # Enrich paragraph chunks with CFG metadata
         enriched = enrich_paragraph_chunks(
@@ -1190,6 +1534,11 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         if verbose and (guard_stats["merged"] or guard_stats["split"]):
             print(f"  Size guard: {guard_stats['merged']} merges, "
                   f"{guard_stats['split']} splits")
+
+        # Phase 2 post-processing enrichments
+        enrich_called_by(chunks_dir, program, verbose)        # R2.4
+        enrich_calls_chunk_ids(chunks_dir, program, verbose)  # R3.2
+        enrich_program_summary_links(chunks_dir, program, verbose)  # R3.3
 
     # --- JCL chunks ---
     if is_jcl:
@@ -1214,6 +1563,9 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
 # =============================================================================
 
 def main():
+    # Must declare global before any use of the names inside this function
+    global MIN_CHUNK_TOKENS, MAX_CHUNK_TOKENS, OVERLAP_TOKENS
+
     parser = argparse.ArgumentParser(
         description="Chunk Pipeline — split report artifacts into RAG retrieval units",
     )
@@ -1221,15 +1573,44 @@ def main():
                         help="Path to a *.report directory")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Print detailed progress")
+    parser.add_argument(
+        "--max-tokens", type=int, default=None,
+        help=f"Maximum tokens per chunk (default: {MAX_CHUNK_TOKENS})",
+    )
+    parser.add_argument(
+        "--min-tokens", type=int, default=None,
+        help=f"Minimum tokens for a standalone chunk (default: {MIN_CHUNK_TOKENS})",
+    )
+    parser.add_argument(
+        "--overlap-tokens", type=int, default=None,
+        help=f"Token overlap between split chunks (default: {OVERLAP_TOKENS})",
+    )
+    parser.add_argument(
+        "--token-counter", choices=["bpe", "whitespace"], default="bpe",
+        help="Token counting strategy: 'bpe' uses tiktoken cl100k_base (default), "
+             "'whitespace' uses simple split()",
+    )
     args = parser.parse_args()
 
     if not args.report_dir.is_dir():
         print(f"Error: {args.report_dir} is not a directory")
         sys.exit(1)
 
+    # Apply CLI overrides to module-level chunk-size globals
+    if args.max_tokens is not None:
+        MAX_CHUNK_TOKENS = args.max_tokens
+    if args.min_tokens is not None:
+        MIN_CHUNK_TOKENS = args.min_tokens
+    if args.overlap_tokens is not None:
+        OVERLAP_TOKENS = args.overlap_tokens
+
+    set_token_counter(args.token_counter)
+
     summary = run_pipeline(args.report_dir, verbose=args.verbose)
     if summary:
-        print(f"\nDone. {summary.get('total', 0)} chunks generated.")
+        counter_label = "BPE" if _USE_BPE else "whitespace"
+        print(f"\nDone. {summary.get('total', 0)} chunks generated "
+              f"(max_tokens={MAX_CHUNK_TOKENS}, counter={counter_label}).")
     else:
         sys.exit(1)
 
