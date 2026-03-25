@@ -619,6 +619,12 @@ class AnalysisPipeline:
         except Exception as e:
             Colors.print_msg(f"  Warning: Comment enrichment failed: {e}", Colors.YELLOW)
 
+    def step7c_structure_analysis(self):
+        """Extract structural facts from source and JSON."""
+        Colors.print_msg("[7c] Extracting COBOL Structural Facts...", Colors.GREEN)
+        cmd = f'"{sys.executable}" cobol_structure_analyzer.py "{self.report_subdir}" "{self.target_file}" --source "{self.target_path}"'
+        run_command(cmd, check=False)
+
     def cleanup(self):
         """Cleanup sandbox and finalize."""
         # Convert additional JSON graphs
@@ -647,6 +653,7 @@ class AnalysisPipeline:
         self.step6_data_dependencies()
         self.step7_knowledge_base()
         self.step7b_comment_enrichment()
+        self.step7c_structure_analysis()
         self.cleanup()
 
 # ============================================================================
