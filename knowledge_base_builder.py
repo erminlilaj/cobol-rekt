@@ -212,7 +212,7 @@ This document describes the program flow in a linear, readable format.
             
             # Get statements in this paragraph
             statements = self._get_paragraph_statements(para['id'], nodes, outgoing)
-            
+
             for stmt in statements:
                 node = nodes.get(stmt)
                 if not node:
@@ -326,7 +326,7 @@ This document describes the program flow in a linear, readable format.
         if match:
             return match.group(1)
         return "Unknown"
-    
+
     # =========================================================================
     # 02_Data_Dictionary.md
     # =========================================================================
@@ -375,6 +375,38 @@ This document describes the program flow in a linear, readable format.
                 dtype = var.get('dataType', '')
                 content += f"| {level:02d} | {name} | {pic} | {dtype} |\n"
         
+        # Load cobol_structure.json to append 88-level and REDEFINES info
+        struct_path = self.report_dir / "cobol_structure.json"
+        if struct_path.exists():
+            try:
+                struct_data = json.loads(struct_path.read_text('utf-8'))
+                
+                conds = struct_data.get("conditions_88", {})
+                if conds:
+                    content += "\n## Condition Names (88-Level)\n\n"
+                    content += "| Condition | Parent Variable | Value(s) |\n"
+                    content += "|-----------|----------------|----------|\n"
+                    for cname, info in conds.items():
+                        vals = ", ".join(info.get('values', []))
+                        parent = info.get('parent', '')
+                        content += f"| {cname} | {parent} | {vals} |\n"
+                        
+                redefs = struct_data.get("redefines", [])
+                if redefs:
+                    content += "\n## REDEFINES Relationships\n\n"
+                    content += "| Redefining | Redefines | Interpretation |\n"
+                    content += "|------------|-----------|----------------|\n"
+                    for rd in redefs:
+                        reding = rd.get('redefining', '')
+                        rededing = rd.get('redefines', '')
+                        reding_pic = rd.get('redefining_pic', '-')
+                        rededing_pic = rd.get('redefined_pic', '-')
+                        size = rd.get('byte_size', '')
+                        sz_str = f"Same {size} bytes" if size else "Same bytes"
+                        content += f"| {reding} (PIC {reding_pic}) | {rededing} (PIC {rededing_pic}) | {sz_str} |\n"
+            except Exception:
+                pass
+
         output_path = self.kb_dir / "02_Data_Dictionary.md"
         output_path.write_text(content, encoding='utf-8')
         
@@ -421,27 +453,62 @@ This document describes the program flow in a linear, readable format.
             'cics': []
         }
         
+        var_values = self._load_variable_values()
+
         if cfg:
             for node in cfg.get('nodes', []):
                 original = node.get('originalText', '').upper()
-                
+
                 # SQL detection
                 if 'EXEC SQL' in original:
-                    sql_stmt = self._extract_sql_info(original)
-                    if sql_stmt:
-                        deps['database']['sql_statements'].append(sql_stmt)
-                        # Extract table names
-                        tables = self._extract_tables(original)
-                        if 'SELECT' in original or 'FETCH' in original:
-                            deps['database']['tables_read'].extend(tables)
-                        elif 'UPDATE' in original or 'INSERT' in original or 'DELETE' in original:
-                            deps['database']['tables_updated'].extend(tables)
-                
-                # CALL detection
+                    # Flag dynamic SQL (PREPARE / EXECUTE IMMEDIATE)
+                    if self._is_dynamic_sql(original):
+                        deps['database']['dynamic_sql'] = True
+                    else:
+                        sql_stmt = self._extract_sql_info(original)
+                        if sql_stmt:
+                            deps['database']['sql_statements'].append(sql_stmt)
+                            tables = self._extract_tables(original)
+                            if 'SELECT' in original or 'FETCH' in original:
+                                deps['database']['tables_read'].extend(tables)
+                            elif ('UPDATE' in original or 'INSERT' in original
+                                  or 'DELETE' in original):
+                                deps['database']['tables_updated'].extend(tables)
+
+                # CALL detection — literal and dynamic (R5.2)
                 if 'CALL' in original:
-                    target = self._extract_call_target(original)
-                    if target and target not in [c.get('target') for c in deps['calls']]:
-                        deps['calls'].append({'target': target})
+                    target = self._extract_literal_call_target(original)
+                    if target:
+                        existing = [c.get('target') for c in deps['calls']]
+                        if target not in existing:
+                            deps['calls'].append({'target': target})
+                    else:
+                        # Dynamic CALL: CALL <variable-name>
+                        dyn_m = re.search(
+                            r'\bCALL\s+([A-Za-z][A-Za-z0-9_-]*)\b', original, re.IGNORECASE
+                        )
+                        if dyn_m:
+                            var_name = dyn_m.group(1).upper()
+                            known_vals = var_values.get(var_name, [])
+                            if known_vals:
+                                for val in known_vals:
+                                    resolved = val.strip("'\"").upper()
+                                    if resolved and resolved not in [
+                                        c.get('target') for c in deps['calls']
+                                    ]:
+                                        deps['calls'].append({
+                                            'target': resolved,
+                                            'source': 'dynamic',
+                                            'variable': var_name,
+                                        })
+                            else:
+                                unknown_entry = {
+                                    'target': 'UNKNOWN',
+                                    'source': 'dynamic',
+                                    'variable': var_name,
+                                }
+                                if unknown_entry not in deps['calls']:
+                                    deps['calls'].append(unknown_entry)
                 
                 # CICS detection
                 if 'EXEC CICS' in original:
@@ -476,26 +543,98 @@ This document describes the program flow in a linear, readable format.
                 return keyword
         return None
     
+    def _is_dynamic_sql(self, text: str) -> bool:
+        """Return True if the SQL statement uses dynamic SQL (PREPARE/EXECUTE IMMEDIATE)."""
+        return bool(re.search(r'\b(PREPARE|EXECUTE\s+IMMEDIATE)\b', text, re.IGNORECASE))
+
     def _extract_tables(self, text: str) -> list:
-        """Extract table names from SQL."""
-        tables = []
-        # FROM clause (may have multiple tables in a JOIN query)
-        tables.extend(re.findall(r'FROM\s+([A-Za-z0-9_]+)', text, re.IGNORECASE))
-        # JOIN clause
-        tables.extend(re.findall(r'JOIN\s+([A-Za-z0-9_]+)', text, re.IGNORECASE))
-        # INTO clause (for INSERT)
-        match = re.search(r'INTO\s+([A-Za-z0-9_]+)', text, re.IGNORECASE)
-        if match:
-            tables.append(match.group(1))
-        # UPDATE clause
-        match = re.search(r'UPDATE\s+([A-Za-z0-9_]+)', text, re.IGNORECASE)
-        if match:
-            tables.append(match.group(1))
+        """Extract table names from SQL. Tries sqlparse first, falls back to regex."""
+        result = self._extract_tables_sqlparse(text)
+        if result is not None:
+            return result
+        return self._extract_tables_regex(text)
+
+    def _extract_tables_sqlparse(self, text: str) -> Optional[list]:
+        """Extract table names using sqlparse token walking.
+
+        Handles JOINs, subqueries, and CTEs. Returns None if sqlparse is
+        unavailable or raises an exception (caller falls back to regex).
+        """
+        try:
+            import sqlparse                    # noqa: PLC0415
+            from sqlparse import tokens as T  # noqa: PLC0415
+        except ImportError:
+            return None
+
+        # Strip EXEC SQL / END-EXEC wrappers; replace COBOL host variables
+        sql = re.sub(r'EXEC\s+SQL\b', '', text, flags=re.IGNORECASE)
+        sql = re.sub(r'\bEND-EXEC\b', '', sql, flags=re.IGNORECASE)
+        sql = re.sub(r':[A-Za-z][A-Za-z0-9_-]*', 'COBOL_HOST_VAR', sql)
+
+        # Collect CTE alias names so we don't list them as tables
+        cte_names = {m.upper() for m in re.findall(r'\b(\w+)\s+AS\s*\(', sql, re.IGNORECASE)}
+
+        # Keywords that introduce a table name
+        _TABLE_INTRO = {'FROM', 'JOIN', 'INTO', 'UPDATE'}
+        # JOIN subtypes that are NOT table introductors
+        _JOIN_MODS = {'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'CROSS', 'NATURAL'}
+
+        tables: list[str] = []
+        try:
+            for stmt in sqlparse.parse(sql.strip()):
+                flat = list(stmt.flatten())
+                i = 0
+                while i < len(flat):
+                    tok = flat[i]
+                    ttype = tok.ttype
+                    val = tok.normalized.upper()
+
+                    if ttype in (T.Keyword, T.Keyword.DML) and val in _TABLE_INTRO:
+                        # Scan forward for next non-whitespace token
+                        j = i + 1
+                        while j < len(flat):
+                            nt = flat[j]
+                            if nt.ttype in (T.Text.Whitespace, T.Newline,
+                                            T.Text.Whitespace.Newline):
+                                j += 1
+                                continue
+                            # Skip JOIN modifier keywords (INNER, LEFT …)
+                            nval = nt.normalized.upper()
+                            if nt.ttype in (T.Keyword, T.Keyword.DML) and nval in _JOIN_MODS:
+                                j += 1
+                                continue
+                            # If another keyword, stop (e.g. INTO after INSERT … VALUES)
+                            if nt.ttype in (T.Keyword, T.Keyword.DML, T.Punctuation):
+                                break
+                            if nt.ttype in (T.Name, T.Literal.String.Single):
+                                name = nval.strip("'\"")
+                                if (name and name not in cte_names
+                                        and name != 'COBOL_HOST_VAR'
+                                        and not name.startswith('COBOL_')):
+                                    tables.append(name)
+                            break
+                    i += 1
+        except Exception:
+            return None
+
         return tables
-    
-    def _extract_call_target(self, text: str) -> Optional[str]:
-        """Extract CALL target program."""
-        match = re.search(r'CALL\s+[\'"]?([A-Za-z0-9_-]+)[\'"]?', text, re.IGNORECASE)
+
+    def _extract_tables_regex(self, text: str) -> list:
+        """Regex-based table extraction (fallback when sqlparse unavailable)."""
+        tables = []
+        tables.extend(re.findall(r'FROM\s+([A-Za-z0-9_]+)', text, re.IGNORECASE))
+        tables.extend(re.findall(r'JOIN\s+([A-Za-z0-9_]+)', text, re.IGNORECASE))
+        m = re.search(r'INTO\s+([A-Za-z0-9_]+)', text, re.IGNORECASE)
+        if m:
+            tables.append(m.group(1))
+        m = re.search(r'UPDATE\s+([A-Za-z0-9_]+)', text, re.IGNORECASE)
+        if m:
+            tables.append(m.group(1))
+        return tables
+
+    def _extract_literal_call_target(self, text: str) -> Optional[str]:
+        """Extract CALL target — only literal (quoted) targets."""
+        match = re.search(r"CALL\s+['\"]([A-Za-z0-9_-]+)['\"]", text, re.IGNORECASE)
         if match:
             return match.group(1)
         return None
@@ -511,6 +650,19 @@ This document describes the program flow in a linear, readable format.
     # Data Loading
     # =========================================================================
     
+    def _load_variable_values(self) -> dict:
+        """Load variable_values.json → {VAR_NAME: [val, ...]}. Returns {} if absent."""
+        path = self.report_dir / "variable_values.json"
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+            if isinstance(data, list):
+                return {entry[0].upper(): entry[1] for entry in data if len(entry) == 2}
+        except Exception:
+            pass
+        return {}
+
     def _load_cfg(self) -> Optional[dict]:
         """Load CFG JSON."""
         if self._cfg_data is not None:

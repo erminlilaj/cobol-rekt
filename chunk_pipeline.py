@@ -111,6 +111,13 @@ def load_yaml(path: Path) -> dict | None:
         return None
 
 
+
+def _load_cobol_structure(report_dir: Path) -> dict:
+    path = report_dir / "cobol_structure.json"
+    if path.exists():
+        return load_json(path) or {}
+    return {}
+
 # =============================================================================
 # Parse quality helpers (R7.1, R7.2)
 # =============================================================================
@@ -249,6 +256,9 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
         "complexity_score": complexity_score,
         "confidence": confidence,
     }
+    struct = _load_cobol_structure(report_dir)
+    if struct and struct.get("known_system_copybooks"):
+        metadata["known_system_copybooks"] = struct["known_system_copybooks"]
     if parse_coverage_pct is not None:
         metadata["parse_coverage_pct"] = parse_coverage_pct
 
@@ -529,6 +539,8 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
     # Split by ## headings
     sections = re.split(r"(?=^## )", text, flags=re.MULTILINE)
     count = 0
+    struct = _load_cobol_structure(report_dir)
+    profiles = struct.get("paragraph_profiles", {})
     for section in sections:
         m = re.match(r"^## (.+)", section)
         if not m:
@@ -592,6 +604,16 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
         comment_english = comment_meta.get("english", "")
         if comment_english:
             parts.append(comment_english)
+            
+        prof = profiles.get(heading)
+        if prof and prof.get("structural_patterns"):
+            pats = prof["structural_patterns"]
+            if len(pats) > 1:
+                pat_str = ", ".join(pats[:-1]) + " and " + pats[-1]
+            else:
+                pat_str = pats[0]
+            parts.append(f"*This paragraph performs {pat_str}.*")
+            
         parts.append(heading)
         parts.append(body)
         chunk_text = "\n".join(parts)
@@ -613,6 +635,8 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
             "comment_english": comment_english if has_comments else None,
             "comment_category": comment_meta.get("category") if has_comments else None,
         }
+        if prof and prof.get("structural_patterns"):
+            metadata["structural_patterns"] = prof["structural_patterns"]
         safe_name = re.sub(r"[^\w\-]", "_", heading)
         write_chunk(
             chunks_dir, f"{program}__paragraph__{safe_name}.json",
@@ -800,6 +824,10 @@ def generate_variable_groups(report_dir: Path, chunks_dir: Path,
     children = data.get("children", [])
     count = 0
     filler_index = 0
+    
+    struct = _load_cobol_structure(report_dir)
+    conds_88 = struct.get("conditions_88", {})
+    redefs = struct.get("redefines", [])
 
     for record in children:
         level = record.get("levelNumber", 0)
@@ -848,18 +876,40 @@ def generate_variable_groups(report_dir: Path, chunks_dir: Path,
                 lines.append("Static assignments:")
                 lines.extend(val_lines)
 
-        # R5.3 — 88-level condition descriptions
-        cond_lines = _collect_88_conditions(rec_children)
+        # R5.3 & R5.4 — 88-level condition descriptions & REDEFINES from struct
+        group_fields = set()
+        group_88s = []
+        def _walk_fields(nodes):
+            for n in nodes:
+                if n.get("name"): group_fields.add(n.get("name"))
+                if n.get("levelNumber") == 88: group_88s.append(n.get("name", ""))
+                _walk_fields(n.get("children", []))
+        _walk_fields(rec_children)
+        group_fields.add(name)
+        
+        cond_lines = []
+        for cname in group_88s:
+            if cname in conds_88:
+                info = conds_88[cname]
+                vals = ", ".join(info.get("values", []))
+                parent = info.get("parent", "")
+                cond_lines.append(f"{cname} (88-level condition) = {parent} equals {vals}")
+                
         if cond_lines:
             cond_block = "Condition names (88-level):"
             if token_count("\n".join(lines)) + token_count(cond_block) + token_count("\n".join(cond_lines)) <= MAX_CHUNK_TOKENS:
                 lines.append(cond_block)
                 lines.extend(cond_lines)
 
-        # R5.4 — REDEFINES aliasing explanation
-        redef_line = _build_redefines_explanation(record, rec_children)
-        if redef_line and token_count("\n".join(lines)) + token_count(redef_line) <= MAX_CHUNK_TOKENS:
-            lines.append(redef_line)
+        redef_lines = []
+        for rd in redefs:
+            if rd.get("redefining") in group_fields:
+                bs = rd.get("byte_size", "")
+                sz_str = f"same {bs} bytes" if bs else "same bytes"
+                redef_lines.append(f"{rd['redefining']} REDEFINES {rd['redefines']} — {sz_str}, numeric interpretation.")
+        
+        if redef_lines and token_count("\n".join(lines)) + token_count("\n".join(redef_lines)) <= MAX_CHUNK_TOKENS:
+            lines.extend(redef_lines)
 
         chunk_text = "\n".join(lines)
 
@@ -2077,6 +2127,10 @@ def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
     coverage_pct = _compute_parse_coverage(diag) or 100.0
     error_count = diag.get("error_summary", {}).get("total_errors", 0) if diag else 0
 
+    struct = _load_cobol_structure(report_dir)
+    copy_stmts = struct.get("copy_statements", [])
+    sys_cpbs = struct.get("known_system_copybooks", {})
+
     # Copybook data
     cpb_manifest_path = report_dir / "copybook_manifest.json"
     stubbed_copybooks: list[str] = []
@@ -2089,7 +2143,17 @@ def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
         resolved_copybooks = summary_cpb.get("resolved", 0)
         for name, info in (cpb.get("copybooks") or {}).items():
             if info.get("is_stub"):
-                stubbed_copybooks.append(name)
+                impact = "Unknown impact"
+                if name in sys_cpbs:
+                    impact = sys_cpbs[name].get("stub_impact", impact)
+                else:
+                    for cs in copy_stmts:
+                        if cs["copybook"] == name:
+                            impact = cs.get("impact", impact)
+                            break
+                sys_id = sys_cpbs.get(name, {}).get("system")
+                sys_part = f" [{sys_id}]" if sys_id else ""
+                stubbed_copybooks.append(f"{name}{sys_part}: {impact}")
 
     stubbed_count = len(stubbed_copybooks)
 
