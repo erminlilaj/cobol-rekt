@@ -31,7 +31,7 @@ try:
     def _count(text: str) -> int:
         return len(_BPE_ENC.encode(text))
     _COUNTER_LABEL = "BPE"
-except Exception:
+except ImportError:
     _BPE_ENC = None
     def _count(text: str) -> int:
         return len(text.split())
@@ -52,7 +52,8 @@ XREF_FIELDS = {"parent_program_chunk", "calls", "related_cobol_chunks",
 def _load_json(path: Path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  [WARN] Failed to load JSON {path}: {e}", file=sys.stderr)
         return None
 
 

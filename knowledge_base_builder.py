@@ -11,6 +11,7 @@ Transforms raw analysis artifacts into LLM-optimized documentation:
 
 import json
 import re
+import sys
 import yaml
 from pathlib import Path
 from typing import Optional
@@ -342,7 +343,20 @@ This document describes the program flow in a linear, readable format.
         
         content = f"""# Data Dictionary: {self.program_name}
 
-## Working Storage Variables
+"""
+        # Check for degraded data structures from parse diagnostics
+        diag = self._load_parse_diagnostics()
+        if diag.get("data_structures_degraded"):
+            content += "> **Warning:** Data structures were unavailable (lenient fallback). This dictionary may be incomplete.\n\n"
+        skipped = diag.get("skipped_variables", [])
+        if skipped:
+            content += f"> **Note:** {len(skipped)} variable(s) skipped due to parse errors: "
+            content += ", ".join(sv["variable"] for sv in skipped[:10])
+            if len(skipped) > 10:
+                content += f" ... and {len(skipped) - 10} more"
+            content += "\n\n"
+
+        content += """## Working Storage Variables
 
 | Level | Variable Name | Picture Clause | Data Type | Section |
 |:------|:--------------|:---------------|:----------|:--------|
@@ -404,8 +418,8 @@ This document describes the program flow in a linear, readable format.
                         size = rd.get('byte_size', '')
                         sz_str = f"Same {size} bytes" if size else "Same bytes"
                         content += f"| {reding} (PIC {reding_pic}) | {rededing} (PIC {rededing_pic}) | {sz_str} |\n"
-            except Exception:
-                pass
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                print(f"  [WARN] Failed to load cobol_structure.json: {e}", file=sys.stderr)
 
         output_path = self.kb_dir / "02_Data_Dictionary.md"
         output_path.write_text(content, encoding='utf-8')
@@ -614,7 +628,7 @@ This document describes the program flow in a linear, readable format.
                                     tables.append(name)
                             break
                     i += 1
-        except Exception:
+        except (ValueError, TypeError, AttributeError) as e:
             return None
 
         return tables
@@ -659,8 +673,8 @@ This document describes the program flow in a linear, readable format.
             data = json.loads(path.read_text(encoding='utf-8'))
             if isinstance(data, list):
                 return {entry[0].upper(): entry[1] for entry in data if len(entry) == 2}
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  [WARN] Failed to load variable_values.json: {e}", file=sys.stderr)
         return {}
 
     def _load_cfg(self) -> Optional[dict]:
@@ -673,11 +687,20 @@ This document describes the program flow in a linear, readable format.
             try:
                 self._cfg_data = json.loads(cfg_path.read_text(encoding='utf-8'))
                 return self._cfg_data
-            except Exception as e:
-                if self.verbose:
-                    print(f"  [WARN] Failed to load CFG: {e}")
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"  [WARN] Failed to load CFG: {e}", file=sys.stderr)
         return None
     
+    def _load_parse_diagnostics(self) -> dict:
+        """Load parse_diagnostics.json. Returns empty dict if absent."""
+        path = self.report_dir / "parse_diagnostics.json"
+        if not path.exists():
+            return {}
+        try:
+            return json.loads(path.read_text(encoding='utf-8'))
+        except (json.JSONDecodeError, OSError):
+            return {}
+
     def _load_data_structures(self) -> Optional[dict]:
         """Load data structures JSON."""
         if self._data_structures is not None:
@@ -688,9 +711,8 @@ This document describes the program flow in a linear, readable format.
             try:
                 self._data_structures = json.loads(data_path.read_text(encoding='utf-8'))
                 return self._data_structures
-            except Exception as e:
-                if self.verbose:
-                    print(f"  [WARN] Failed to load data structures: {e}")
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"  [WARN] Failed to load data structures: {e}", file=sys.stderr)
         return None
     
     def _load_comments(self) -> Optional[dict]:
@@ -703,9 +725,8 @@ This document describes the program flow in a linear, readable format.
             try:
                 self._comments = json.loads(comments_path.read_text(encoding='utf-8'))
                 return self._comments
-            except Exception as e:
-                if self.verbose:
-                    print(f"  [WARN] Failed to load comments: {e}")
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"  [WARN] Failed to load comments: {e}", file=sys.stderr)
         return None
 
 

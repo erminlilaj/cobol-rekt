@@ -256,7 +256,8 @@ def _load_json(path: Path):
     """Load a JSON file, return None on failure."""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  [WARN] Failed to load JSON {path}: {e}", file=sys.stderr)
         return None
 
 
@@ -264,7 +265,8 @@ def _load_yaml(path: Path):
     """Load a YAML file, return None on failure."""
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (yaml.YAMLError, OSError) as e:
+        print(f"  [WARN] Failed to load YAML {path}: {e}", file=sys.stderr)
         return None
 
 
@@ -472,8 +474,8 @@ class JCLCOBOLReportBuilder:
                     cpb = err.get("copybook")
                     loc = f"line {line}" + (f" in copybook {cpb}" if cpb else "")
                     quality_flags.append(f"  parse error at {loc}: {suggestion}")
-            except Exception:
-                pass
+            except (json.JSONDecodeError, OSError, KeyError) as e:
+                print(f"  [WARN] Failed to read parse diagnostics {diag_path}: {e}", file=sys.stderr)
         elif canonical in self.lenient_programs:
             quality_flags.append(
                 "analyzed with --lenient (parse diagnostics file not found)"
@@ -502,8 +504,8 @@ class JCLCOBOLReportBuilder:
                         quality_flags.append(
                             f"  stubbed copybooks: {', '.join(stub_names[:10])}"
                         )
-            except Exception:
-                pass
+            except (json.JSONDecodeError, OSError, KeyError) as e:
+                print(f"  [WARN] Failed to read copybook manifest {cpb_manifest_path}: {e}", file=sys.stderr)
 
         all_present = all(artifacts.values())
         status = "complete" if all_present else "partial"

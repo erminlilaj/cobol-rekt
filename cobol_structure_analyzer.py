@@ -19,8 +19,8 @@ def _get_cfg(report_dir: Path, program_name: str) -> dict:
     if cfg_path.exists():
         try:
             return json.loads(cfg_path.read_text(encoding='utf-8'))
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  [WARN] Failed to load CFG {cfg_path}: {e}", file=sys.stderr)
     return {}
 
 
@@ -29,8 +29,8 @@ def _get_data(report_dir: Path, program_name: str) -> dict:
     if data_path.exists():
         try:
             return json.loads(data_path.read_text(encoding='utf-8'))
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  [WARN] Failed to load data structures {data_path}: {e}", file=sys.stderr)
     return {}
 
 
@@ -190,7 +190,8 @@ def _analyze_source(source_path: Path):
 
     try:
         lines = source_path.read_text(errors='replace').splitlines()
-    except Exception:
+    except OSError as e:
+        print(f"  [WARN] Failed to read source {source_path}: {e}", file=sys.stderr)
         return {"divisions": divisions, "sections": sections}, copy_statements, {}
 
     current_div = None

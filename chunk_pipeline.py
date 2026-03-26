@@ -56,7 +56,7 @@ try:
     def _bpe_count(text: str) -> int:
         return len(_BPE_ENCODING.encode(text))
     _TIKTOKEN_AVAILABLE = True
-except Exception:
+except ImportError:
     _BPE_ENCODING = None
     _TIKTOKEN_AVAILABLE = False
 
@@ -82,6 +82,14 @@ def token_count(text: str) -> int:
     return len(text.split())
 
 
+def _atomic_write_json(path: Path, data):
+    """Write JSON atomically via temp file + rename."""
+    import os
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+    os.replace(str(tmp), str(path))
+
+
 def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     """Write a single chunk JSON file."""
     metadata["schema_version"] = CHUNK_SCHEMA_VERSION
@@ -90,16 +98,15 @@ def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     metadata["content_hash"] = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
     metadata["parse_quality"] = _CURRENT_PARSE_QUALITY
     chunk = {"text": text, "metadata": metadata}
-    (chunks_dir / filename).write_text(
-        json.dumps(chunk, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    _atomic_write_json(chunks_dir / filename, chunk)
 
 
 def load_json(path: Path) -> dict | list | None:
     """Load a JSON file, return None on failure."""
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  [WARN] Could not load {path.name}: {e}", file=sys.stderr)
         return None
 
 
@@ -107,7 +114,8 @@ def load_yaml(path: Path) -> dict | None:
     """Load a YAML file, return None on failure."""
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (yaml.YAMLError, OSError) as e:
+        print(f"  [WARN] Could not load {path.name}: {e}", file=sys.stderr)
         return None
 
 
@@ -129,7 +137,8 @@ def _get_parse_diagnostics(report_dir: Path) -> dict:
         return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  [WARN] Corrupt parse_diagnostics.json: {e}", file=sys.stderr)
         return {}
 
 
@@ -137,10 +146,13 @@ def _compute_parse_quality(diag: dict) -> str:
     """Map parse diagnostics to a quality label: full / partial / degraded / unknown."""
     if not diag:
         return "unknown"
+    if diag.get("data_structures_degraded", False):
+        return "degraded"
+    skipped = diag.get("skipped_variables", [])
     errors = diag.get("error_summary", {}).get("total_errors", 0)
-    if errors == 0:
+    if errors == 0 and not skipped:
         return "full"
-    if errors <= 5:
+    if errors <= 5 and len(skipped) <= 3:
         return "partial"
     return "degraded"
 
@@ -1818,9 +1830,7 @@ def generate_manifest(chunks_dir: Path, verbose: bool) -> dict:
         "type_counts": type_counts,
         "chunks": entries,
     }
-    (chunks_dir / "chunks_manifest.json").write_text(
-        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    _atomic_write_json(chunks_dir / "chunks_manifest.json", manifest)
     if verbose:
         print(f"  Manifest: {len(entries)} chunks — {type_counts}")
     return manifest

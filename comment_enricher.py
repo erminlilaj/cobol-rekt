@@ -91,7 +91,7 @@ def check_ollama(port: int) -> bool:
     try:
         r = requests.get(f"http://localhost:{port}/api/tags", timeout=3)
         return r.status_code == 200
-    except Exception:
+    except (requests.RequestException, ConnectionError, TimeoutError):
         return False
 
 
@@ -101,7 +101,7 @@ def list_models(port: int) -> list[str]:
         r = requests.get(f"http://localhost:{port}/api/tags", timeout=3)
         if r.status_code == 200:
             return [m['name'] for m in r.json().get('models', [])]
-    except Exception:
+    except (requests.RequestException, ConnectionError, TimeoutError):
         pass
     return []
 
@@ -278,7 +278,8 @@ def enrich_comments(
     if output_path.exists():
         try:
             existing = json.loads(output_path.read_text(encoding='utf-8'))
-        except Exception:
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  [WARN] Failed to load existing enriched comments {output_path}: {e}", file=sys.stderr)
             existing = {}
 
     # Separate _PROGRAM_SUMMARY from paragraph entries

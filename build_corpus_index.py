@@ -64,14 +64,16 @@ import yaml
 def _load_json(path: Path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  [WARN] Failed to load JSON {path}: {e}", file=sys.stderr)
         return None
 
 
 def _load_yaml(path: Path):
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (yaml.YAMLError, OSError) as e:
+        print(f"  [WARN] Failed to load YAML {path}: {e}", file=sys.stderr)
         return None
 
 

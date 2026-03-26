@@ -20,11 +20,14 @@ Options:
     --no-comment-enrichment   Skip Italian comment translation via Ollama (step 7b)
 """
 
+import json
 import os
 import subprocess
 import sys
 import shutil
 import re
+import time
+from datetime import datetime
 from pathlib import Path
 
 # Local imports
@@ -34,6 +37,59 @@ import knowledge_base_builder
 import comment_extractor
 import comment_enricher
 from analysis import SandboxEnvironment, Colors
+
+# ============================================================================
+# Pipeline Report
+# ============================================================================
+
+class PipelineReport:
+    """Tracks pipeline step execution for post-mortem analysis."""
+
+    def __init__(self, program):
+        self.program = program
+        self.timestamp = datetime.now().isoformat()
+        self.steps = []
+        self.pre_flight = {}
+        self._current_step = None
+        self._step_start = None
+
+    def start_step(self, name):
+        self._current_step = {"name": name, "status": "running", "diagnostics": []}
+        self._step_start = time.time()
+
+    def add_diagnostic(self, msg):
+        if self._current_step:
+            self._current_step["diagnostics"].append(msg)
+
+    def end_step(self, status, outputs=None):
+        if self._current_step is None:
+            return
+        self._current_step["status"] = status
+        self._current_step["duration_seconds"] = round(time.time() - self._step_start, 2)
+        self._current_step["outputs"] = outputs or []
+        self.steps.append(self._current_step)
+        self._current_step = None
+
+    def write(self, path):
+        overall = "success"
+        for s in self.steps:
+            if s["status"] == "failed":
+                overall = "completed_with_failures"
+                break
+            if s["status"] == "warning":
+                overall = "completed_with_warnings"
+        data = {
+            "program": self.program,
+            "timestamp": self.timestamp,
+            "overall_status": overall,
+            "pre_flight": self.pre_flight,
+            "steps": self.steps,
+        }
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        except OSError as e:
+            Colors.print_msg(f"  Warning: Could not write pipeline report: {e}", Colors.YELLOW)
 
 # ============================================================================
 # Configuration
@@ -56,8 +112,24 @@ class Config:
 # Utility Functions
 # ============================================================================
 
-def run_command(command, cwd=None, env=None, check=True):
-    """Execute a shell command with error handling."""
+def run_command(command, cwd=None, env=None, check=True, capture_to=None):
+    """Execute a shell command with error handling.
+
+    If capture_to is set and check is False, stderr/stdout are captured to the
+    given Path on failure instead of being discarded.
+    """
+    if capture_to and not check:
+        result = subprocess.run(command, cwd=cwd, env=env, check=False, shell=True,
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            try:
+                capture_to.parent.mkdir(parents=True, exist_ok=True)
+                capture_to.write_text(
+                    f"Exit code: {result.returncode}\n\n--- STDERR ---\n{result.stderr or ''}\n\n--- STDOUT ---\n{result.stdout or ''}",
+                    encoding='utf-8')
+            except OSError:
+                pass
+        return result
     try:
         subprocess.run(command, cwd=cwd, env=env, check=check, shell=True)
     except subprocess.CalledProcessError as e:
@@ -89,7 +161,7 @@ def detect_dialect(source_file: Path) -> tuple:
     """
     try:
         content = source_file.read_text(errors='replace')[:50000]
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         return ('COBOL', False)
     
     idms_patterns = [
@@ -150,9 +222,9 @@ def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir,
                     path.write_text(stub_content, encoding='utf-8')
                     stubbed_round.append(name)
                     all_stubbed.append(name)
-                except Exception:
-                    pass
-        
+                except OSError as e:
+                    Colors.print_msg(f"    Warning: Could not stub copybook {name}: {e}", Colors.YELLOW)
+
         if not stubbed_round:
             break
         Colors.print_msg(f"    Attempt {attempt}: stubbed {len(stubbed_round)} copybooks", Colors.YELLOW)
@@ -189,7 +261,81 @@ class AnalysisPipeline:
         
         # Sandbox reference
         self.sandbox = None
+
+        # Pipeline report
+        self.report = PipelineReport(self.target_file)
+        self._cleaned_up = False
     
+    def pre_flight_check(self):
+        """Validate prerequisites before running the pipeline."""
+        checks = {}
+
+        # 1. Java CLI JAR exists
+        jar = self.config.smojol_cli
+        if not jar.exists():
+            Colors.print_msg(
+                f"[FATAL] Java CLI JAR not found: {jar}\n"
+                "  Run: mvn clean verify -Dcheckstyle.skip=true -Dmaven.test.skip=true",
+                Colors.RED,
+            )
+            checks["smojol_cli_jar"] = "MISSING"
+            self.report.pre_flight = checks
+            sys.exit(1)
+        checks["smojol_cli_jar"] = "ok"
+
+        # 2. Dialect JAR exists
+        djar = self.config.idms_dialect_jar
+        if not djar.exists():
+            Colors.print_msg(
+                f"[FATAL] Dialect JAR not found: {djar}\n"
+                "  Run: mvn clean verify -Dcheckstyle.skip=true -Dmaven.test.skip=true",
+                Colors.RED,
+            )
+            checks["dialect_jar"] = "MISSING"
+            self.report.pre_flight = checks
+            sys.exit(1)
+        checks["dialect_jar"] = "ok"
+
+        # 3. Target file readable and non-empty
+        if not self.target_path.is_file():
+            checks["target_file"] = "NOT_FOUND"
+            self.report.pre_flight = checks
+            Colors.print_msg(f"[FATAL] Target file not found: {self.target_path}", Colors.RED)
+            sys.exit(1)
+        if self.target_path.stat().st_size == 0:
+            checks["target_file"] = "EMPTY"
+            self.report.pre_flight = checks
+            Colors.print_msg(f"[FATAL] Target file is empty: {self.target_path}", Colors.RED)
+            sys.exit(1)
+        checks["target_file"] = "ok"
+
+        # 4. File extension check (warn only)
+        ext = self.target_path.suffix.lower()
+        if ext not in ('.cbl', '.cob'):
+            Colors.print_msg(
+                f"  Warning: Unexpected extension '{self.target_path.suffix}', "
+                "expected .cbl/.CBL/.cob/.COB",
+                Colors.YELLOW,
+            )
+            checks["file_extension"] = f"unexpected: {self.target_path.suffix}"
+        else:
+            checks["file_extension"] = "ok"
+
+        # 5. Output directory writable
+        try:
+            self.report_subdir.mkdir(parents=True, exist_ok=True)
+            test_file = self.report_subdir / ".write_test"
+            test_file.write_text("test")
+            test_file.unlink()
+            checks["output_dir"] = "ok"
+        except OSError as e:
+            checks["output_dir"] = f"NOT_WRITABLE: {e}"
+            Colors.print_msg(f"[FATAL] Output directory not writable: {e}", Colors.RED)
+            self.report.pre_flight = checks
+            sys.exit(1)
+
+        self.report.pre_flight = checks
+
     def setup_sandbox(self):
         """Set up isolated sandbox environment."""
         if not self.options.get('use_sandbox', True):
@@ -234,7 +380,7 @@ class AnalysisPipeline:
             is_stub = name in stubbed
             try:
                 lines = len(cpf.read_text(errors='replace').splitlines())
-            except Exception:
+            except OSError:
                 lines = 0
             manifest["copybooks"][name] = {
                 "file": cpf.name,
@@ -279,8 +425,10 @@ class AnalysisPipeline:
     def _build_smojol_cmd(self, commands: str, generation: str = "PROGRAM") -> str:
         """Build smojol-cli command string."""
         lenient = "--lenient" if self.options.get('lenient') else ""
+        heap_size = self.options.get('java_heap', '2g')
+        jvm_flags = f'-Xmx{heap_size} -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath="{self.report_subdir}"'
         return (
-            f'java -jar "{self.config.smojol_cli}" run "{self.target_file}" '
+            f'java {jvm_flags} -jar "{self.config.smojol_cli}" run "{self.target_file}" '
             f'--commands="{commands}" '
             f'--srcDir "{self.src_dir}" --copyBooksDir "{self.copybooks_dir}" '
             f'--dialectJarPath "{self.dialect_jar}" --dialect COBOL '
@@ -364,7 +512,8 @@ class AnalysisPipeline:
             return
         try:
             diag = _json.loads(diag_path.read_text())
-        except Exception:
+        except (json.JSONDecodeError, OSError) as e:
+            Colors.print_msg(f"  Warning: Could not read parse diagnostics: {e}", Colors.YELLOW)
             return
         coverage = diag.get("coverage_percentage", 0)
         errors = diag.get("error_summary", {}).get("total_errors", 0)
@@ -498,10 +647,11 @@ class AnalysisPipeline:
     def step2_advanced_analysis(self):
         """Generate transpiler flowgraph, unified model, GraphML."""
         Colors.print_msg("[2/7] Generating Advanced Analysis...", Colors.GREEN)
+        log_dir = self.report_subdir / "logs"
         run_command(self._build_smojol_cmd(
             "BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES "
             "EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML"
-        ), check=False)
+        ), check=False, capture_to=log_dir / "step2_stderr.log")
     
     def step3_mermaid(self):
         """Generate Mermaid flowcharts."""
@@ -622,14 +772,22 @@ class AnalysisPipeline:
     def step7c_structure_analysis(self):
         """Extract structural facts from source and JSON."""
         Colors.print_msg("[7c] Extracting COBOL Structural Facts...", Colors.GREEN)
+        log_dir = self.report_subdir / "logs"
         cmd = f'"{sys.executable}" cobol_structure_analyzer.py "{self.report_subdir}" "{self.target_file}" --source "{self.target_path}"'
-        run_command(cmd, check=False)
+        run_command(cmd, check=False, capture_to=log_dir / "step7c_stderr.log")
 
     def cleanup(self):
         """Cleanup sandbox and finalize."""
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+
+        # Write pipeline report before anything else
+        self.report.write(self.report_subdir / "pipeline_report.json")
+
         # Convert additional JSON graphs
         run_command(f'"{sys.executable}" convert_json_graphs.py "{self.report_subdir}"')
-        
+
         # Cleanup sandbox
         if self.sandbox:
             Colors.print_msg("[Cleanup] Removing sandbox...", Colors.BLUE)
@@ -640,21 +798,38 @@ class AnalysisPipeline:
         Colors.print_msg(f"  {self.report_subdir}")
         Colors.print_msg("=" * 60, Colors.BLUE)
     
+    def _run_step(self, name, func):
+        """Run a pipeline step with report tracking."""
+        self.report.start_step(name)
+        try:
+            func()
+            self.report.end_step("success")
+        except SystemExit:
+            self.report.end_step("failed", [])
+            raise
+        except Exception as e:
+            self.report.add_diagnostic(str(e))
+            self.report.end_step("failed", [])
+            raise
+
     def run(self):
         """Execute the full analysis pipeline."""
+        self.pre_flight_check()
         self.setup_sandbox()
-        self.pre_validate()
-        self.step1_core_structures()
-        self.step2_advanced_analysis()
-        self.step3_mermaid()
-        self.step3b_graphviz()
-        self.step4_cfg_to_mermaid()
-        self.step5_variable_analysis()
-        self.step6_data_dependencies()
-        self.step7_knowledge_base()
-        self.step7b_comment_enrichment()
-        self.step7c_structure_analysis()
-        self.cleanup()
+        try:
+            self._run_step("pre_validate", self.pre_validate)
+            self._run_step("step1_core_structures", self.step1_core_structures)
+            self._run_step("step2_advanced_analysis", self.step2_advanced_analysis)
+            self._run_step("step3_mermaid", self.step3_mermaid)
+            self._run_step("step3b_graphviz", self.step3b_graphviz)
+            self._run_step("step4_cfg_to_mermaid", self.step4_cfg_to_mermaid)
+            self._run_step("step5_variable_analysis", self.step5_variable_analysis)
+            self._run_step("step6_data_dependencies", self.step6_data_dependencies)
+            self._run_step("step7_knowledge_base", self.step7_knowledge_base)
+            self._run_step("step7b_comment_enrichment", self.step7b_comment_enrichment)
+            self._run_step("step7c_structure_analysis", self.step7c_structure_analysis)
+        finally:
+            self.cleanup()
 
 # ============================================================================
 # Main Entry Point
@@ -673,12 +848,17 @@ def main():
         sys.exit(1)
     
     # Parse options (graphviz enabled by default)
+    java_heap = "2g"
+    for arg in sys.argv:
+        if arg.startswith("--java-heap="):
+            java_heap = arg.split("=", 1)[1]
     options = {
         'graphviz': "--no-graphviz" not in sys.argv,
         'lenient': "--lenient" in sys.argv,
         'ignore_copybooks': "--ignore-copybooks" in sys.argv,
         'use_sandbox': "--no-sandbox" not in sys.argv,
         'comment_enrichment': "--no-comment-enrichment" not in sys.argv,
+        'java_heap': java_heap,
     }
     
     config = Config()
