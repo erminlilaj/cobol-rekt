@@ -72,6 +72,8 @@ public class ParsePipeline {
     @Getter private List<SyntaxError> parseErrors = new ArrayList<>();
     @Getter private int totalTreeNodes = 0;
     @Getter private int sourceLineCount = 0;
+    @Getter private List<org.smojol.common.structure.SkippedVariable> skippedDataStructures = List.of();
+    @Getter private boolean dataStructureDegraded = false;
 
     public ParsePipeline(SourceConfig sourceConfig, ComponentsBuilder ops, LanguageDialect dialect) {
         this.src = sourceConfig.source();
@@ -179,12 +181,15 @@ public class ParsePipeline {
         // TODO: The navigator itself can probably determine these things,
         navigator = navigatorBuilder.navigator(tree);
         try {
-            dataStructures = dataStructureValidation.run(ops.getDataStructureBuilder(navigator));
+            org.smojol.common.structure.CobolDataStructureBuilder builder = ops.getDataStructureBuilder(navigator);
+            dataStructures = dataStructureValidation.run(builder);
+            skippedDataStructures = builder.getSkippedVariables();
         } catch (RuntimeException e) {
             if (!lenient) throw e;
             LOGGER.warning("LENIENT MODE: Data structure validation failed: " + e.getMessage()
                 + ". Using NullDataStructure as fallback.");
             dataStructures = new NullDataStructure("LENIENT_FALLBACK");
+            dataStructureDegraded = true;
         }
         LOGGER.info(gson.toJson(timingResult));
         return navigator;

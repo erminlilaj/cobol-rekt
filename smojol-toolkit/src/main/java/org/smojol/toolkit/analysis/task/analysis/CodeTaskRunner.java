@@ -223,19 +223,31 @@ public class CodeTaskRunner {
             root.addProperty("total_tree_nodes", pipeline.getTotalTreeNodes());
 
             Set<Integer> errorLines = new HashSet<>();
+            int nullLocationErrors = 0;
             JsonArray errorsArray = new JsonArray();
             for (SyntaxError e : pipeline.getParseErrors()) {
                 JsonObject err = new JsonObject();
+                boolean hasLocation = false;
                 if (e.getLocation() != null && e.getLocation().getLocation() != null) {
                     var range = e.getLocation().getLocation().getRange();
-                    int line = range.getStart().getLine() + 1;
-                    err.addProperty("line", line);
-                    err.addProperty("column", range.getStart().getCharacter());
-                    err.addProperty("end_line", range.getEnd().getLine() + 1);
-                    err.addProperty("end_column", range.getEnd().getCharacter());
-                    for (int l = range.getStart().getLine(); l <= range.getEnd().getLine(); l++) {
-                        errorLines.add(l);
+                    if (range != null && range.getStart() != null) {
+                        hasLocation = true;
+                        int line = range.getStart().getLine() + 1;
+                        err.addProperty("line", line);
+                        err.addProperty("column", range.getStart().getCharacter());
+                        if (range.getEnd() != null) {
+                            err.addProperty("end_line", range.getEnd().getLine() + 1);
+                            err.addProperty("end_column", range.getEnd().getCharacter());
+                            for (int l = range.getStart().getLine(); l <= range.getEnd().getLine(); l++) {
+                                errorLines.add(l);
+                            }
+                        } else {
+                            errorLines.add(range.getStart().getLine());
+                        }
                     }
+                }
+                if (!hasLocation) {
+                    nullLocationErrors++;
                 }
                 err.addProperty("severity",
                     e.getSeverity() != null ? e.getSeverity().name() : "UNKNOWN");
@@ -254,11 +266,14 @@ public class CodeTaskRunner {
             root.add("errors", errorsArray);
 
             int sourceLines = pipeline.getSourceLineCount();
-            int affectedLines = errorLines.size();
+            // Heuristic: assume 3 affected lines per error with no location info
+            int estimatedAffectedFromNullLocations = nullLocationErrors * 3;
+            int affectedLines = errorLines.size() + estimatedAffectedFromNullLocations;
             double coverage = sourceLines > 0
                 ? ((sourceLines - affectedLines) * 100.0 / sourceLines) : 0.0;
             root.addProperty("coverage_percentage", Math.round(coverage * 100.0) / 100.0);
             root.addProperty("affected_lines", affectedLines);
+            root.addProperty("null_location_errors", nullLocationErrors);
 
             JsonObject summary = new JsonObject();
             summary.addProperty("total_errors", pipeline.getParseErrors().size());
@@ -273,6 +288,18 @@ public class CodeTaskRunner {
             summary.add("by_severity", new Gson().toJsonTree(bySeverity));
             summary.add("by_source", new Gson().toJsonTree(bySource));
             root.add("error_summary", summary);
+
+            // Skipped variables from data structure building
+            JsonArray skippedVars = new JsonArray();
+            for (org.smojol.common.structure.SkippedVariable sv : pipeline.getSkippedDataStructures()) {
+                JsonObject entry = new JsonObject();
+                entry.addProperty("variable", sv.name());
+                entry.addProperty("error", sv.error());
+                entry.addProperty("section", sv.section());
+                skippedVars.add(entry);
+            }
+            root.add("skipped_variables", skippedVars);
+            root.addProperty("data_structures_degraded", pipeline.isDataStructureDegraded());
 
             Files.createDirectories(diagnosticsPath.getParent());
             Files.writeString(diagnosticsPath,

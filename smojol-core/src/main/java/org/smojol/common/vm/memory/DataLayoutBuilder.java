@@ -1,7 +1,10 @@
 package org.smojol.common.vm.memory;
 
+import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.RecognitionException;
+import org.antlr.v4.runtime.Recognizer;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.eclipse.lsp.cobol.core.CobolDataTypes;
@@ -11,9 +14,15 @@ import org.smojol.common.vm.type.AlphanumericDataTypeSpec;
 import org.smojol.common.vm.type.DataTypeSpec;
 import org.smojol.common.vm.type.ZonedDecimalDataTypeSpec;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 
 public class DataLayoutBuilder {
+    private static final Logger LOGGER = Logger.getLogger(DataLayoutBuilder.class.getName());
+
+    public record PicParseResult(CobolDataTypes.StartRuleContext tree, List<String> errors) {}
+
     public MemoryLayout layout(String spec) {
         CobolDataTypes.StartRuleContext root = parseSpec(spec);
         return build(typeSpec(root.dataTypeSpec()));
@@ -103,9 +112,34 @@ public class DataLayoutBuilder {
         return antlrParser.startRule();
     }
 
+    public static PicParseResult parseSpecWithDiagnostics(String spec) {
+        List<String> errors = new ArrayList<>();
+        CobolDataTypesLexer antlrLexer = new CobolDataTypesLexer(CharStreams.fromString(spec));
+        antlrLexer.removeErrorListeners();
+        antlrLexer.addErrorListener(new BaseErrorListener() {
+            @Override
+            public void syntaxError(Recognizer<?, ?> r, Object o, int line, int pos, String msg, RecognitionException e) {
+                errors.add("PIC '" + spec + "' lexer error at " + pos + ": " + msg);
+            }
+        });
+        CommonTokenStream tokenStream = new CommonTokenStream(antlrLexer);
+        CobolDataTypes antlrParser = new CobolDataTypes(tokenStream);
+        antlrParser.removeErrorListeners();
+        antlrParser.addErrorListener(new BaseErrorListener() {
+            @Override
+            public void syntaxError(Recognizer<?, ?> r, Object o, int line, int pos, String msg, RecognitionException e) {
+                errors.add("PIC '" + spec + "' parse error at " + pos + ": " + msg);
+            }
+        });
+        return new PicParseResult(antlrParser.startRule(), errors);
+    }
+
     public Pair<DataTypeSpec, Integer> size(String spec) {
-        CobolDataTypes.StartRuleContext root = parseSpec(spec);
-        Pair<DataTypeSpec, Integer> typeSpec = typeSpec(root.dataTypeSpec());
+        PicParseResult result = parseSpecWithDiagnostics(spec);
+        if (!result.errors().isEmpty()) {
+            LOGGER.warning("PIC clause errors for '" + spec + "': " + result.errors());
+        }
+        Pair<DataTypeSpec, Integer> typeSpec = typeSpec(result.tree().dataTypeSpec());
         return typeSpec;
     }
 }

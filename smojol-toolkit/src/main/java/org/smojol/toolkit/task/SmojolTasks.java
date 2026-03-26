@@ -15,12 +15,15 @@ import org.smojol.toolkit.analysis.task.analysis.*;
 import org.smojol.toolkit.flowchart.FlowchartOutputWriter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import static com.mojo.algorithms.task.CommandLineAnalysisTask.DO_NOTHING;
 
 public class SmojolTasks {
+    private static final Logger LOGGER = Logger.getLogger(SmojolTasks.class.getName());
     private final SourceConfig sourceConfig;
     private final FlowchartOutputWriter flowchartOutputWriter;
     private final RawASTOutputConfig rawAstOutputConfig;
@@ -75,7 +78,25 @@ public class SmojolTasks {
     }
 
     public List<AnalysisTaskResult> run(List<CommandLineAnalysisTask> commandLineAnalysisTasks) throws IOException {
-        return tasks(commandLineAnalysisTasks).map(AnalysisTask::run).toList();
+        List<AnalysisTask> taskList = tasks(commandLineAnalysisTasks).toList();
+        List<AnalysisTaskResult> results = new ArrayList<>();
+        for (int i = 0; i < taskList.size(); i++) {
+            try {
+                AnalysisTaskResult result = taskList.get(i).run();
+                results.add(result);
+                // BUILD_BASE_ANALYSIS is always first. If it fails, baseModel is null — abort.
+                if (i == 0 && result instanceof AnalysisTaskResultError) {
+                    LOGGER.severe("BUILD_BASE_ANALYSIS failed, aborting remaining tasks");
+                    break;
+                }
+            } catch (Exception e) {
+                String taskName = commandLineAnalysisTasks.size() > i
+                    ? commandLineAnalysisTasks.get(i).name() : "TASK_" + i;
+                LOGGER.warning("Task " + taskName + " threw exception, continuing: " + e.getMessage());
+                results.add(AnalysisTaskResult.ERROR(e, taskName));
+            }
+        }
+        return results;
     }
 
     public AnalysisTask FLOW_TO_NEO4J = new AnalysisTask() {
