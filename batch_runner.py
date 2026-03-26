@@ -101,22 +101,25 @@ def main():
     total_files = len(files)
     print(f"Found {total_files} files. Starting batch analysis with {MAX_WORKERS} workers...")
     print("-" * 60)
-    print(f"{'Filename':<30} | {'Status':<10} | {'Time':<6} | {'Generated'}")
-    print("-" * 60)
+    print(f"{'[#]':<10} {'Filename':<30} | {'Status':<10} | {'Time':<6} | {'Generated'}")
+    print("-" * 65)
 
     results = []
     
+    processed_count = 0
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         future_to_file = {executor.submit(run_analysis, f): f for f in files}
         
         for future in as_completed(future_to_file):
+            processed_count += 1
             res = future.result()
             results.append(res)
             
             status_color = "\033[92mPASS\033[0m" if res['success'] else "\033[91mFAIL\033[0m"
             gen_mark = "✅" if res['generated'] else "❌"
             
-            print(f"{res['file']:<30} | {status_color:<19} | {res['duration']:>5.2f}s | {gen_mark}")
+            prog = f"[{processed_count}/{total_files}]"
+            print(f"{prog:<10} {res['file']:<30} | {status_color:<19} | {res['duration']:>5.2f}s | {gen_mark}")
             
             if not res['success']:
                 # Save error log
