@@ -1,173 +1,351 @@
-import os
-import subprocess
-import glob
-import sys
+import argparse
 import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
 
 # Configuration
 TEST_ROOT = "che-che4z-lsp-for-cobol-integration/tests/test_files"
-MAX_WORKERS = 4  # Adjust based on CPU
-TIMEOUT_SECONDS = 300 # Increased to 5 mins mostly for nist85
 
-class Counters:
-    passed = 0
-    failed = 0
-    generated = 0
-    total = 0
+# ---------------------------------------------------------------------------
+# Dry-run copybook scan (mirrors _pre_stub_from_source in analyze.py)
+# ---------------------------------------------------------------------------
 
-def run_analysis(filepath):
+def _scan_copy_names(filepath):
+    """Return the list of COPY-referenced copybook names in a COBOL source file."""
+    try:
+        source_text = filepath.read_text(encoding='utf-8', errors='ignore')
+    except OSError:
+        return []
+    names = []
+    for line in source_text.splitlines():
+        if len(line) < 8:
+            continue
+        if line[6] in ('*', '/'):
+            continue
+        area = line[7:72]
+        m = re.match(
+            r'\s*COPY\s+([A-Z0-9@#$][A-Z0-9@#$_-]*)(?:\s+(?:IN|OF)\s+\S+)?',
+            area, re.IGNORECASE
+        )
+        if m:
+            names.append(m.group(1).upper())
+    return list(set(names))
+
+# ---------------------------------------------------------------------------
+# Coverage helpers
+# ---------------------------------------------------------------------------
+
+def _copybook_ratio(filepath, copybooks_from_result, report_base_dir):
+    """Return (found, total_needed) for copybooks actually referenced by filepath.
+
+    'total_needed' = number of distinct COPY statements in the source.
+    'found' = how many of those were resolved (not stubs) per the manifest.
+    Returns (None, None) if source can't be scanned or manifest is unavailable.
+    """
+    needed = set(_scan_copy_names(filepath))
+    if not needed:
+        return None, None
+
+    # Build name→is_stub lookup from the manifest returned by run_analysis
+    stub_lookup = {}
+    if copybooks_from_result and isinstance(copybooks_from_result[0], dict):
+        for c in copybooks_from_result:
+            stub_lookup[c["name"].upper()] = c.get("is_stub", True)
+
+    if not stub_lookup:
+        # Manifest not available (e.g. timeout before sandbox completes)
+        return None, len(needed)
+
+    found = sum(1 for n in needed if not stub_lookup.get(n, True))
+    return found, len(needed)
+
+
+def _read_analysis_coverage(filepath, report_base_dir):
+    """Read pipeline_report.json and parse_diagnostics.json for coverage stats.
+
+    Returns (step_pct, parse_pct) where each may be None if not available.
+    """
+    report_base = report_base_dir / f"{filepath.name}.report"
+    step_pct = parse_pct = None
+
+    pr = report_base / "pipeline_report.json"
+    if pr.exists():
+        try:
+            data = json.loads(pr.read_text(encoding='utf-8'))
+            steps = data.get("steps", [])
+            total = len(steps)
+            passed = sum(1 for s in steps if s.get("status") == "success")
+            if total:
+                step_pct = int(passed * 100 / total)
+        except Exception:
+            pass
+
+    pd = report_base / "parse_diagnostics.json"
+    if pd.exists():
+        try:
+            data = json.loads(pd.read_text(encoding='utf-8'))
+            parse_pct = data.get("coverage_percentage")
+        except Exception:
+            pass
+
+    return step_pct, parse_pct
+
+# ---------------------------------------------------------------------------
+# Analysis runner
+# ---------------------------------------------------------------------------
+
+def run_analysis(filepath, timeout_seconds, extra_flags, report_base_dir):
     """Runs analyze.py on a single file and returns result."""
     start_time = time.time()
+    proc = None
     try:
-        # Note: Removing --ignore-copybooks so copybook resolution happens
         cmd = [
             sys.executable, "analyze.py",
             str(filepath),
             "--lenient",
             "--no-graphviz",
-        ]
-        
-        # Capture output to avoid console spam
-        result = subprocess.run(
-            cmd, 
-            capture_output=True, 
-            text=True, 
-            timeout=TIMEOUT_SECONDS
+            "--skip-transpiler",
+        ] + extra_flags
+
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-        
+
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            # Send SIGTERM first so analyze.py can write pipeline_report.json,
+            # then SIGKILL after 5 s to guarantee termination.
+            try:
+                proc.send_signal(signal.SIGTERM)
+                time.sleep(5)
+                proc.kill()
+            except Exception:
+                pass
+            proc.wait()
+            return {
+                "file": filepath.name,
+                "success": False,
+                "generated": False,
+                "duration": timeout_seconds,
+                "copybooks": [],
+                "error": "TIMEOUT",
+            }
+
         duration = time.time() - start_time
-        success = (result.returncode == 0)
-        
+        success = (proc.returncode == 0)
+
         # Check if knowledge base was actually generated (strict success)
-        report_dir = Path("out/report") / f"{filepath.name}.report" / "knowledge_base"
+        report_dir = report_base_dir / f"{filepath.name}.report" / "knowledge_base"
         generated = report_dir.exists()
-        
+
         # Read the copybook manifest
-        manifest_path = Path("out/report") / f"{filepath.name}.report" / "copybook_manifest.json"
+        manifest_path = report_base_dir / f"{filepath.name}.report" / "copybook_manifest.json"
         copybooks = []
         if manifest_path.exists():
             try:
-                with open(manifest_path, "r") as f:
-                    manifest_data = json.load(f)
-                    copybooks = manifest_data.get("copybooks", [])
-            except json.JSONDecodeError:
+                manifest_data = json.loads(manifest_path.read_text(encoding='utf-8'))
+                cbs = manifest_data.get("copybooks", {})
+                if isinstance(cbs, dict):
+                    copybooks = [{"name": k, **v} for k, v in cbs.items()]
+                else:
+                    copybooks = cbs
+            except Exception:
                 pass
-        
+
         return {
             "file": filepath.name,
             "success": success,
             "generated": generated,
             "duration": duration,
             "copybooks": copybooks,
-            "error": result.stderr if not success else ""
+            "error": stderr if not success else "",
         }
-        
-    except subprocess.TimeoutExpired:
-        return {
-            "file": filepath.name,
-            "success": False,
-            "generated": False,
-            "duration": TIMEOUT_SECONDS,
-            "copybooks": [],
-            "error": "TIMEOUT"
-        }
+
     except Exception as e:
+        if proc:
+            try:
+                proc.kill()
+            except Exception:
+                pass
         return {
             "file": filepath.name,
             "success": False,
             "generated": False,
             "duration": 0,
             "copybooks": [],
-            "error": str(e)
+            "error": str(e),
         }
 
-def main():
-    if len(sys.argv) > 1:
-        target_dir = Path(sys.argv[1])
-    else:
-        target_dir = Path(TEST_ROOT)
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="Batch COBOL analysis runner",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python batch_runner.py smojol-test-code/
+  python batch_runner.py my_cobol_dir/ --workers 2 --timeout 400
+  python batch_runner.py my_cobol_dir/ --dry-run
+""",
+    )
+    parser.add_argument("target_dir", nargs="?", default=TEST_ROOT,
+                        help="Directory to scan for COBOL files (default: %(default)s)")
+    parser.add_argument("--workers", type=int, default=2,
+                        help="Parallel JVM workers (default: 2; reduce if memory-constrained)")
+    parser.add_argument("--timeout", type=int, default=300,
+                        help="Per-file timeout in seconds (default: 300)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print files and COPY-stub counts without running analysis")
+    args = parser.parse_args()
+
+    target_dir = Path(args.target_dir)
     if not target_dir.exists():
         print(f"Directory not found: {target_dir}")
         sys.exit(1)
 
+    report_base_dir = Path("out/report")
+
     print(f"Scanning for COBOL files in {target_dir}...")
-    # Find all .cbl, .cob, .CBL files recursively
-    files = list(target_dir.rglob("*.cbl")) + list(target_dir.rglob("*.CBL")) + list(target_dir.rglob("*.cob"))
-    
+    seen = set()
+    files = []
+    for p in (list(target_dir.rglob("*.cbl"))
+              + list(target_dir.rglob("*.CBL"))
+              + list(target_dir.rglob("*.cob"))):
+        key = p.resolve()
+        if key not in seen:
+            seen.add(key)
+            files.append(p)
     total_files = len(files)
-    print(f"Found {total_files} files. Starting batch analysis with {MAX_WORKERS} workers...")
-    print("-" * 60)
-    print(f"{'[#]':<10} {'Filename':<30} | {'Status':<10} | {'Time':<6} | {'Generated'}")
-    print("-" * 65)
+    print(f"Found {total_files} files.")
+
+    # ---- Dry-run mode -------------------------------------------------------
+    if args.dry_run:
+        print(f"\n{'Filename':<45} {'Size KB':>8}  {'COPY refs':>10}")
+        print("-" * 68)
+        for f in sorted(files):
+            size_kb = f.stat().st_size / 1024
+            names = _scan_copy_names(f)
+            print(f"  {f.name:<43} {size_kb:>7.1f}KB  {len(names):>6} ({', '.join(names[:4])}"
+                  + (f"... +{len(names)-4} more" if len(names) > 4 else "") + ")")
+        return
+
+    # ---- Batch run ----------------------------------------------------------
+    print(f"Workers: {args.workers} | Timeout: {args.timeout}s | --skip-transpiler: ON")
+    print("-" * 75)
+    print(f"{'[#]':<10} {'Filename':<34} | {'Status':<10} | {'Time':>6} | {'KB':>3} | {'Coverage'}")
+    print("-" * 75)
 
     results = []
-    
     processed_count = 0
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_file = {executor.submit(run_analysis, f): f for f in files}
-        
+
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        future_to_file = {
+            executor.submit(run_analysis, f, args.timeout, [], report_base_dir): f
+            for f in files
+        }
+
         for future in as_completed(future_to_file):
             processed_count += 1
             res = future.result()
             results.append(res)
-            
-            status_color = "\033[92mPASS\033[0m" if res['success'] else "\033[91mFAIL\033[0m"
-            gen_mark = "✅" if res['generated'] else "❌"
-            
+
+            filepath = future_to_file[future]
+            status_color = "\033[92mPASS\033[0m" if res["success"] else "\033[91mFAIL\033[0m"
+            gen_mark = "✅" if res["generated"] else "❌"
+
+            step_pct, parse_pct = _read_analysis_coverage(filepath, report_base_dir)
+            cov_parts = []
+            if step_pct is not None:
+                cov_parts.append(f"steps:{step_pct}%")
+            if parse_pct is not None:
+                cov_parts.append(f"parse:{parse_pct:.1f}%")
+            cov_str = " | " + " ".join(cov_parts) if cov_parts else ""
+
+            cpy_found, cpy_total = _copybook_ratio(filepath, res["copybooks"], report_base_dir)
+            if cpy_total is not None:
+                cpy_str = f" | CPY:{cpy_found if cpy_found is not None else '?'}/{cpy_total}"
+            else:
+                cpy_str = ""
+
             prog = f"[{processed_count}/{total_files}]"
-            print(f"{prog:<10} {res['file']:<30} | {status_color:<19} | {res['duration']:>5.2f}s | {gen_mark}")
-            
-            if not res['success']:
-                # Save error log
+            print(f"{prog:<10} {res['file']:<34} | {status_color:<19} | {res['duration']:>5.2f}s | {gen_mark}{cov_str}{cpy_str}")
+
+            if not res["success"]:
                 with open(f"batch_error_{res['file']}.log", "w") as f:
-                    f.write(res['error'])
-    
-    print("-" * 60)
-    passed = sum(1 for r in results if r['success'])
-    generated = sum(1 for r in results if r['generated'])
+                    f.write(res["error"])
+
+    print("-" * 75)
+    passed = sum(1 for r in results if r["success"])
+    generated = sum(1 for r in results if r["generated"])
     failed = total_files - passed
-    
+
     print(f"Batch Complete.")
-    print(f"Total: {total_files}")
-    print(f"Passed (Exit 0): {passed}")
-    print(f"Failed (Exit 1): {failed}")
-    print(f"Knowledge Base Generated: {generated}")
+    print(f"Total: {total_files} | Passed: {passed} | Failed: {failed} | KB Generated: {generated}")
     print("\nSee batch_error_*.log files for failure details.")
-    
+
     print("\nWriting Consolidated Summary Report to batch_summary_report.json...")
-    
+
     report_data = {
         "summary": {
             "total_files": total_files,
             "passed": passed,
             "failed": failed,
-            "generated": generated
+            "generated": generated,
+            "workers": args.workers,
+            "timeout_seconds": args.timeout,
         },
-        "details": []
+        "details": [],
     }
-    
+
+    # Build a filepath lookup for summary enrichment
+    file_lookup = {f.name: f for f in files}
+
     for r in results:
-        found_cpy = [c['name'] for c in r['copybooks'] if c.get('status') == 'resolved']
-        missing_cpy = [c['name'] for c in r['copybooks'] if c.get('status') == 'stubbed']
-        
+        cbs = r["copybooks"]
+        if cbs and isinstance(cbs[0], dict):
+            # Only include copybooks actually referenced by this program
+            fp = file_lookup.get(r["file"])
+            needed = set(_scan_copy_names(fp)) if fp else set()
+            if needed:
+                found_cpy = [c["name"] for c in cbs if c["name"].upper() in needed and not c.get("is_stub")]
+                missing_cpy = [c["name"] for c in cbs if c["name"].upper() in needed and c.get("is_stub")]
+            else:
+                found_cpy = [c["name"] for c in cbs if not c.get("is_stub")]
+                missing_cpy = [c["name"] for c in cbs if c.get("is_stub")]
+        else:
+            found_cpy = []
+            missing_cpy = []
+            needed = set()
+
         report_data["details"].append({
             "file": r["file"],
             "status": "PASS" if r["success"] else "FAIL",
             "duration_seconds": round(r["duration"], 2),
             "kb_generated": r["generated"],
+            "copybooks_needed": len(needed) if needed else None,
             "copybooks_found": found_cpy,
             "copybooks_missing": missing_cpy,
-            "error_snippet": r["error"][:500] if r["error"] else None
+            "error_snippet": r["error"][:500] if r["error"] else None,
         })
-        
+
     with open("batch_summary_report.json", "w") as f:
         json.dump(report_data, f, indent=2)
-        
+
     print("Done. Check batch_summary_report.json for details per program.")
+
 
 if __name__ == "__main__":
     main()

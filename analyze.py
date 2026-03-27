@@ -18,10 +18,12 @@ Options:
     --ignore-copybooks        Stub all copybooks
     --no-sandbox              Skip sandbox (modify files in-place)
     --no-comment-enrichment   Skip Italian comment translation via Ollama (step 7b)
+    --skip-transpiler         Skip BUILD_TRANSPILER_FLOWGRAPH in step 2 (faster batch mode)
 """
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import shutil
@@ -177,6 +179,16 @@ def detect_dialect(source_file: Path) -> tuple:
     
     return ('COBOL', False)
 
+# Italian and common English stopwords that error-message scraping may falsely
+# extract as copybook names (safety net; primary avoidance is _pre_stub_from_source).
+_COPYBOOK_STUB_STOPWORDS = {
+    'con', 'di', 'e', 'in', 'il', 'la', 'le', 'un', 'una', 'che', 'per',
+    'del', 'della', 'dei', 'lo', 'da', 'al', 'sul', 'nel', 'se', 'ma',
+    'non', 'anche', 'come', 'tra', 'fra', 'alle', 'sui', 'inserita',
+    'contenente', 'istruzioni', 'compensi', 'detrazioni', 'definizione',
+}
+
+
 def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir,
                           dialect_jar, lenient_flag, max_retries=5):
     """
@@ -186,7 +198,7 @@ def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir,
     stub_content = """\
       * STUB COPYBOOK - Auto-generated due to parsing errors
 """
-    
+
     for attempt in range(1, max_retries + 1):
         cmd = (
             f'java -jar "{smojol_cli}" run "{target_file}" '
@@ -195,18 +207,27 @@ def pre_validate_and_stub(smojol_cli, target_file, src_dir, copybooks_dir,
             f'--dialectJarPath "{dialect_jar}" --dialect COBOL '
             f'--reportDir "out/prevalidate_temp" --generation=PROGRAM {lenient_flag}'
         )
-        
+
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         combined = result.stderr + result.stdout
-        
-        # Extract problematic copybook names
+
+        # Extract problematic copybook names from error messages.
+        # Note: _pre_stub_from_source() already handles programs where source is
+        # available; this path is a safety net (e.g. --no-sandbox mode).
         problematic = set()
         for pattern in [r'copybookId["\s:=]+([A-Za-z0-9_-]+)',
                         r'Error.*copybook.*["\']([A-Za-z0-9_-]+)["\']']:
             for match in re.finditer(pattern, combined, re.IGNORECASE):
                 name = match.group(1)
-                if name and name.lower() not in ('null', 'none', 'cobol'):
-                    problematic.add(name)
+                if not name:
+                    continue
+                if name.lower() in ('null', 'none', 'cobol'):
+                    continue
+                if name.lower() in _COPYBOOK_STUB_STOPWORDS:
+                    continue
+                if len(name) < 2 or not re.match(r'^[A-Z0-9][A-Z0-9_@#$-]*$', name, re.IGNORECASE):
+                    continue
+                problematic.add(name)
         
         if not problematic:
             break
@@ -261,6 +282,9 @@ class AnalysisPipeline:
         
         # Sandbox reference
         self.sandbox = None
+
+        # Pre-stub names (from _pre_stub_from_source, tracked separately from sandbox stubs)
+        self._pre_stub_names = []
 
         # Pipeline report
         self.report = PipelineReport(self.target_file)
@@ -362,6 +386,11 @@ class AnalysisPipeline:
         
         if self.sandbox.stubs_created:
             Colors.print_msg(f"  Auto-created {len(self.sandbox.stubs_created)} stubs", Colors.YELLOW)
+
+        # Pre-stub all COPY-referenced copybooks from source before first JVM call
+        if not self.options.get('ignore_copybooks', False):
+            self._pre_stub_from_source()
+
         self._write_copybook_manifest()
 
     def _write_copybook_manifest(self):
@@ -371,6 +400,7 @@ class AnalysisPipeline:
         if not Path(cpb_dir).is_dir():
             return
         stubbed = [s.upper() for s in getattr(self.sandbox, 'stubs_created', [])]
+        stubbed.extend(s.upper() for s in self._pre_stub_names)
         manifest = {"program": self.target_file, "copybooks": {}, "summary": {}}
 
         for cpf in sorted(Path(cpb_dir).glob("*")):
@@ -407,6 +437,56 @@ class AnalysisPipeline:
                 f"({total - stub_count}/{total}), {stub_count} stubbed",
                 Colors.YELLOW
             )
+
+    def _pre_stub_from_source(self):
+        """Scan COPY statements from source and stub all missing copybooks before pre_validate.
+
+        Collapses the iterative pre_validate loop (up to 5 JVM invocations) into 1
+        by creating all necessary stubs upfront using a direct source text scan.
+        Handles fixed-format COBOL (cols 8-72), COPY name IN/OF library syntax,
+        and comment lines (col-7 indicator).
+        """
+        stub_content = "      * STUB COPYBOOK - Auto-generated\n"
+        source_path = Path(self.src_dir) / self.target_file
+        try:
+            source_text = source_path.read_text(encoding='utf-8', errors='ignore')
+        except OSError:
+            return
+
+        names = []
+        for line in source_text.splitlines():
+            if len(line) < 8:
+                continue
+            # Col 7 (0-indexed: index 6) is the indicator area; * or / = comment
+            if line[6] in ('*', '/'):
+                continue
+            area = line[7:72]  # Area A+B: cols 8-72 (0-indexed 7-71)
+            # Match: COPY name [IN/OF library] [.]
+            m = re.match(
+                r'\s*COPY\s+([A-Z0-9@#$][A-Z0-9@#$_-]*)(?:\s+(?:IN|OF)\s+\S+)?',
+                area, re.IGNORECASE
+            )
+            if m:
+                names.append(m.group(1).upper())
+
+        stubs_created = []
+        for name in set(names):
+            cpy_path = Path(self.copybooks_dir) / f"{name}.cpy"
+            if not cpy_path.exists():
+                try:
+                    cpy_path.write_text(stub_content, encoding='utf-8')
+                    stubs_created.append(name)
+                except OSError as e:
+                    Colors.print_msg(f"  Warning: Could not pre-stub {name}: {e}", Colors.YELLOW)
+
+        if stubs_created:
+            Colors.print_msg(
+                f"  Pre-stubbed {len(stubs_created)} copybooks from source scan "
+                f"({', '.join(sorted(stubs_created)[:5])}"
+                + (f"... +{len(stubs_created)-5} more" if len(stubs_created) > 5 else "") + ")",
+                Colors.YELLOW
+            )
+            self._pre_stub_names.extend(stubs_created)
 
     def pre_validate(self):
         """Pre-validation: detect and stub broken copybooks."""
@@ -648,10 +728,16 @@ class AnalysisPipeline:
         """Generate transpiler flowgraph, unified model, GraphML."""
         Colors.print_msg("[2/7] Generating Advanced Analysis...", Colors.GREEN)
         log_dir = self.report_subdir / "logs"
-        run_command(self._build_smojol_cmd(
-            "BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES "
-            "EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML"
-        ), check=False, capture_to=log_dir / "step2_stderr.log")
+        if self.options.get('skip_transpiler'):
+            # Skip BUILD_TRANSPILER_FLOWGRAPH for faster batch runs.
+            # Knowledge base, Mermaid, and all Python steps are unaffected.
+            commands = "ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML"
+            Colors.print_msg("  (BUILD_TRANSPILER_FLOWGRAPH skipped via --skip-transpiler)", Colors.YELLOW)
+        else:
+            commands = ("BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES "
+                        "EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML")
+        run_command(self._build_smojol_cmd(commands), check=False,
+                    capture_to=log_dir / "step2_stderr.log")
     
     def step3_mermaid(self):
         """Generate Mermaid flowcharts."""
@@ -814,6 +900,17 @@ class AnalysisPipeline:
 
     def run(self):
         """Execute the full analysis pipeline."""
+        # Write pipeline_report.json and clean up on SIGTERM (e.g. from batch runner timeout).
+        # Write the report explicitly before cleanup() so it's on disk even if cleanup raises.
+        def _on_sigterm(sig, frame):
+            try:
+                self.report.write(self.report_subdir / "pipeline_report.json")
+            except Exception:
+                pass
+            self.cleanup()
+            sys.exit(1)
+        signal.signal(signal.SIGTERM, _on_sigterm)
+
         self.pre_flight_check()
         self.setup_sandbox()
         try:
@@ -858,6 +955,7 @@ def main():
         'ignore_copybooks': "--ignore-copybooks" in sys.argv,
         'use_sandbox': "--no-sandbox" not in sys.argv,
         'comment_enrichment': "--no-comment-enrichment" not in sys.argv,
+        'skip_transpiler': "--skip-transpiler" in sys.argv,
         'java_heap': java_heap,
     }
     
