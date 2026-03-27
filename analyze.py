@@ -19,6 +19,7 @@ Options:
     --no-sandbox              Skip sandbox (modify files in-place)
     --no-comment-enrichment   Skip Italian comment translation via Ollama (step 7b)
     --skip-transpiler         Skip BUILD_TRANSPILER_FLOWGRAPH in step 2 (faster batch mode)
+    --no-mermaid              Skip EXPORT_MERMAID in step 3 (faster batch mode)
 """
 
 import json
@@ -285,6 +286,9 @@ class AnalysisPipeline:
 
         # Pre-stub names (from _pre_stub_from_source, tracked separately from sandbox stubs)
         self._pre_stub_names = []
+        # Set to True by _pre_stub_from_source once all COPY names in source are covered;
+        # allows pre_validate to be skipped (saves 1 JVM call per file in batch mode).
+        self._all_copies_resolved = False
 
         # Pipeline report
         self.report = PipelineReport(self.target_file)
@@ -487,12 +491,21 @@ class AnalysisPipeline:
                 Colors.YELLOW
             )
             self._pre_stub_names.extend(stubs_created)
+        # All COPY names from source are now either already present or freshly stubbed.
+        # Stubs contain no COPY statements, so no transitive deps can appear.
+        # pre_validate (which runs one JVM call) can be safely skipped.
+        self._all_copies_resolved = True
 
     def pre_validate(self):
         """Pre-validation: detect and stub broken copybooks."""
         if not self.options.get('use_sandbox', True):
             return
-        
+        # If _pre_stub_from_source already covered all COPY names, the first JVM
+        # attempt would succeed with no new stubs → skip the round-trip entirely.
+        if self._all_copies_resolved:
+            Colors.print_msg("[0.5/7] Pre-validation skipped (all COPYs pre-stubbed from source)", Colors.YELLOW)
+            return
+
         Colors.print_msg("[0.5/7] Pre-validating syntax...", Colors.BLUE)
         lenient = "--lenient" if self.options.get('lenient') else ""
         problematic = pre_validate_and_stub(
@@ -741,6 +754,9 @@ class AnalysisPipeline:
     
     def step3_mermaid(self):
         """Generate Mermaid flowcharts."""
+        if self.options.get('skip_mermaid'):
+            Colors.print_msg("[3/7] Mermaid generation skipped (--no-mermaid)", Colors.YELLOW)
+            return
         Colors.print_msg("[3/7] Generating Mermaid Flowchart...", Colors.GREEN)
         run_command(self._build_smojol_cmd("EXPORT_MERMAID", generation="SECTION"), check=False)
 
@@ -956,6 +972,7 @@ def main():
         'use_sandbox': "--no-sandbox" not in sys.argv,
         'comment_enrichment': "--no-comment-enrichment" not in sys.argv,
         'skip_transpiler': "--skip-transpiler" in sys.argv,
+        'skip_mermaid': "--no-mermaid" in sys.argv,
         'java_heap': java_heap,
     }
     
