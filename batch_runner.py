@@ -111,6 +111,7 @@ def run_analysis(filepath, timeout_seconds, extra_flags, report_base_dir):
             "--lenient",
             "--no-graphviz",
             "--skip-transpiler",
+            "--no-mermaid",
         ] + extra_flags
 
         proc = subprocess.Popen(
@@ -132,12 +133,26 @@ def run_analysis(filepath, timeout_seconds, extra_flags, report_base_dir):
             except Exception:
                 pass
             proc.wait()
+            # Try to read the copybook manifest even on timeout — it's written by
+            # setup_sandbox early in the pipeline, so it's usually already on disk.
+            manifest_path = report_base_dir / f"{filepath.name}.report" / "copybook_manifest.json"
+            copybooks = []
+            if manifest_path.exists():
+                try:
+                    manifest_data = json.loads(manifest_path.read_text(encoding='utf-8'))
+                    cbs = manifest_data.get("copybooks", {})
+                    if isinstance(cbs, dict):
+                        copybooks = [{"name": k, **v} for k, v in cbs.items()]
+                    else:
+                        copybooks = cbs
+                except Exception:
+                    pass
             return {
                 "file": filepath.name,
                 "success": False,
                 "generated": False,
                 "duration": timeout_seconds,
-                "copybooks": [],
+                "copybooks": copybooks,
                 "error": "TIMEOUT",
             }
 
