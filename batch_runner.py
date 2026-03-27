@@ -224,6 +224,8 @@ Examples:
                         help="Per-file timeout in seconds (default: 600)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print files and COPY-stub counts without running analysis")
+    parser.add_argument("--java-heap", default="2g",
+                        help="JVM heap size passed to analyze.py (default: 2g; use 4g for 5k+ line programs)")
     args = parser.parse_args()
 
     target_dir = Path(args.target_dir)
@@ -257,18 +259,47 @@ Examples:
                   + (f"... +{len(names)-4} more" if len(names) > 4 else "") + ")")
         return
 
-    # ---- Batch run ----------------------------------------------------------
-    print(f"Workers: {args.workers} | Timeout: {args.timeout}s | --skip-transpiler: ON")
+    # ---- Helpers ----------------------------------------------------------------
+    def _print_result(res, filepath, label, total):
+        status_color = "\033[92mPASS\033[0m" if res["success"] else "\033[91mFAIL\033[0m"
+        gen_mark = "✅" if res["generated"] else "❌"
+
+        step_pct, parse_pct = _read_analysis_coverage(filepath, report_base_dir)
+        cov_parts = []
+        if step_pct is not None:
+            cov_parts.append(f"steps:{step_pct}%")
+        if parse_pct is not None:
+            cov_parts.append(f"parse:{parse_pct:.1f}%")
+        cov_str = " | " + " ".join(cov_parts) if cov_parts else ""
+
+        cpy_found, cpy_total = _copybook_ratio(filepath, res["copybooks"], report_base_dir)
+        if cpy_total is not None:
+            cpy_str = f" | CPY:{cpy_found if cpy_found is not None else '?'}/{cpy_total}"
+        else:
+            cpy_str = ""
+
+        print(f"{label:<10} {res['file']:<34} | {status_color:<19} | {res['duration']:>5.2f}s | {gen_mark}{cov_str}{cpy_str}")
+
+        if not res["success"]:
+            with open(f"batch_error_{res['file']}.log", "w") as fh:
+                fh.write(res["error"])
+
+    # ---- Pass 1: parallel run -----------------------------------------------
+    retry_timeout = max(args.timeout * 2, 1200)
+    print(f"Workers: {args.workers} | Timeout: {args.timeout}s | Heap: {args.java_heap} | --skip-transpiler: ON")
+    print(f"Auto-retry: timed-out files will be retried serially (timeout={retry_timeout}s, heap=4g)")
     print("-" * 75)
     print(f"{'[#]':<10} {'Filename':<34} | {'Status':<10} | {'Time':>6} | {'KB':>3} | {'Coverage'}")
     print("-" * 75)
 
     results = []
     processed_count = 0
+    file_lookup = {f.name: f for f in files}
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        extra = [f"--java-heap={args.java_heap}"]
         future_to_file = {
-            executor.submit(run_analysis, f, args.timeout, [], report_base_dir): f
+            executor.submit(run_analysis, f, args.timeout, extra, report_base_dir): f
             for f in files
         }
 
@@ -276,31 +307,24 @@ Examples:
             processed_count += 1
             res = future.result()
             results.append(res)
-
             filepath = future_to_file[future]
-            status_color = "\033[92mPASS\033[0m" if res["success"] else "\033[91mFAIL\033[0m"
-            gen_mark = "✅" if res["generated"] else "❌"
+            _print_result(res, filepath, f"[{processed_count}/{total_files}]", total_files)
 
-            step_pct, parse_pct = _read_analysis_coverage(filepath, report_base_dir)
-            cov_parts = []
-            if step_pct is not None:
-                cov_parts.append(f"steps:{step_pct}%")
-            if parse_pct is not None:
-                cov_parts.append(f"parse:{parse_pct:.1f}%")
-            cov_str = " | " + " ".join(cov_parts) if cov_parts else ""
-
-            cpy_found, cpy_total = _copybook_ratio(filepath, res["copybooks"], report_base_dir)
-            if cpy_total is not None:
-                cpy_str = f" | CPY:{cpy_found if cpy_found is not None else '?'}/{cpy_total}"
-            else:
-                cpy_str = ""
-
-            prog = f"[{processed_count}/{total_files}]"
-            print(f"{prog:<10} {res['file']:<34} | {status_color:<19} | {res['duration']:>5.2f}s | {gen_mark}{cov_str}{cpy_str}")
-
-            if not res["success"]:
-                with open(f"batch_error_{res['file']}.log", "w") as f:
-                    f.write(res["error"])
+    # ---- Pass 2: serial retry for timeouts ----------------------------------
+    timed_out = [r for r in results if r["error"] == "TIMEOUT"]
+    if timed_out:
+        print("-" * 75)
+        print(f"Pass 2 — retrying {len(timed_out)} timed-out file(s) serially "
+              f"(timeout={retry_timeout}s, heap=4g) ...")
+        print("-" * 75)
+        retry_extra = ["--java-heap=4g"]
+        for i, r in enumerate(timed_out, 1):
+            filepath = file_lookup[r["file"]]
+            retry_res = run_analysis(filepath, retry_timeout, retry_extra, report_base_dir)
+            # Replace original result
+            results = [x for x in results if x["file"] != retry_res["file"]]
+            results.append(retry_res)
+            _print_result(retry_res, filepath, f"[R{i}/{len(timed_out)}]", len(timed_out))
 
     print("-" * 75)
     passed = sum(1 for r in results if r["success"])
@@ -324,9 +348,6 @@ Examples:
         },
         "details": [],
     }
-
-    # Build a filepath lookup for summary enrichment
-    file_lookup = {f.name: f for f in files}
 
     for r in results:
         cbs = r["copybooks"]
