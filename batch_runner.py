@@ -220,8 +220,8 @@ Examples:
                         help="Directory to scan for COBOL files (default: %(default)s)")
     parser.add_argument("--workers", type=int, default=2,
                         help="Parallel JVM workers (default: 2; reduce if memory-constrained)")
-    parser.add_argument("--timeout", type=int, default=300,
-                        help="Per-file timeout in seconds (default: 300)")
+    parser.add_argument("--timeout", type=int, default=600,
+                        help="Per-file timeout in seconds (default: 600)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print files and COPY-stub counts without running analysis")
     args = parser.parse_args()

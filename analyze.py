@@ -538,12 +538,25 @@ class AnalysisPipeline:
         4. If lenient also fails, write parse_failure_report.json from stderr
            and abort pipeline with structured error output
         5. Always log diagnostics before continuing or aborting
+
+        Batch-mode optimisation (--skip-transpiler):
+        When running in batch mode, step2's commands are appended here so that
+        BUILD_BASE_ANALYSIS (the expensive parse+CFG pass) runs only ONCE per
+        program instead of twice.  step2_advanced_analysis then skips its JVM
+        call because the work is already done.
         """
         Colors.print_msg("[1/7] Generating Core Structures (AST, CFG)...", Colors.GREEN)
 
-        cmd = self._build_smojol_cmd(
-            "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
-        )
+        # In batch mode, merge step2 commands here to avoid a second JVM launch
+        # and a second BUILD_BASE_ANALYSIS invocation (the costly parse+CFG pass).
+        if self.options.get('skip_transpiler'):
+            core_cmds = ("WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES "
+                         "ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML")
+            Colors.print_msg("  (Step 2 merged into Step 1 — single JVM call)", Colors.YELLOW)
+        else:
+            core_cmds = "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
+
+        cmd = self._build_smojol_cmd(core_cmds)
 
         result = run_command_captured(cmd)
 
@@ -578,9 +591,7 @@ class AnalysisPipeline:
 
         # Enable lenient for this and all subsequent smojol commands
         self.options['lenient'] = True
-        cmd_lenient = self._build_smojol_cmd(
-            "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
-        )
+        cmd_lenient = self._build_smojol_cmd(core_cmds)
         result2 = run_command_captured(cmd_lenient)
 
         if result2.returncode == 0:
@@ -739,16 +750,15 @@ class AnalysisPipeline:
 
     def step2_advanced_analysis(self):
         """Generate transpiler flowgraph, unified model, GraphML."""
-        Colors.print_msg("[2/7] Generating Advanced Analysis...", Colors.GREEN)
         log_dir = self.report_subdir / "logs"
         if self.options.get('skip_transpiler'):
-            # Skip BUILD_TRANSPILER_FLOWGRAPH for faster batch runs.
-            # Knowledge base, Mermaid, and all Python steps are unaffected.
-            commands = "ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML"
-            Colors.print_msg("  (BUILD_TRANSPILER_FLOWGRAPH skipped via --skip-transpiler)", Colors.YELLOW)
-        else:
-            commands = ("BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES "
-                        "EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML")
+            # In batch mode, step1 already ran these commands in the same JVM call.
+            # Running again would re-do BUILD_BASE_ANALYSIS for no gain.
+            Colors.print_msg("[2/7] Advanced Analysis (merged into Step 1)", Colors.YELLOW)
+            return
+        Colors.print_msg("[2/7] Generating Advanced Analysis...", Colors.GREEN)
+        commands = ("BUILD_TRANSPILER_FLOWGRAPH ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES "
+                    "EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML")
         run_command(self._build_smojol_cmd(commands), check=False,
                     capture_to=log_dir / "step2_stderr.log")
     
