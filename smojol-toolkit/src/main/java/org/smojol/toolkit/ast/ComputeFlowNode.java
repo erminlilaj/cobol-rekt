@@ -23,7 +23,7 @@ public class ComputeFlowNode extends CobolFlowNode {
     @Getter private List<CobolParser.ComputeStoreContext> destinations;
     @Getter private CobolParser.ArithmeticExpressionContext rhs;
     private CobolExpression rhsExpression;
-    private List<CobolExpression> destinationExpressions;
+    private List<CobolExpression> destinationExpressions = ImmutableList.of();
 
     public ComputeFlowNode(ParseTree parseTree, FlowNode scope, FlowNodeService nodeService, StackFrames stackFrames) {
         super(parseTree, scope, nodeService, stackFrames);

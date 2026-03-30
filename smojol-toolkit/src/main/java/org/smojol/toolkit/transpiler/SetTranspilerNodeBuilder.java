@@ -11,6 +11,9 @@ import java.util.List;
 
 public class SetTranspilerNodeBuilder {
     public static TranspilerNode build(MoveFlowNode n, CobolDataStructure dataStructures) {
+        if (n.getFromExpressions().isEmpty() || n.getToExpressions().isEmpty()) {
+            return new TranspilerCodeBlockNode(List.of());
+        }
         TranspilerExpressionBuilder nodeBuilder = new TranspilerExpressionBuilder(dataStructures);
         List<TranspilerNode> tos = n.getToExpressions().stream().map(nodeBuilder::build).toList();
         TranspilerNode from = new ValueOfNode(nodeBuilder.build(n.getFromExpressions().getFirst()));

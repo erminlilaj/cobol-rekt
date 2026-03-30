@@ -24,8 +24,8 @@ public class DivideFlowNode extends CobolFlowNode {
     private List<CobolParser.DivideIntoContext> dividends;
     private CobolParser.DivisorContext givingDividend;
     private CobolExpression divisorExpression;
-    private List<CobolExpression> dividendExpressions;
-    private List<CobolExpression> destinationExpressions;
+    private List<CobolExpression> dividendExpressions = ImmutableList.of();
+    private List<CobolExpression> destinationExpressions = ImmutableList.of();
 
     public DivideFlowNode(ParseTree parseTree, FlowNode scope, FlowNodeService nodeService, StackFrames stackFrames) {
         super(parseTree, scope, nodeService, stackFrames);

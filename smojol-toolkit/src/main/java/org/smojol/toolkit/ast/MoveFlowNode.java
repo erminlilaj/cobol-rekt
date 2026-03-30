@@ -24,8 +24,8 @@ import java.util.Optional;
 public class MoveFlowNode extends CobolFlowNode {
     private CobolParser.MoveToSendingAreaContext fromSingle;
     private List<CobolParser.GeneralIdentifierContext> tos;
-    private List<CobolExpression> fromExpressions;
-    private List<CobolExpression> toExpressions;
+    private List<CobolExpression> fromExpressions = ImmutableList.of();
+    private List<CobolExpression> toExpressions = ImmutableList.of();
 
     public MoveFlowNode(ParseTree parseTree, FlowNode scope, FlowNodeService nodeService, StackFrames stackFrames) {
         super(parseTree, scope, nodeService, stackFrames);

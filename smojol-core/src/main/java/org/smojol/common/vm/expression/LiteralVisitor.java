@@ -46,7 +46,7 @@ public class LiteralVisitor extends AntlrCobolExpressionVisitor {
     }
 
     private Double asNumber(String text) {
-        return Double.valueOf(text);
+        return Double.valueOf(text.replace(',', '.'));
     }
 
     private Boolean asBoolean(String text) {

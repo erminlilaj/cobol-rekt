@@ -18,6 +18,10 @@ public class MoveOperation implements CobolOperation {
     }
 
     public void run(CobolDataStructure cobolDataStructure) {
+        if (move.getFromExpressions().isEmpty() || move.getToExpressions().isEmpty()) {
+            LOGGER.warning("MoveOperation: unresolved expressions, skipping move");
+            return;
+        }
         LOGGER.finer("From is " + move.getFromExpressions().toString());
         CobolReferenceBuilder referenceBuilder = new CobolReferenceBuilder();
         List<CobolReference> tos = move.getToExpressions().stream().map(to -> referenceBuilder.getReference(to, cobolDataStructure)).toList();

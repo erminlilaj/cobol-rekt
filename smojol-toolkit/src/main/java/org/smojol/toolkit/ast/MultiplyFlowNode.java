@@ -26,9 +26,9 @@ public class MultiplyFlowNode extends CobolFlowNode {
     private CobolParser.MultiplyGivingOperandContext givingRhs;
     private List<CobolParser.MultiplyGivingResultContext> givingDestinations;
     private CobolExpression lhsExpression;
-    private List<CobolExpression> rhsExpressions;
+    private List<CobolExpression> rhsExpressions = ImmutableList.of();
     private CobolExpression givingRhsExpression;
-    private List<CobolExpression> givingDestinationExpressions;
+    private List<CobolExpression> givingDestinationExpressions = ImmutableList.of();
     private final List<CobolExpression> destinationExpressions = new ArrayList<>();
     private final List<CobolExpression> sourceExpressions = new ArrayList<>();
 
