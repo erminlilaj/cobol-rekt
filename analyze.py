@@ -293,6 +293,10 @@ class AnalysisPipeline:
         # Pipeline report
         self.report = PipelineReport(self.target_file)
         self._cleaned_up = False
+
+        # Progress tracking
+        self._total_steps = 11   # pre_validate + steps 1-7c
+        self._current_step_num = 0
     
     def pre_flight_check(self):
         """Validate prerequisites before running the pipeline."""
@@ -547,11 +551,17 @@ class AnalysisPipeline:
         """
         Colors.print_msg("[1/7] Generating Core Structures (AST, CFG)...", Colors.GREEN)
 
-        # In batch mode, merge step2 commands here to avoid a second JVM launch
+        # In batch/rag-only mode, merge step2 commands here to avoid a second JVM launch
         # and a second BUILD_BASE_ANALYSIS invocation (the costly parse+CFG pass).
         if self.options.get('skip_transpiler'):
-            core_cmds = ("WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES "
-                         "ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML")
+            if self.options.get('rag_only'):
+                # RAG needs: RAW_AST (for variable_values), CFG, data structures, unified model.
+                # Skips: WRITE_FLOW_AST (flow_ast/ dir) and FLOW_TO_GRAPHML (*.graphml file).
+                core_cmds = ("WRITE_RAW_AST WRITE_CFG WRITE_DATA_STRUCTURES "
+                             "ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON")
+            else:
+                core_cmds = ("WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES "
+                             "ATTACH_COMMENTS BUILD_PROGRAM_DEPENDENCIES EXPORT_UNIFIED_TO_JSON FLOW_TO_GRAPHML")
             Colors.print_msg("  (Step 2 merged into Step 1 — single JVM call)", Colors.YELLOW)
         else:
             core_cmds = "WRITE_RAW_AST WRITE_FLOW_AST WRITE_CFG WRITE_DATA_STRUCTURES"
@@ -793,6 +803,8 @@ class AnalysisPipeline:
     
     def step4_cfg_to_mermaid(self):
         """Convert CFG JSON to Mermaid."""
+        if self.options.get('rag_only'):
+            return
         Colors.print_msg("[4/7] Converting CFG to Mermaid...", Colors.GREEN)
         cfg_json = self.report_subdir / "cfg" / f"cfg-{self.target_file}.json"
         mermaid_out = self.report_subdir / "mermaid" / "program_flow.md"
@@ -821,6 +833,8 @@ class AnalysisPipeline:
     
     def step6_data_dependencies(self):
         """Generate data dependency graph."""
+        if self.options.get('rag_only'):
+            return
         Colors.print_msg("[6/7] Generating Data Dependency Graph...", Colors.GREEN)
         unified_json = self.report_subdir / "unified_model" / f"{self.target_file}-unified.json"
         dep_mermaid = self.report_subdir / "mermaid" / "data_dependencies.md"
@@ -910,8 +924,19 @@ class AnalysisPipeline:
         Colors.print_msg(f"  {self.report_subdir}")
         Colors.print_msg("=" * 60, Colors.BLUE)
     
+    def _print_progress(self, step_name: str, width: int = 36):
+        """Print a progress bar showing overall pipeline progress."""
+        self._current_step_num += 1
+        filled = int(width * self._current_step_num / self._total_steps)
+        bar = '\u2588' * filled + '\u2591' * (width - filled)
+        pct = int(100 * self._current_step_num / self._total_steps)
+        remaining = self._total_steps - self._current_step_num
+        suffix = f"{remaining} step(s) remaining" if remaining else "last step"
+        print(f"  [{bar}] {pct:3d}%  ({self._current_step_num}/{self._total_steps})  {step_name}  \u2014 {suffix}", flush=True)
+
     def _run_step(self, name, func):
         """Run a pipeline step with report tracking."""
+        self._print_progress(name)
         self.report.start_step(name)
         try:
             func()
@@ -975,14 +1000,16 @@ def main():
     for arg in sys.argv:
         if arg.startswith("--java-heap="):
             java_heap = arg.split("=", 1)[1]
+    rag_only = "--rag-only" in sys.argv
     options = {
-        'graphviz': "--no-graphviz" not in sys.argv,
+        'graphviz': "--no-graphviz" not in sys.argv and not rag_only,
         'lenient': "--lenient" in sys.argv,
         'ignore_copybooks': "--ignore-copybooks" in sys.argv,
         'use_sandbox': "--no-sandbox" not in sys.argv,
         'comment_enrichment': "--no-comment-enrichment" not in sys.argv,
-        'skip_transpiler': "--skip-transpiler" in sys.argv,
-        'skip_mermaid': "--no-mermaid" in sys.argv,
+        'skip_transpiler': "--skip-transpiler" in sys.argv or rag_only,
+        'skip_mermaid': "--no-mermaid" in sys.argv or rag_only,
+        'rag_only': rag_only,
         'java_heap': java_heap,
     }
     

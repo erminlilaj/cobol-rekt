@@ -109,9 +109,6 @@ def run_analysis(filepath, timeout_seconds, extra_flags, report_base_dir):
             sys.executable, "analyze.py",
             str(filepath),
             "--lenient",
-            "--no-graphviz",
-            "--skip-transpiler",
-            "--no-mermaid",
         ] + extra_flags
 
         proc = subprocess.Popen(
@@ -226,6 +223,9 @@ Examples:
                         help="Print files and COPY-stub counts without running analysis")
     parser.add_argument("--java-heap", default="2g",
                         help="JVM heap size passed to analyze.py (default: 2g; use 4g for 5k+ line programs)")
+    parser.add_argument("--all", action="store_true",
+                        help="Generate all artifacts (mermaid, graphviz, flow_ast, graphml). "
+                             "Default is RAG-only mode which skips non-RAG outputs.")
     args = parser.parse_args()
 
     target_dir = Path(args.target_dir)
@@ -260,6 +260,14 @@ Examples:
         return
 
     # ---- Helpers ----------------------------------------------------------------
+    def _print_batch_bar(processed, total, width=40):
+        filled = int(width * processed / total) if total else 0
+        bar = '\u2588' * filled + '\u2591' * (width - filled)
+        pct = int(100 * processed / total) if total else 0
+        remaining = total - processed
+        suffix = f"{remaining} remaining" if remaining else "done"
+        print(f"  [{bar}] {pct:3d}%  ({processed}/{total} files)  \u2014 {suffix}", flush=True)
+
     def _print_result(res, filepath, label, total):
         status_color = "\033[92mPASS\033[0m" if res["success"] else "\033[91mFAIL\033[0m"
         gen_mark = "✅" if res["generated"] else "❌"
@@ -286,7 +294,8 @@ Examples:
 
     # ---- Pass 1: parallel run -----------------------------------------------
     retry_timeout = max(args.timeout * 2, 1200)
-    print(f"Workers: {args.workers} | Timeout: {args.timeout}s | Heap: {args.java_heap} | --skip-transpiler: ON")
+    mode_label = "full" if args.all else "rag-only"
+    print(f"Workers: {args.workers} | Timeout: {args.timeout}s | Heap: {args.java_heap} | Mode: {mode_label}")
     print(f"Auto-retry: timed-out files will be retried serially (timeout={retry_timeout}s, heap=4g)")
     print("-" * 75)
     print(f"{'[#]':<10} {'Filename':<34} | {'Status':<10} | {'Time':>6} | {'KB':>3} | {'Coverage'}")
@@ -298,6 +307,8 @@ Examples:
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         extra = [f"--java-heap={args.java_heap}"]
+        if not args.all:
+            extra.append("--rag-only")
         future_to_file = {
             executor.submit(run_analysis, f, args.timeout, extra, report_base_dir): f
             for f in files
@@ -309,6 +320,7 @@ Examples:
             results.append(res)
             filepath = future_to_file[future]
             _print_result(res, filepath, f"[{processed_count}/{total_files}]", total_files)
+            _print_batch_bar(processed_count, total_files)
 
     # ---- Pass 2: serial retry for timeouts ----------------------------------
     timed_out = [r for r in results if r["error"] == "TIMEOUT"]
@@ -318,6 +330,8 @@ Examples:
               f"(timeout={retry_timeout}s, heap=4g) ...")
         print("-" * 75)
         retry_extra = ["--java-heap=4g"]
+        if not args.all:
+            retry_extra.append("--rag-only")
         for i, r in enumerate(timed_out, 1):
             filepath = file_lookup[r["file"]]
             retry_res = run_analysis(filepath, retry_timeout, retry_extra, report_base_dir)
@@ -325,6 +339,7 @@ Examples:
             results = [x for x in results if x["file"] != retry_res["file"]]
             results.append(retry_res)
             _print_result(retry_res, filepath, f"[R{i}/{len(timed_out)}]", len(timed_out))
+            _print_batch_bar(i, len(timed_out))
 
     print("-" * 75)
     passed = sum(1 for r in results if r["success"])
