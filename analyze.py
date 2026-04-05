@@ -295,7 +295,8 @@ class AnalysisPipeline:
         self._cleaned_up = False
 
         # Progress tracking
-        self._total_steps = 11   # pre_validate + steps 1-7c
+        # Steps: pre_validate + 1 + 2 + 3 + 3b + 4 + 5 + 6 + 7a + 7b + 7c + 7d = 12
+        self._total_steps = 12
         self._current_step_num = 0
     
     def pre_flight_check(self):
@@ -844,11 +845,15 @@ class AnalysisPipeline:
         else:
             Colors.print_msg("  Warning: Unified JSON not found", Colors.YELLOW)
     
-    def step7_knowledge_base(self):
-        """Build LLM-optimized knowledge base."""
-        Colors.print_msg("[7/7] Building Knowledge Base...", Colors.GREEN)
-        
-        # Extract comments from original source file
+    def step7a_extract_comments(self):
+        """Extract column-7 comments from the COBOL source into comments.json.
+
+        This step runs before comment enrichment (step7b) so that the
+        translated comments are available when the knowledge base is built
+        (step7c).  Separating extraction from KB generation allows opus-mt
+        translation to be inserted cleanly between the two.
+        """
+        Colors.print_msg("[7a] Extracting source comments...", Colors.GREEN)
         try:
             comments_output = self.report_subdir / "comments.json"
             comment_extractor.extract_comments_to_json(
@@ -858,18 +863,18 @@ class AnalysisPipeline:
                 Colors.print_msg("  Extracted source comments", Colors.GREEN)
         except Exception as e:
             Colors.print_msg(f"  Warning: Comment extraction failed: {e}", Colors.YELLOW)
-        
-        try:
-            kb_path = knowledge_base_builder.build_knowledge_base(
-                self.report_subdir, self.target_file, verbose=True
-            )
-            Colors.print_msg(f"  Output: {kb_path}", Colors.GREEN)
-        except Exception as e:
-            Colors.print_msg(f"  Warning: Knowledge base generation failed: {e}", Colors.YELLOW)
-    
-    
+
     def step7b_comment_enrichment(self):
-        """Translate and categorize Italian COBOL comments via Ollama (optional)."""
+        """Translate and categorize Italian COBOL comments (optional).
+
+        Uses the opus-mt backend by default (local model, no server needed).
+        Falls back gracefully when --no-comment-enrichment is passed or
+        when comments.json was not produced by step7a.
+
+        Must run AFTER step7a (needs comments.json) and BEFORE step7c
+        (so the knowledge base builder can embed translated comments in
+        the logic narrative).
+        """
         if not self.options.get('comment_enrichment', True):
             Colors.print_msg("[7b] Comment enrichment skipped (--no-comment-enrichment)", Colors.BLUE)
             return
@@ -879,10 +884,6 @@ class AnalysisPipeline:
             Colors.print_msg("[7b] Comment enrichment skipped: comments.json not found", Colors.YELLOW)
             return
 
-        if not comment_enricher.check_ollama(port=11434):
-            Colors.print_msg("[7b] Comment enrichment skipped: Ollama not reachable at localhost:11434", Colors.YELLOW)
-            return
-
         Colors.print_msg("[7b] Enriching comments (translate + categorize)...", Colors.GREEN)
         try:
             out = comment_enricher.enrich_comments(
@@ -890,17 +891,33 @@ class AnalysisPipeline:
                 model=comment_enricher.DEFAULT_MODEL,
                 port=comment_enricher.DEFAULT_PORT,
                 verbose=self.verbose,
+                backend="opus-mt",   # local model — no Ollama server needed
             )
             Colors.print_msg(f"  Output: {out}", Colors.GREEN)
         except Exception as e:
             Colors.print_msg(f"  Warning: Comment enrichment failed: {e}", Colors.YELLOW)
 
-    def step7c_structure_analysis(self):
+    def step7c_knowledge_base(self):
+        """Build LLM-optimized knowledge base documents.
+
+        Runs after step7b so that comments_enriched.json (if produced) is
+        available for bilingual comment injection into the logic narrative.
+        """
+        Colors.print_msg("[7c] Building Knowledge Base...", Colors.GREEN)
+        try:
+            kb_path = knowledge_base_builder.build_knowledge_base(
+                self.report_subdir, self.target_file, verbose=True
+            )
+            Colors.print_msg(f"  Output: {kb_path}", Colors.GREEN)
+        except Exception as e:
+            Colors.print_msg(f"  Warning: Knowledge base generation failed: {e}", Colors.YELLOW)
+
+    def step7d_structure_analysis(self):
         """Extract structural facts from source and JSON."""
-        Colors.print_msg("[7c] Extracting COBOL Structural Facts...", Colors.GREEN)
+        Colors.print_msg("[7d] Extracting COBOL Structural Facts...", Colors.GREEN)
         log_dir = self.report_subdir / "logs"
         cmd = f'"{sys.executable}" cobol_structure_analyzer.py "{self.report_subdir}" "{self.target_file}" --source "{self.target_path}"'
-        run_command(cmd, check=False, capture_to=log_dir / "step7c_stderr.log")
+        run_command(cmd, check=False, capture_to=log_dir / "step7d_stderr.log")
 
     def cleanup(self):
         """Cleanup sandbox and finalize."""
@@ -973,9 +990,13 @@ class AnalysisPipeline:
             self._run_step("step4_cfg_to_mermaid", self.step4_cfg_to_mermaid)
             self._run_step("step5_variable_analysis", self.step5_variable_analysis)
             self._run_step("step6_data_dependencies", self.step6_data_dependencies)
-            self._run_step("step7_knowledge_base", self.step7_knowledge_base)
+            # Step 7 group: comment extraction → enrichment → KB build → structure
+            # This ordering is required: KB builder reads comments_enriched.json
+            # (produced by 7b) to embed translated comments in the logic narrative.
+            self._run_step("step7a_extract_comments", self.step7a_extract_comments)
             self._run_step("step7b_comment_enrichment", self.step7b_comment_enrichment)
-            self._run_step("step7c_structure_analysis", self.step7c_structure_analysis)
+            self._run_step("step7c_knowledge_base", self.step7c_knowledge_base)
+            self._run_step("step7d_structure_analysis", self.step7d_structure_analysis)
         finally:
             self.cleanup()
 

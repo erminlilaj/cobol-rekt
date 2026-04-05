@@ -25,7 +25,7 @@ import yaml
 # Constants
 # =============================================================================
 
-CHUNK_SCHEMA_VERSION = "1.1"
+CHUNK_SCHEMA_VERSION = "1.2"  # Added section_summary + workflow chunk types; fixed section metadata
 PIPELINE_VERSION = "1.2"
 
 # CFG JSON field names (NOT source/target/label as CLAUDE.md incorrectly states)
@@ -680,10 +680,38 @@ def _get_cfg_paragraph_names(report_dir: Path) -> set[str]:
 
 
 def _build_paragraph_section_map(report_dir: Path) -> dict[str, str]:
-    """Return {paragraph_name: enclosing_section_name} from CFG STARTS_WITH edges.
+    """Return ``{paragraph_name: enclosing_section_name}`` from the CFG graph.
 
-    Traverses upward from each PARAGRAPH node via reverse STARTS_WITH edges
-    until a node of type SECTION is found.
+    The actual graph structure linking paragraphs to their enclosing section
+    is NOT a pure STARTS_WITH chain.  The real path (confirmed by inspection
+    of real CFG outputs) is::
+
+        SECTION
+          --STARTS_WITH--> SECTION_HEADER
+          --FOLLOWED_BY--> PARAGRAPHS
+          --STARTS_WITH--> SENTENCE   (first statement)
+          --FOLLOWED_BY--> PARAGRAPH  (first paragraph)
+          --FOLLOWED_BY--> PARAGRAPH  (next paragraph)
+          ...
+
+    The original implementation only walked reverse STARTS_WITH edges, which
+    stopped at the PARAGRAPHS node and never reached SECTION because the edge
+    from PARAGRAPHS to SECTION_HEADER is FOLLOWED_BY (not STARTS_WITH).
+
+    **Fix**: perform a BFS upward from each PARAGRAPH node using *both*
+    reverse STARTS_WITH and reverse FOLLOWED_BY edges.  The first SECTION
+    node encountered is the enclosing section.  A ``visited`` set prevents
+    cycles (the graph has some FOLLOWED_BY edges that loop back).
+
+    Paragraphs with "/" in their name are skipped — these are COPY-injected
+    qualified names that are not real procedure paragraphs.
+
+    Args:
+        report_dir: Report directory containing the ``cfg/`` subdirectory.
+
+    Returns:
+        Dict mapping paragraph name → enclosing section name.  Paragraphs
+        not enclosed in any named section map to ``""``.
     """
     cfg_dir = report_dir / "cfg"
     if not cfg_dir.is_dir():
@@ -697,29 +725,48 @@ def _build_paragraph_section_map(report_dir: Path) -> dict[str, str]:
 
     nodes = data.get("nodes", [])
     edges = data.get("edges", [])
-    node_by_id = {n["id"]: n for n in nodes}
+    node_by_id: dict[str, dict] = {n["id"]: n for n in nodes}
 
-    # Build reverse STARTS_WITH: child_id → parent_id
-    parent_of: dict[str, str] = {}
+    # Build reverse maps: toNodeID → list of fromNodeIDs, per edge type.
+    # We need reverse STARTS_WITH and reverse FOLLOWED_BY to walk upward.
+    reverse_starts_with: dict[str, list[str]] = {}
+    reverse_followed_by: dict[str, list[str]] = {}
     for e in edges:
-        if e.get(EDGE_TYPE) == "STARTS_WITH":
-            parent_of[e[EDGE_TARGET]] = e[EDGE_SOURCE]
+        etype = e.get(EDGE_TYPE, "")
+        src = e.get(EDGE_SOURCE, "")
+        tgt = e.get(EDGE_TARGET, "")
+        if etype == "STARTS_WITH":
+            reverse_starts_with.setdefault(tgt, []).append(src)
+        elif etype == "FOLLOWED_BY":
+            reverse_followed_by.setdefault(tgt, []).append(src)
 
     result: dict[str, str] = {}
     for n in nodes:
         if n.get("type") != "PARAGRAPH" or "/" in n.get("name", ""):
             continue
-        # Walk up until we hit a SECTION node or exhaust parents
-        current_id = n["id"]
+
+        # BFS upward using both reverse edge types
         section_name = ""
-        visited = set()
-        while current_id in parent_of and current_id not in visited:
-            visited.add(current_id)
-            current_id = parent_of[current_id]
-            parent_node = node_by_id.get(current_id, {})
-            if parent_node.get("type") == "SECTION":
-                section_name = parent_node.get("name", "")
+        visited: set[str] = set()
+        queue: list[str] = [n["id"]]
+        while queue:
+            cur_id = queue.pop(0)
+            if cur_id in visited:
+                continue
+            visited.add(cur_id)
+            cur_node = node_by_id.get(cur_id, {})
+            if cur_node.get("type") == "SECTION":
+                section_name = cur_node.get("name", "")
                 break
+            # Expand via reverse STARTS_WITH
+            for parent_id in reverse_starts_with.get(cur_id, []):
+                if parent_id not in visited:
+                    queue.append(parent_id)
+            # Expand via reverse FOLLOWED_BY
+            for parent_id in reverse_followed_by.get(cur_id, []):
+                if parent_id not in visited:
+                    queue.append(parent_id)
+
         result[n.get("name", "")] = section_name
 
     return result
@@ -2216,6 +2263,263 @@ def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
 
 
 # =============================================================================
+# Group G — section_summary chunks
+# =============================================================================
+
+def generate_section_summaries(
+    report_dir: Path,
+    chunks_dir: Path,
+    program: str,
+    verbose: bool = False,
+) -> int:
+    """Generate one ``section_summary`` chunk per COBOL SECTION.
+
+    A section_summary provides a mid-level retrieval unit between the
+    fine-grained ``paragraph_logic`` chunks and the coarse ``program_summary``
+    chunk.  Each chunk aggregates:
+
+    - The section name and its paragraph list
+    - English comment translations for each paragraph (from
+      ``comments_enriched.json`` if available)
+    - Internal PERFORM calls (between paragraphs in the same section) and
+      external PERFORM calls (to paragraphs outside the section)
+
+    **Empty sections** (sections with no paragraphs) are silently skipped —
+    they produce no chunk.
+
+    **Programs with no sections** (flat paragraph structure) return 0 without
+    error.
+
+    Args:
+        report_dir: Report directory containing the CFG and comments files.
+        chunks_dir: Output directory for generated chunk JSON files.
+        program: Program name used as chunk ID prefix.
+        verbose: If True, print progress.
+
+    Returns:
+        Number of section_summary chunks written.
+    """
+    section_map = _build_paragraph_section_map(report_dir)
+    if not section_map:
+        if verbose:
+            print("  section_summary: no sections found — skipping")
+        return 0
+
+    enriched = _load_enriched_comments(report_dir)
+
+    # Group paragraphs by section
+    section_paragraphs: dict[str, list[str]] = {}
+    for para_name, section_name in section_map.items():
+        if section_name:
+            section_paragraphs.setdefault(section_name, []).append(para_name)
+
+    if not section_paragraphs:
+        if verbose:
+            print("  section_summary: no paragraphs assigned to any section — skipping")
+        return 0
+
+    # Load paragraph chunks to extract call relationships.
+    # Use the ``calls`` field (set by generate_paragraph_logic with raw names).
+    # Note: ``calls_names`` is added later by enrich_calls_chunk_ids (Phase 2),
+    # so it is NOT available yet when this generator runs.
+    para_calls: dict[str, list[str]] = {}
+    for chunk_file in chunks_dir.glob(f"{program}__paragraph__*.json"):
+        chunk_data = load_json(chunk_file)
+        if not chunk_data:
+            continue
+        meta = chunk_data.get("metadata", {})
+        pname = meta.get("paragraph", "")
+        # ``calls`` may be raw names or chunk_ids depending on run order;
+        # normalize to bare names via _normalize_call_target regardless
+        raw_calls = meta.get("calls", [])
+        if pname:
+            para_calls[pname] = raw_calls
+
+    count = 0
+    for section_name, paragraphs in sorted(section_paragraphs.items()):
+        # Build the chunk text
+        parts: list[str] = [
+            f"Section: {section_name}",
+            f"Contains {len(paragraphs)} paragraph(s): {', '.join(paragraphs)}",
+        ]
+
+        # Append per-paragraph comment translations
+        for para in paragraphs:
+            entry = enriched.get(para, {})
+            english = entry.get("english", "").strip()
+            if english and not entry.get("translation_failed"):
+                parts.append(f"- {para}: {english}")
+
+        # Classify PERFORM calls as internal (within section) or external
+        section_set = set(paragraphs)
+        internal_calls: list[str] = []
+        external_calls: list[str] = []
+        for para in paragraphs:
+            for raw_call in para_calls.get(para, []):
+                target = _normalize_call_target(raw_call).upper()
+                if target in section_set:
+                    internal_calls.append(f"{para} → {target}")
+                else:
+                    external_calls.append(f"{para} → {target}")
+
+        if internal_calls:
+            # Deduplicate while preserving order
+            seen: set[str] = set()
+            unique = [c for c in internal_calls if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+            parts.append("Internal calls: " + "; ".join(unique))
+        if external_calls:
+            seen = set()
+            unique = [c for c in external_calls if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+            parts.append("External calls: " + "; ".join(unique))
+
+        chunk_text = "\n".join(parts)
+
+        # Sanitize section name for use in chunk ID and filename
+        safe_name = re.sub(r"[^\w\-]", "_", section_name)
+
+        metadata: dict = {
+            "chunk_type": "section_summary",
+            "chunk_id": f"{program}:section_summary:{safe_name}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            "section": section_name,
+            "paragraph_count": len(paragraphs),
+            "paragraphs": paragraphs,
+        }
+        write_chunk(chunks_dir, f"{program}__section__{safe_name}.json",
+                    chunk_text, metadata)
+        count += 1
+
+    if verbose:
+        print(f"  section_summary: {count} chunk(s)")
+    return count
+
+
+# =============================================================================
+# Group H — workflow chunks
+# =============================================================================
+
+def generate_workflow_chunks(
+    report_dir: Path,
+    chunks_dir: Path,
+    program: str,
+    verbose: bool = False,
+) -> int:
+    """Generate ``workflow`` chunks for paragraphs that orchestrate others.
+
+    A workflow chunk describes a paragraph that PERFORMs two or more other
+    paragraphs — i.e. an orchestrating paragraph.  It shows the entry
+    paragraph's purpose and the sequence of steps it delegates to, giving
+    RAG a mid-level "business process" view that sits between the fine-grained
+    per-paragraph chunks and the coarse program_summary.
+
+    **Thresholds** (documented here because they will be questioned):
+
+    - **2+ callees**: guarantees the entry paragraph is actually orchestrating
+      something, not just performing a single subroutine.
+    - **3+ local nodes** (CFG node count for the paragraph): filters out pure
+      dispatchers like ``MAINLINE`` that consist entirely of PERFORM statements
+      with no local logic — these add no retrieval value beyond the individual
+      callee chunks.
+
+    **Paragraph name sanitization**: COBOL names can contain hyphens but not
+    colons or spaces; we still sanitize with ``re.sub`` for safety.
+
+    Args:
+        report_dir: Report directory (used to check if enriched comments exist).
+        chunks_dir: Directory containing already-generated paragraph_logic chunks.
+        program: Program name used as chunk ID prefix.
+        verbose: If True, print progress.
+
+    Returns:
+        Number of workflow chunks written.
+    """
+    enriched = _load_enriched_comments(report_dir)
+
+    # Load all paragraph chunks — we need calls_names, node_count, english comment
+    paragraph_chunks: list[dict] = []
+    for chunk_file in sorted(chunks_dir.glob(f"{program}__paragraph__*.json")):
+        data = load_json(chunk_file)
+        if data:
+            paragraph_chunks.append(data)
+
+    if not paragraph_chunks:
+        if verbose:
+            print("  workflow: no paragraph chunks found — skipping")
+        return 0
+
+    count = 0
+    for chunk in paragraph_chunks:
+        meta = chunk.get("metadata", {})
+        entry_para = meta.get("paragraph", "")
+        if not entry_para:
+            continue
+
+        # ``calls`` contains raw PERFORM target strings at generation time
+        # (e.g. "FOO THRU FOO-EXIT").  Phase 2 enrichment later converts them
+        # to chunk_ids in-place and saves the originals as ``calls_names``, but
+        # that happens AFTER this generator runs.  We normalize to bare names
+        # here so both raw strings and chunk_ids work correctly.
+        raw_calls_field: list[str] = meta.get("calls", [])
+        callee_names = list(dict.fromkeys(
+            _normalize_call_target(c) for c in raw_calls_field
+        ))
+
+        # Threshold 1: must call 2+ distinct paragraphs
+        if len(callee_names) < 2:
+            continue
+
+        # Threshold 2: must have 3+ CFG nodes (filters pure dispatchers)
+        node_count = meta.get("node_count", 0)
+        if node_count < 3:
+            continue
+
+        # Build workflow chunk text
+        entry_entry = enriched.get(entry_para, {})
+        entry_english = entry_entry.get("english", "").strip()
+        if entry_entry.get("translation_failed"):
+            entry_english = ""
+
+        parts: list[str] = []
+        if entry_english:
+            parts.append(entry_english)
+        parts.append(f"{entry_para} orchestrates:")
+
+        # Describe each callee
+        for callee in callee_names:
+            callee_entry = enriched.get(callee, {})
+            callee_english = callee_entry.get("english", "").strip()
+            if callee_entry.get("translation_failed"):
+                callee_english = ""
+            if callee_english:
+                parts.append(f"  - {callee}: {callee_english}")
+            else:
+                parts.append(f"  - {callee}")
+
+        chunk_text = "\n".join(parts)
+
+        # Sanitize paragraph name for chunk ID / filename (no colons or spaces)
+        safe_para = re.sub(r"[^\w\-]", "_", entry_para)
+
+        metadata: dict = {
+            "chunk_type": "workflow",
+            "chunk_id": f"{program}:workflow:{safe_para}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            "entry_paragraph": entry_para,
+            "called_paragraphs": callee_names,
+            "callee_count": len(callee_names),
+        }
+        write_chunk(chunks_dir, f"{program}__workflow__{safe_para}.json",
+                    chunk_text, metadata)
+        count += 1
+
+    if verbose:
+        print(f"  workflow: {count} chunk(s)")
+    return count
+
+
+# =============================================================================
 # Main orchestrator
 # =============================================================================
 
@@ -2278,6 +2582,15 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         if verbose and (guard_stats["merged"] or guard_stats["split"]):
             print(f"  Size guard: {guard_stats['merged']} merges, "
                   f"{guard_stats['split']} splits")
+
+        # Section-level and workflow chunks (new in schema v1.2).
+        # section_summary groups paragraphs by COBOL SECTION for mid-level retrieval.
+        # workflow groups orchestrating paragraphs with their callee summaries.
+        # Both run AFTER paragraph enrichment so they can read calls_names metadata.
+        summary["section_summary"] = generate_section_summaries(
+            report_dir, chunks_dir, program, verbose)
+        summary["workflow"] = generate_workflow_chunks(
+            report_dir, chunks_dir, program, verbose)
 
         # Phase 2 post-processing enrichments
         enrich_called_by(chunks_dir, program, verbose)        # R2.4
