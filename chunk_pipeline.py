@@ -145,7 +145,7 @@ def _get_parse_diagnostics(report_dir: Path) -> dict:
 def _compute_parse_quality(diag: dict) -> str:
     """Map parse diagnostics to a quality label: full / partial / degraded / unknown."""
     if not diag:
-        return "unknown"
+        return "full"  # absent diagnostics = strict parse succeeded with zero errors
     if diag.get("data_structures_degraded", False):
         return "degraded"
     skipped = diag.get("skipped_variables", [])
@@ -483,6 +483,7 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
     sql_stmts = db.get("sql_statements", []) or []
     calls = [c.get("target", "") for c in (deps.get("calls", []) or [])]
     cics = deps.get("cics", []) or []
+    cics_calls = deps.get("cics_calls", []) or []
 
     # Build human-readable text
     lines = [f"External dependencies for program {program}:"]
@@ -496,7 +497,10 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         lines.append(f"Called programs: {', '.join(calls)}.")
     if cics:
         lines.append(f"CICS commands: {', '.join(cics)}.")
-    if not any([tables_read, tables_updated, sql_stmts, calls, cics]):
+    if cics_calls:
+        targets = [c.get("target", "?") for c in cics_calls]
+        lines.append(f"CICS program transfers (LINK/XCTL): {', '.join(targets)}.")
+    if not any([tables_read, tables_updated, sql_stmts, calls, cics, cics_calls]):
         lines.append("No external dependencies detected.")
 
     metadata = {
@@ -508,6 +512,7 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         "sql_statements": sql_stmts,
         "calls": calls,
         "cics_commands": cics,
+        "cics_calls": [{"command": c.get("command"), "target": c.get("target")} for c in cics_calls],
     }
     write_chunk(
         chunks_dir, f"{program}__dependencies.json",
@@ -1100,15 +1105,18 @@ def _build_paragraph_subgraphs(report_dir: Path) -> dict[str, dict]:
         complexity = decisions + 1
         internal_nodes = len(subgraph)
 
-        # Extract SQL and CICS operations from DIALECT nodes in the subgraph
+        # Extract SQL and CICS operations from DIALECT nodes in the subgraph.
+        # Skip DATA DIVISION structural markers — they are not executable statements.
+        _NON_EXEC_SQL = ('BEGIN DECLARE', 'END DECLARE', 'INCLUDE ', 'WHENEVER ')
         sql_ops: list[str] = []
         cics_cmds: list[str] = []
         for nid in subgraph:
             orig = node_by_id.get(nid, {}).get("originalText", "").upper()
             if "EXEC SQL" in orig:
-                m = re.search(r"EXEC\s+SQL\s+(\w+)", orig)
-                if m:
-                    sql_ops.append(m.group(1).capitalize())
+                if not any(marker in orig for marker in _NON_EXEC_SQL):
+                    m = re.search(r"EXEC\s+SQL\s+(\w+)", orig)
+                    if m:
+                        sql_ops.append(m.group(1).capitalize())
             if "EXEC CICS" in orig:
                 m = re.search(r"EXEC\s+CICS\s+(\w+)", orig)
                 if m:
