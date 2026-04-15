@@ -25,14 +25,15 @@ class KnowledgeBaseBuilder:
         self.report_dir = Path(report_dir)
         self.program_name = program_name
         self.verbose = verbose
-        
+
         # Output directory - inside the report folder
         self.kb_dir = self.report_dir / "knowledge_base"
-        
+
         # Cached data
         self._cfg_data = None
         self._data_structures = None
         self._comments = None
+        self._enriched_comments = None
     
     def build(self) -> Path:
         """Build complete knowledge base. Returns output directory."""
@@ -92,8 +93,13 @@ class KnowledgeBaseBuilder:
 | Type | Count |
 |------|-------|
 """
+        _DISPLAY_NAMES = {
+            'DIALECT': 'CICS/SQL block',
+            'DIALECT_CONTAINER': 'CICS/SQL container',
+        }
         for node_type, count in sorted(type_counts.items(), key=lambda x: -x[1])[:10]:
-            content += f"| {node_type} | {count} |\n"
+            display = _DISPLAY_NAMES.get(node_type, node_type)
+            content += f"| {display} | {count} |\n"
         
         content += f"""
 ## Analysis Notes
@@ -103,13 +109,88 @@ class KnowledgeBaseBuilder:
 - See `02_Data_Dictionary.md` for variable definitions
 - See `03_Dependencies.yaml` for external calls
 """
-        
+        goto_count = type_counts.get('GOTO', 0)
+        if goto_count > 10:
+            content += f"\n> **Warning:** High GO TO count ({goto_count}) — program uses unstructured control flow. Review spaghetti code sections carefully.\n"
+
+        # Dangling paragraph reference validation
+        dangling = self._find_dangling_references(cfg)
+        if dangling:
+            content += f"\n## Validation Warnings\n\n"
+            content += f"> **{len(dangling)} undefined paragraph reference(s) detected:**\n>\n"
+            for d in dangling[:15]:
+                content += f"> - `{d['type']} {d['name']}` (from `{d['from_para']}`)\n"
+            if len(dangling) > 15:
+                content += f"> - … and {len(dangling) - 15} more\n"
+            content += "\n"
+
         output_path = self.kb_dir / "00_Executive_Summary.md"
         output_path.write_text(content, encoding='utf-8')
         
         if self.verbose:
             print(f"  [OK] 00_Executive_Summary.md ({node_count} nodes, complexity={complexity})")
     
+    def _find_dangling_references(self, cfg: dict) -> list:
+        """Return list of paragraph names referenced in GO TO / PERFORM that
+        don't exist as nodes in the CFG.
+
+        Each entry is a dict with keys: ``type`` (GO TO / PERFORM), ``name``
+        (referenced paragraph), ``from_para`` (containing paragraph name).
+
+        Common false-positive patterns are excluded:
+        - Names ending in ``-EXIT`` (standard THRU-range exit labels)
+        - Single-word names that are COBOL keywords (EXIT, CONTINUE, STOP)
+        """
+        if not cfg:
+            return []
+
+        _KEYWORD_SKIP = {'EXIT', 'CONTINUE', 'STOP', 'RETURN', 'PROGRAM', 'RUN'}
+
+        # Build set of known paragraph / section names
+        known: set = {
+            n.get('name', '').upper()
+            for n in cfg.get('nodes', [])
+            if n.get('type') in ('PARAGRAPH', 'SECTION') and n.get('name')
+        }
+
+        # Map node id → containing paragraph name for context
+        para_of: dict = {}
+        for n in cfg.get('nodes', []):
+            if n.get('type') in ('PARAGRAPH', 'SECTION'):
+                para_of[n['id']] = n.get('name', '?')
+
+        dangling: list = []
+        seen: set = set()
+
+        for node in cfg.get('nodes', []):
+            original = node.get('originalText', '')
+            node_type = node.get('type', '')
+            container = para_of.get(node.get('id', ''), '?')
+
+            refs: list = []
+
+            # GO TO targets
+            if 'GO TO' in original.upper() or node_type == 'GOTO':
+                for m in re.finditer(r'\bGO\s+TO\s+([A-Za-z][A-Za-z0-9-]+)', original, re.IGNORECASE):
+                    refs.append(('GO TO', m.group(1).upper()))
+
+            # PERFORM targets (skip VARYING/UNTIL — those are inline loops)
+            if node_type == 'PERFORM' and 'VARYING' not in original.upper() and 'UNTIL' not in original.upper():
+                m = re.search(r'\bPERFORM\s+([A-Za-z][A-Za-z0-9-]+)', original, re.IGNORECASE)
+                if m:
+                    refs.append(('PERFORM', m.group(1).upper()))
+
+            for ref_type, ref_name in refs:
+                if (ref_name.endswith('-EXIT')
+                        or ref_name in _KEYWORD_SKIP
+                        or ref_name in seen
+                        or ref_name in known):
+                    continue
+                seen.add(ref_name)
+                dangling.append({'type': ref_type, 'name': ref_name, 'from_para': container})
+
+        return dangling
+
     def _calculate_complexity(self, cfg: dict) -> str:
         """Calculate complexity score based on CFG structure."""
         if not cfg:
@@ -149,17 +230,33 @@ class KnowledgeBaseBuilder:
     # =========================================================================
     
     def _generate_logic_narrative(self):
-        """Generate linear narrative of program flow."""
+        """Generate linear narrative of program flow.
+
+        When ``comments_enriched.json`` is present (produced by step7b), each
+        paragraph's comment block is rendered bilingually:
+
+            > **<English translation>**
+            >
+            > *Original: <Italian source text>*
+
+        When only ``comments.json`` is available (enrichment was skipped or
+        failed), the raw Italian text is shown as plain blockquotes — identical
+        to the previous behaviour.
+
+        If a translation is identical to the original (e.g. code-like strings
+        such as ``PERFORM VARYING I FROM 1 BY 1``), the bilingual display is
+        skipped and the text is shown only once.
+        """
         cfg = self._load_cfg()
-        
+
         if not cfg:
             content = f"# Logic Narrative: {self.program_name}\n\n*No CFG data available.*\n"
             (self.kb_dir / "01_Logic_Narrative.md").write_text(content, encoding='utf-8')
             return
-        
+
         nodes = {n['id']: n for n in cfg.get('nodes', [])}
         edges = cfg.get('edges', [])
-        
+
         # Build adjacency list
         outgoing = defaultdict(list)
         incoming = defaultdict(list)
@@ -169,7 +266,7 @@ class KnowledgeBaseBuilder:
             edge_type = edge.get('edgeType', '')
             outgoing[from_id].append((to_id, edge_type))
             incoming[to_id].append((from_id, edge_type))
-        
+
         # Find entry points (nodes with no incoming FOLLOWED_BY edges)
         entry_points = []
         for node_id in nodes:
@@ -177,40 +274,42 @@ class KnowledgeBaseBuilder:
                 n = nodes[node_id]
                 if n.get('type') in ('PARAGRAPH', 'SECTION', 'PROCEDURE_DIVISION_BODY'):
                     entry_points.append(node_id)
-        
+
         content = f"""# Logic Narrative: {self.program_name}
 
 This document describes the program flow in a linear, readable format.
 
 """
-        
-        # Inject program summary at top if available
+
+        # Load comment sources once — enriched (English) and raw (Italian)
         comments = self._load_comments()
+        enriched = self._load_enriched_comments()
+
+        # --- Program Overview block ---
         if comments and '_PROGRAM_SUMMARY' in comments:
             content += "## Program Overview\n\n"
-            for line in comments['_PROGRAM_SUMMARY']:
-                content += f"> {line}\n"
+            content += self._format_comment_block(
+                '_PROGRAM_SUMMARY', comments, enriched
+            )
             content += "\n---\n\n"
         else:
             content += "---\n\n"
-        
+
         # Process paragraphs/sections
-        processed = set()
-        paragraphs = [n for n in cfg.get('nodes', []) 
+        paragraphs = [n for n in cfg.get('nodes', [])
                       if n.get('type') in ('PARAGRAPH', 'SECTION')]
-        
+
         for para in paragraphs:
             para_name = para.get('name', para.get('label', 'Unknown'))
             content += f"## {para_name}\n\n"
-            
-            # Inject comments as blockquotes
-            comments = self._load_comments()
+
+            # Inject comments — bilingual when translation is available
             para_key = para_name.upper()
-            if comments and para_key in comments:
-                for comment_line in comments[para_key]:
-                    content += f"> {comment_line}\n"
+            comment_block = self._format_comment_block(para_key, comments, enriched)
+            if comment_block:
+                content += comment_block
                 content += "\n"
-            
+
             # Get statements in this paragraph
             statements = self._get_paragraph_statements(para['id'], nodes, outgoing)
 
@@ -218,10 +317,25 @@ This document describes the program flow in a linear, readable format.
                 node = nodes.get(stmt)
                 if not node:
                     continue
-                
+
                 original_text = node.get('originalText', '')
                 node_type = node.get('type', '')
-                
+
+                # Fix 3: skip DIALECT_CONTAINER wrapper nodes whose originalText
+                # is the raw sequence marker (not an actual EXEC statement)
+                if original_text.strip().startswith('_DIALECT_'):
+                    continue
+
+                # Fix 2: skip SENTENCE wrappers that have child statement nodes —
+                # the children will be output separately, avoiding duplication
+                if node_type == 'SENTENCE':
+                    children_via_starts_with = [
+                        nid for nid, et in outgoing.get(node['id'], [])
+                        if et == 'STARTS_WITH'
+                    ]
+                    if children_via_starts_with:
+                        continue
+
                 # Format based on type
                 if node_type in ('IF', 'CONDITION'):
                     content += self._format_decision(node, nodes, outgoing)
@@ -235,8 +349,13 @@ This document describes the program flow in a linear, readable format.
                     if clean_text:
                         content += f"- `{clean_text}`\n"
                 elif node_type in ('PERFORM',):
-                    target = self._extract_perform_target(original_text)
-                    content += f"- **PERFORM** `{target}`\n"
+                    upper_orig = original_text.upper()
+                    if 'VARYING' in upper_orig or re.match(r'\s*PERFORM\s+UNTIL\b', upper_orig):
+                        loop_desc = self._extract_perform_loop(original_text)
+                        content += f"- **PERFORM** (loop) `{loop_desc}`\n"
+                    else:
+                        target = self._extract_perform_target(original_text)
+                        content += f"- **PERFORM** `{target}`\n"
             
             content += "\n"
         
@@ -246,6 +365,64 @@ This document describes the program flow in a linear, readable format.
         if self.verbose:
             print(f"  [OK] 01_Logic_Narrative.md ({len(paragraphs)} paragraphs)")
     
+    def _format_comment_block(
+        self,
+        para_key: str,
+        comments: Optional[dict],
+        enriched: dict,
+    ) -> str:
+        """Render comment blockquote(s) for *para_key*.
+
+        Rendering rules (in priority order):
+
+        1. **Bilingual** — when ``comments_enriched.json`` has a successful
+           translation for *para_key* AND the translated English text differs
+           from the original Italian (i.e. translation actually changed the
+           text):
+
+               > **<English translation>**
+               >
+               > *Original: <joined Italian lines>*
+
+        2. **Italian-only fallback** — when no enriched translation exists, or
+           the entry has ``translation_failed: true``, or the English is
+           identical to the Italian (code-heavy comments that MarianMT passes
+           through unchanged):
+
+               > <Italian line 1>
+               > <Italian line 2>
+
+        3. **Empty string** — when *para_key* has no comments at all.
+
+        Args:
+            para_key:  Paragraph name in UPPER CASE (key into *comments*).
+            comments:  Raw Italian comments dict loaded from ``comments.json``.
+            enriched:  Translated entries loaded from ``comments_enriched.json``
+                       (may be empty if enrichment was skipped).
+
+        Returns:
+            Markdown blockquote string (may be empty).
+        """
+        raw_lines: list[str] = (comments or {}).get(para_key, [])
+        entry: dict = enriched.get(para_key, {})
+        english: str = entry.get('english', '').strip()
+        failed: bool = bool(entry.get('translation_failed'))
+
+        if english and not failed:
+            # Join Italian lines for compact display in the "Original:" line
+            original_joined = ' '.join(raw_lines).strip()
+            # Skip bilingual display when translation didn't change the text
+            # (happens with code-heavy comments like "PERFORM VARYING I FROM 1")
+            if english.lower() != original_joined.lower():
+                result = f"> **{english}**\n"
+                if original_joined:
+                    result += f">\n> *Original: {original_joined}*\n"
+                return result
+            # Fall through to Italian-only display
+        if raw_lines:
+            return ''.join(f"> {line}\n" for line in raw_lines)
+        return ''
+
     def _get_paragraph_statements(self, para_id: str, nodes: dict, outgoing: dict) -> list:
         """Get ordered list of statement IDs in a paragraph."""
         statements = []
@@ -294,12 +471,23 @@ This document describes the program flow in a linear, readable format.
         result = f"\n### EVALUATE Block\n```cobol\n{original[:200]}...\n```\n\n"
         return result
     
+    # SQL structural markers that belong to the DATA DIVISION — not executable
+    # statements. Filter them from the procedure narrative (Fix 6).
+    _NON_EXEC_SQL_MARKERS = (
+        'BEGIN DECLARE SECTION', 'END DECLARE SECTION', 'INCLUDE', 'WHENEVER',
+    )
+
     def _format_exec_block(self, node: dict) -> str:
         """Format EXEC SQL/CICS blocks."""
         original = node.get('originalText', '')
-        if 'EXEC SQL' in original.upper():
+        upper = original.upper()
+        if 'EXEC SQL' in upper:
+            # Skip DATA DIVISION structural markers — not executable statements
+            for marker in self._NON_EXEC_SQL_MARKERS:
+                if marker in upper:
+                    return ''
             return f"- **SQL:** `{self._clean_statement(original)}`\n"
-        elif 'EXEC CICS' in original.upper():
+        elif 'EXEC CICS' in upper:
             return f"- **CICS:** `{self._clean_statement(original)}`\n"
         return f"- `{self._clean_statement(original)}`\n"
     
@@ -327,6 +515,16 @@ This document describes the program flow in a linear, readable format.
         if match:
             return match.group(1)
         return "Unknown"
+
+    def _extract_perform_loop(self, text: str) -> str:
+        """Extract PERFORM VARYING/UNTIL loop description preserving bounds.
+
+        Returns the full clause after PERFORM (e.g.
+        ``VARYING IX FROM 1 BY 1 UNTIL IX > LENGTH OF WS-STRIN``).
+        """
+        clean = self._clean_statement(text)
+        m = re.match(r'PERFORM\s+(.*)', clean, re.IGNORECASE)
+        return m.group(1).strip() if m else clean
 
     # =========================================================================
     # 02_Data_Dictionary.md
@@ -371,7 +569,7 @@ This document describes the program flow in a linear, readable format.
         for var in ws_vars:
             level = var.get('level', '')
             name = var.get('name', '')
-            pic = self._extract_pic(var.get('rawText', ''))
+            pic = self._extract_pic(var.get('raw', ''))
             dtype = var.get('dataType', '')
             section = var.get('section', '')
             content += f"| {level:02d} | {name} | {pic} | {dtype} | {section} |\n"
@@ -385,7 +583,7 @@ This document describes the program flow in a linear, readable format.
             for var in ls_vars:
                 level = var.get('level', '')
                 name = var.get('name', '')
-                pic = self._extract_pic(var.get('rawText', ''))
+                pic = self._extract_pic(var.get('raw', ''))
                 dtype = var.get('dataType', '')
                 content += f"| {level:02d} | {name} | {pic} | {dtype} |\n"
         
@@ -464,17 +662,29 @@ This document describes the program flow in a linear, readable format.
                 'sql_statements': []
             },
             'calls': [],
-            'cics': []
+            'cics': [],
+            'cics_calls': [],
         }
         
         var_values = self._load_variable_values()
 
+        # Node types that represent individual statements (not containers).
+        # PARAGRAPH/SENTENCE/PARAGRAPHS/PROCEDURE_DIVISION_BODY nodes contain
+        # the full block text and would cause over-extraction if scanned.
+        _ATOMIC_TYPES = {
+            'CALL', 'EXEC_SQL', 'EXEC_CICS',
+            'DIALECT', 'DIALECT_CONTAINER',  # CICS/SQL in Che4z dialect nodes
+            'MOVE', 'PERFORM', 'IF_BRANCH', 'EVALUATE',
+            'GOTO', 'INITIALIZE', 'STOP_RUN', 'GOBACK',
+        }
+
         if cfg:
             for node in cfg.get('nodes', []):
+                node_type = node.get('type', '')
                 original = node.get('originalText', '').upper()
 
-                # SQL detection
-                if 'EXEC SQL' in original:
+                # SQL detection — only on statement-level nodes
+                if 'EXEC SQL' in original and node_type in _ATOMIC_TYPES:
                     # Flag dynamic SQL (PREPARE / EXECUTE IMMEDIATE)
                     if self._is_dynamic_sql(original):
                         deps['database']['dynamic_sql'] = True
@@ -489,13 +699,18 @@ This document describes the program flow in a linear, readable format.
                                   or 'DELETE' in original):
                                 deps['database']['tables_updated'].extend(tables)
 
-                # CALL detection — literal and dynamic (R5.2)
-                if 'CALL' in original:
+                # CALL detection — only on CALL-type nodes to avoid over-extraction
+                # from PARAGRAPH/SENTENCE container nodes (R5.2)
+                if 'CALL' in original and node_type == 'CALL':
                     target = self._extract_literal_call_target(original)
+                    using_params = self._extract_call_using(original)
                     if target:
                         existing = [c.get('target') for c in deps['calls']]
                         if target not in existing:
-                            deps['calls'].append({'target': target})
+                            entry = {'target': target}
+                            if using_params:
+                                entry['using'] = using_params
+                            deps['calls'].append(entry)
                     else:
                         # Dynamic CALL: CALL <variable-name>
                         dyn_m = re.search(
@@ -510,32 +725,66 @@ This document describes the program flow in a linear, readable format.
                                     if resolved and resolved not in [
                                         c.get('target') for c in deps['calls']
                                     ]:
-                                        deps['calls'].append({
+                                        call_entry: dict = {
                                             'target': resolved,
                                             'source': 'dynamic',
                                             'variable': var_name,
-                                        })
+                                        }
+                                        if using_params:
+                                            call_entry['using'] = using_params
+                                        deps['calls'].append(call_entry)
                             else:
-                                unknown_entry = {
+                                unknown_entry: dict = {
                                     'target': 'UNKNOWN',
                                     'source': 'dynamic',
                                     'variable': var_name,
                                 }
+                                if using_params:
+                                    unknown_entry['using'] = using_params
                                 if unknown_entry not in deps['calls']:
                                     deps['calls'].append(unknown_entry)
-                
-                # CICS detection
-                if 'EXEC CICS' in original:
+
+                # CICS detection — only on statement-level nodes
+                if 'EXEC CICS' in original and node_type in _ATOMIC_TYPES:
                     cics_cmd = self._extract_cics_command(original)
                     if cics_cmd:
                         deps['cics'].append(cics_cmd)
-        
+                    # Extract PROGRAM() target for LINK and XCTL commands
+                    if cics_cmd in ('LINK', 'XCTL'):
+                        cics_prog = self._extract_cics_program(original)
+                        if cics_prog:
+                            deps['cics_calls'].append({'command': cics_cmd, 'target': cics_prog})
+                        else:
+                            # Indirect target: PROGRAM(VARIABLE-NAME)
+                            # Resolve via variable_values.json
+                            prog_var = self._extract_cics_program_variable(original)
+                            if prog_var:
+                                known_vals = var_values.get(prog_var, [])
+                                for val in known_vals:
+                                    resolved = val.strip("'\"").upper()
+                                    if resolved:
+                                        deps['cics_calls'].append({
+                                            'command': cics_cmd,
+                                            'target': resolved,
+                                            'source': 'indirect_variable',
+                                            'variable': prog_var,
+                                        })
+
         # Deduplicate
         deps['database']['tables_read'] = sorted(set(deps['database']['tables_read']))
         deps['database']['tables_updated'] = sorted(set(deps['database']['tables_updated']))
         deps['database']['sql_statements'] = sorted(set(deps['database']['sql_statements']))
         deps['cics'] = sorted(set(deps['cics']))
-        
+        # Deduplicate cics_calls by (command, target) key
+        _seen_cics_calls: set = set()
+        _deduped_cics_calls: list = []
+        for _e in deps['cics_calls']:
+            _key = (_e.get('command'), _e.get('target'))
+            if _key not in _seen_cics_calls:
+                _seen_cics_calls.add(_key)
+                _deduped_cics_calls.append(_e)
+        deps['cics_calls'] = _deduped_cics_calls
+
         # Remove empty sections
         if not deps['database']['tables_read'] and not deps['database']['tables_updated']:
             del deps['database']
@@ -543,6 +792,8 @@ This document describes the program flow in a linear, readable format.
             del deps['calls']
         if not deps['cics']:
             del deps['cics']
+        if not deps['cics_calls']:
+            del deps['cics_calls']
         
         output_path = self.kb_dir / "03_Dependencies.yaml"
         output_path.write_text(yaml.dump(deps, default_flow_style=False, sort_keys=False), encoding='utf-8')
@@ -659,6 +910,51 @@ This document describes the program flow in a linear, readable format.
         if match:
             return match.group(1)
         return None
+
+    def _extract_cics_program(self, text: str) -> Optional[str]:
+        """Extract PROGRAM() argument from EXEC CICS LINK/XCTL statements.
+
+        Returns the literal program name (without quotes) when PROGRAM() uses a
+        quoted string.  Returns None when PROGRAM() uses a variable — see
+        ``_extract_cics_program_variable`` for that case.
+        """
+        match = re.search(r"PROGRAM\s*\(\s*['\"]([^'\"]+)['\"]\s*\)", text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return None
+
+    def _extract_cics_program_variable(self, text: str) -> Optional[str]:
+        """Extract the variable name from PROGRAM(VAR) in CICS LINK/XCTL.
+
+        Returns the variable name (uppercase) when PROGRAM() contains an
+        unquoted identifier.  Returns None when PROGRAM() contains a quoted
+        literal (handled by ``_extract_cics_program``).
+        """
+        # Match PROGRAM( followed by an unquoted identifier )
+        match = re.search(
+            r"PROGRAM\s*\(\s*(?!['\"])([A-Za-z][A-Za-z0-9_-]*)\s*\)",
+            text, re.IGNORECASE,
+        )
+        if match:
+            return match.group(1).upper()
+        return None
+
+    def _extract_call_using(self, text: str) -> list:
+        """Extract USING parameter names from a CALL statement (uppercase text).
+
+        Returns a list of variable names appearing after the USING keyword.
+        Stops at BY REFERENCE/VALUE/CONTENT, END-CALL, or end of text.
+        Filters out COBOL syntactic keywords.
+        """
+        m = re.search(
+            r'\bUSING\b(.+?)(?:\bBY\s+(?:REFERENCE|VALUE|CONTENT)\b|\bEND-CALL\b|$)',
+            text, re.IGNORECASE | re.DOTALL,
+        )
+        if not m:
+            return []
+        _NOISE = {'BY', 'REFERENCE', 'VALUE', 'CONTENT', 'ADDRESS', 'OF', 'LENGTH', 'USING'}
+        params = re.findall(r'\b([A-Z][A-Z0-9-]+)\b', m.group(1).upper())
+        return [p for p in params if p not in _NOISE]
     
     # =========================================================================
     # Data Loading
@@ -716,10 +1012,10 @@ This document describes the program flow in a linear, readable format.
         return None
     
     def _load_comments(self) -> Optional[dict]:
-        """Load comments JSON."""
+        """Load raw Italian comments from ``comments.json``."""
         if self._comments is not None:
             return self._comments
-        
+
         comments_path = self.report_dir / "comments.json"
         if comments_path.exists():
             try:
@@ -728,6 +1024,29 @@ This document describes the program flow in a linear, readable format.
             except (json.JSONDecodeError, OSError) as e:
                 print(f"  [WARN] Failed to load comments: {e}", file=sys.stderr)
         return None
+
+    def _load_enriched_comments(self) -> dict:
+        """Load translated comments from ``comments_enriched.json``.
+
+        Returns an empty dict when the file is absent (e.g. enrichment was
+        skipped via ``--no-comment-enrichment``) so callers can always treat
+        the return value as a plain dict without None-checks.
+        """
+        if self._enriched_comments is not None:
+            return self._enriched_comments
+
+        path = self.report_dir / "comments_enriched.json"
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding='utf-8'))
+                self._enriched_comments = data if isinstance(data, dict) else {}
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"  [WARN] Failed to load enriched comments: {e}", file=sys.stderr)
+                self._enriched_comments = {}
+        else:
+            self._enriched_comments = {}
+
+        return self._enriched_comments
 
 
 def build_knowledge_base(report_dir: Path, program_name: str, verbose: bool = True) -> Path:
