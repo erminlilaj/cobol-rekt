@@ -4,6 +4,14 @@ Most recent entries first.
 
 ---
 
+## 2026-04-16 — Fix Java level-88 condition export in data structures JSON
+
+**File(s):** `smojol-core/src/main/java/org/smojol/common/vm/structure/Format1DataStructure.java`
+**What changed:** Overrode `acceptScopedVisitor()` in `Format1DataStructure` to also walk `this.conditions` (level-88 entries stored in a separate list). The base class `CobolDataStructure.acceptScopedVisitor()` only walked `this.structures`, silently omitting all 88-level conditions from the exported `*-data.json` files.
+**Why:** Bug — `cobol_structure_analyzer.py` and `chunk_pipeline.py` both tried to extract 88-level conditions from the data structures JSON but found zero entries in every program because the Java exporter never included them. This blocked the planned `business_rules` RAG chunk type and the `conditions_88` field in `cobol_structure.json`.
+
+---
+
 ## 2026-04-15 — Fix RAG chunk accuracy: parse_quality, cics_calls metadata, SQL false positives, dedup
 
 **File(s):** `chunk_pipeline.py`, `knowledge_base_builder.py`

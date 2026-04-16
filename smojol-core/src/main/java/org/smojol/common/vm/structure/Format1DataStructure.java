@@ -306,6 +306,13 @@ public class Format1DataStructure extends CobolDataStructure {
         this.conditions.forEach(c -> c.accept(visitor, this, stopRecurseCondition, root));
     }
 
+    @Override
+    public void acceptScopedVisitor(ScopedDataStructureVisitor visitor) {
+        ScopedDataStructureVisitor scopedVisitor = visitor.visit(this);
+        this.structures.forEach(s -> s.acceptScopedVisitor(scopedVisitor));
+        this.conditions.forEach(c -> c.acceptScopedVisitor(scopedVisitor));
+    }
+
     private Optional<ConditionalDataStructure> condition(String subRecordID) {
         return conditions.stream().filter(c -> !c.matches(subRecordID).isEmpty()).findFirst();
     }
