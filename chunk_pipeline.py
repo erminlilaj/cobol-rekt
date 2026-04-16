@@ -1143,15 +1143,24 @@ def _build_paragraph_subgraphs(report_dir: Path) -> dict[str, dict]:
         _NON_EXEC_SQL = ('BEGIN DECLARE', 'END DECLARE', 'INCLUDE ', 'WHENEVER ')
         sql_ops: list[str] = []
         cics_cmds: list[str] = []
+        sql_nodes: list[dict] = []  # raw SQL texts for generate_sql_operations()
+        _seen_sql_hashes: set[str] = set()  # dedup: same SQL block appears as multiple nodes
         for nid in subgraph:
-            orig = node_by_id.get(nid, {}).get("originalText", "").upper()
-            if "EXEC SQL" in orig:
-                if not any(marker in orig for marker in _NON_EXEC_SQL):
-                    m = re.search(r"EXEC\s+SQL\s+(\w+)", orig)
+            orig = node_by_id.get(nid, {}).get("originalText", "")
+            orig_upper = orig.upper()
+            if "EXEC SQL" in orig_upper:
+                if not any(marker in orig_upper for marker in _NON_EXEC_SQL):
+                    m = re.search(r"EXEC\s+SQL\s+(\w+)", orig_upper)
                     if m:
-                        sql_ops.append(m.group(1).capitalize())
-            if "EXEC CICS" in orig:
-                m = re.search(r"EXEC\s+CICS\s+(\w+)", orig)
+                        op = m.group(1).capitalize()
+                        # Deduplicate: same SQL text may appear as many CFG nodes
+                        _key = hashlib.sha256(orig.encode()).hexdigest()[:12]
+                        if _key not in _seen_sql_hashes:
+                            _seen_sql_hashes.add(_key)
+                            sql_ops.append(op)
+                            sql_nodes.append({"text": orig, "operation": op})
+            if "EXEC CICS" in orig_upper:
+                m = re.search(r"EXEC\s+CICS\s+(\w+)", orig_upper)
                 if m:
                     cics_cmds.append(m.group(1).capitalize())
 
@@ -1160,6 +1169,7 @@ def _build_paragraph_subgraphs(report_dir: Path) -> dict[str, dict]:
             "node_count": internal_nodes,
             "sql_operations": sorted(set(sql_ops)),
             "cics_commands": sorted(set(cics_cmds)),
+            "sql_nodes": sql_nodes,
         }
 
     return result
@@ -2320,6 +2330,151 @@ def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
 # Group G — section_summary chunks
 # =============================================================================
 
+def generate_business_rules(report_dir: Path, chunks_dir: Path,
+                            program: str, verbose: bool) -> int:
+    """Generate a business_rules chunk aggregating all level-88 conditions.
+
+    Requires Enhancement 0 (Java acceptScopedVisitor fix) to have been applied
+    and programs re-analyzed, otherwise the data structures JSON will have no
+    level-88 nodes and this generator returns 0.
+    """
+    ds_dir = report_dir / "data_structures"
+    if not ds_dir.is_dir():
+        return 0
+    ds_files = list(ds_dir.glob("*-data.json"))
+    if not ds_files:
+        return 0
+    data = load_json(ds_files[0])
+    if not data:
+        return 0
+
+    conditions: list[dict] = []
+
+    def _walk(node: dict, parent_name: str = "") -> None:
+        name = node.get("name", "")
+        level = node.get("levelNumber", 0)
+        if level == 88:
+            raw = node.get("rawText", "").strip()
+            val_m = re.search(r"\bVALUES?\s+(.+?)(?:\s*\.|$)", raw, re.IGNORECASE)
+            val_str = val_m.group(1).strip() if val_m else raw
+            conditions.append({"condition": name, "parent": parent_name, "values": val_str})
+        else:
+            if name and name != "FILLER":
+                parent_name = name
+            for child in node.get("children", []):
+                _walk(child, parent_name)
+
+    for record in data.get("children", []):
+        _walk(record)
+
+    if not conditions:
+        if verbose:
+            print("  business_rules: no 88-level conditions — skipping")
+        return 0
+
+    lines = [f"Business rules and boolean conditions for {program}:"]
+    for c in conditions:
+        lines.append(f"- {c['condition']}: {c['parent']} = {c['values']}")
+
+    chunk_text = "\n".join(lines)
+    if token_count(chunk_text) > MAX_CHUNK_TOKENS:
+        kept = lines[:1]
+        for line in lines[1:]:
+            kept.append(line)
+            if token_count("\n".join(kept)) > MAX_CHUNK_TOKENS - 30:
+                kept.append(f"... and {len(conditions) - len(kept) + 1} more conditions.")
+                break
+        chunk_text = "\n".join(kept)
+
+    metadata = {
+        "chunk_type": "business_rules",
+        "chunk_id": f"{program}:business_rules:main",
+        "parent_program_chunk": f"{program}:program_summary",
+        "program": program,
+        "condition_count": len(conditions),
+        "conditions": [{"name": c["condition"], "parent": c["parent"]} for c in conditions],
+    }
+    write_chunk(chunks_dir, f"{program}__business_rules.json", chunk_text, metadata)
+    if verbose:
+        print(f"  business_rules: {len(conditions)} conditions")
+    return 1
+
+
+_SQL_KEYWORD_EXCLUSIONS = frozenset({
+    'SELECT', 'VALUES', 'SET', 'WHERE', 'TABLE', 'NULL', 'NOT', 'AND', 'OR',
+    'ON', 'AS', 'BY', 'ALL', 'IN', 'IS', 'AT', 'END', 'EXEC', 'SQL',
+})
+
+
+def _extract_sql_tables(sql_text: str) -> list[str]:
+    """Extract table names from a SQL statement text."""
+    tables: set[str] = set()
+    sql_upper = sql_text.upper()
+    for pattern in [
+        r'\bFROM\s+(\w+)',
+        r'\bINTO\s+(\w+)',
+        r'\bUPDATE\s+(\w+)',
+        r'\bJOIN\s+(\w+)',
+        r'\bDELETE\s+FROM\s+(\w+)',
+    ]:
+        for m in re.finditer(pattern, sql_upper):
+            name = m.group(1)
+            if name not in _SQL_KEYWORD_EXCLUSIONS and len(name) >= 2:
+                tables.add(name)
+    return sorted(tables)
+
+
+def generate_sql_operations(report_dir: Path, chunks_dir: Path,
+                            program: str, verbose: bool) -> int:
+    """Generate sql_operation chunks — one per SQL statement per paragraph.
+
+    Only programs with actual EXEC SQL blocks produce chunks (7/365 in corpus).
+    Requires _build_paragraph_subgraphs() to have been called and the subgraphs
+    cached; reads subgraphs fresh here to keep the function self-contained.
+    """
+    subgraphs = _build_paragraph_subgraphs(report_dir)
+    if not subgraphs:
+        return 0
+
+    count = 0
+    for para_name, sg in subgraphs.items():
+        sql_nodes = sg.get("sql_nodes", [])
+        for i, sql_node in enumerate(sql_nodes):
+            operation = sql_node["operation"]
+            orig_text = sql_node["text"]
+            tables = _extract_sql_tables(orig_text)
+
+            # Truncate very long SQL text to keep chunk under token limit
+            display_text = orig_text.strip()[:400]
+
+            chunk_text = (
+                f"SQL {operation} in paragraph {para_name} of {program}:\n"
+                f"Tables: {', '.join(tables) if tables else 'unknown'}\n"
+                f"Statement: {display_text}"
+            )
+
+            safe_id = re.sub(r"[^\w\-]", "_", f"{para_name}_{operation}_{i}")
+            metadata = {
+                "chunk_type": "sql_operation",
+                "chunk_id": f"{program}:sql_operation:{para_name}:{operation}:{i}",
+                "parent_program_chunk": f"{program}:program_summary",
+                "program": program,
+                "paragraph": para_name,
+                "operation": operation,
+                "tables": tables,
+            }
+            write_chunk(chunks_dir, f"{program}__sql_op__{safe_id}.json",
+                        chunk_text, metadata)
+            count += 1
+
+    if verbose:
+        if count:
+            print(f"  sql_operation: {count} chunks")
+        else:
+            print("  sql_operation: no SQL statements — skipping")
+    return count
+
+
 def generate_section_summaries(
     report_dir: Path,
     chunks_dir: Path,
@@ -2623,6 +2778,10 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         summary["paragraph_logic"] = generate_paragraph_logic(
             report_dir, chunks_dir, program, verbose)
         summary["variable_group"] = generate_variable_groups(
+            report_dir, chunks_dir, program, verbose)
+        summary["business_rules"] = generate_business_rules(
+            report_dir, chunks_dir, program, verbose)
+        summary["sql_operation"] = generate_sql_operations(
             report_dir, chunks_dir, program, verbose)
         summary["cobol_analysis_health"] = generate_cobol_analysis_health(
             report_dir, chunks_dir, program, verbose)
