@@ -25,8 +25,10 @@ import yaml
 # Constants
 # =============================================================================
 
-CHUNK_SCHEMA_VERSION = "1.2"  # Added section_summary + workflow chunk types; fixed section metadata
-PIPELINE_VERSION = "1.2"
+CHUNK_SCHEMA_VERSION = "1.3"  # Adds business_rules + sql_operation chunk types; adds used_in_paragraphs,
+                               # copybooks_used, analysis_run_timestamp, reachable metadata; bm25_index.json;
+                               # Java fix: level-88 conditions now exported to data_structures JSON
+PIPELINE_VERSION = "1.3"
 
 # CFG JSON field names (NOT source/target/label as CLAUDE.md incorrectly states)
 EDGE_SOURCE = "fromNodeID"

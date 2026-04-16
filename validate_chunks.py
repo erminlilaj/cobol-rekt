@@ -40,6 +40,20 @@ except ImportError:
 
 REQUIRED_FIELDS = {"schema_version", "pipeline_version", "analysis_timestamp", "content_hash"}
 
+# All known chunk types as of schema 1.3
+VALID_COBOL_CHUNK_TYPES = {
+    "program_summary", "dependencies", "paragraph_logic", "variable_group",
+    "analysis_health", "cobol_analysis_health", "section_summary", "workflow",
+    "business_rules", "sql_operation",
+}
+VALID_JCL_CHUNK_TYPES = {
+    "job_flow", "step_detail",
+    "jcl_cobol_overview", "jcl_cobol_step_relationship", "jcl_dataset_flow",
+    "jcl_analysis_health", "jcl_condition_flow", "analysis_health",
+    "condition_flow",
+}
+VALID_CHUNK_TYPES = VALID_COBOL_CHUNK_TYPES | VALID_JCL_CHUNK_TYPES
+
 # Cross-reference fields that should contain chunk_ids (not bare strings)
 XREF_FIELDS = {"parent_program_chunk", "calls", "related_cobol_chunks",
                "paragraph_chunks", "variable_group_chunks", "related_variable_groups"}
@@ -76,6 +90,12 @@ def _check_hash(text: str, meta: dict, chunk_id: str, errors: list) -> None:
         errors.append(f"  HASH_MISMATCH  {chunk_id}: stored={stored} expected={expected}")
 
 
+def _check_chunk_type(meta: dict, chunk_id: str, warnings: list) -> None:
+    ct = meta.get("chunk_type", "")
+    if ct and ct not in VALID_CHUNK_TYPES:
+        warnings.append(f"  UNKNOWN_TYPE   {chunk_id}: unrecognized chunk_type '{ct}'")
+
+
 def _check_token_limit(text: str, max_tokens: int, chunk_id: str, warnings: list) -> None:
     tc = _count(text)
     if tc > max_tokens:
@@ -108,6 +128,7 @@ def validate(report_dir: Path, corpus_index_path: Path, max_tokens: int, verbose
         "required_field_errors": [],
         "hash_errors": [],
         "token_warnings": [],
+        "unknown_type_warnings": [],
         "xref_errors": [],
         "index_errors": [],
     }
@@ -159,6 +180,7 @@ def validate(report_dir: Path, corpus_index_path: Path, max_tokens: int, verbose
             _check_required_fields(meta, chunk_id, results["required_field_errors"])
             _check_hash(text, meta, chunk_id, results["hash_errors"])
             _check_token_limit(text, max_tokens, chunk_id, results["token_warnings"])
+            _check_chunk_type(meta, chunk_id, results["unknown_type_warnings"])
 
             # Cross-reference check
             for ref in _collect_xrefs(meta):
@@ -230,16 +252,19 @@ def main():
     req_errors = results["required_field_errors"]
     hash_errors = results["hash_errors"]
     tok_warnings = results["token_warnings"]
+    type_warnings = results["unknown_type_warnings"]
     xref_errors = results["xref_errors"]
     index_errors = results["index_errors"]
 
     all_errors = req_errors + hash_errors + xref_errors + index_errors
+    all_warnings = tok_warnings + type_warnings
 
     print(f"\n{'='*60}")
     print(f"Chunks checked:          {total}")
     print(f"Required-field errors:   {len(req_errors)}")
     print(f"Hash mismatches:         {len(hash_errors)}")
     print(f"Over-token-limit chunks: {len(tok_warnings)}")
+    print(f"Unknown chunk types:     {len(type_warnings)}")
     print(f"Dangling cross-refs:     {len(xref_errors)}")
     print(f"Index consistency errors:{len(index_errors)}")
     print(f"{'='*60}")
@@ -263,11 +288,21 @@ def main():
         if len(tok_warnings) > 20:
             print(f"  ... and {len(tok_warnings) - 20} more")
 
+    if args.verbose and type_warnings:
+        print(f"\n[UNKNOWN CHUNK TYPES ({len(type_warnings)} chunks)]")
+        for msg in type_warnings[:20]:
+            print(msg)
+
     if all_errors:
         print(f"\nFAIL — {len(all_errors)} error(s) found.")
         sys.exit(1)
     else:
-        warn_suffix = f" ({len(tok_warnings)} over-token-limit warnings)" if tok_warnings else ""
+        warn_parts = []
+        if tok_warnings:
+            warn_parts.append(f"{len(tok_warnings)} over-limit")
+        if type_warnings:
+            warn_parts.append(f"{len(type_warnings)} unknown-type")
+        warn_suffix = f" ({', '.join(warn_parts)} warnings)" if warn_parts else ""
         print(f"\nPASS — all checks passed.{warn_suffix}")
         sys.exit(0)
 
