@@ -1975,11 +1975,86 @@ def _split_if_needed(filepath: Path, chunks_dir: Path,
         print(f"    Split {stem} into {len(parts)} parts ({tc} tokens)")
 
 
+def generate_bm25_index(chunks_dir: Path, verbose: bool) -> int:
+    """Generate bm25_index.json for hybrid BM25 + vector retrieval.
+
+    Pre-tokenizes every chunk's text into term-frequency maps so that a BM25
+    retriever can be constructed at query time without re-reading all chunks.
+    Includes structured metadata terms as a separate boosted-terms field.
+
+    Returns total number of entries indexed.
+    """
+    _SKIP = {"chunks_manifest.json", "bm25_index.json"}
+    index_entries = []
+
+    for f in sorted(chunks_dir.glob("*.json")):
+        if f.name in _SKIP:
+            continue
+        data = load_json(f)
+        if not data:
+            continue
+        text = data.get("text", "")
+        meta = data.get("metadata", {})
+
+        # Tokenize: COBOL identifiers use [A-Za-z][A-Za-z0-9_-]{2,}
+        tokens = re.findall(r'[A-Za-z][A-Za-z0-9_\-]{2,}', text)
+        tokens_upper = [t.upper() for t in tokens]
+
+        # Term frequency map
+        tf: dict[str, int] = {}
+        for t in tokens_upper:
+            tf[t] = tf.get(t, 0) + 1
+
+        # Structured metadata terms (field values that should be boosted at query time)
+        structured: set[str] = set()
+        for field in ("paragraph", "group_name", "program", "section",
+                      "sql_tables_read", "sql_tables_updated",
+                      "field_names", "cics_commands", "calls", "tables",
+                      "conditions"):
+            val = meta.get(field)
+            if isinstance(val, str) and val:
+                structured.add(val.upper())
+            elif isinstance(val, list):
+                for v in val:
+                    if isinstance(v, str) and v:
+                        structured.add(v.upper())
+                    elif isinstance(v, dict):
+                        # e.g. conditions: [{"name": "...", "parent": "..."}]
+                        for vv in v.values():
+                            if isinstance(vv, str) and vv:
+                                structured.add(vv.upper())
+
+        index_entries.append({
+            "chunk_id": meta.get("chunk_id", f.stem),
+            "file": f.name,
+            "chunk_type": meta.get("chunk_type", "unknown"),
+            "term_freq": tf,
+            "structured_terms": sorted(structured),
+            "total_tokens": len(tokens_upper),
+        })
+
+    avg_len = (
+        sum(e["total_tokens"] for e in index_entries) / len(index_entries)
+        if index_entries else 0.0
+    )
+    index = {
+        "total_chunks": len(index_entries),
+        "avg_doc_length": round(avg_len, 1),
+        "entries": index_entries,
+    }
+    _atomic_write_json(chunks_dir / "bm25_index.json", index)
+    if verbose:
+        print(f"  bm25_index: {len(index_entries)} entries, "
+              f"avg_len={avg_len:.0f} tokens")
+    return len(index_entries)
+
+
 def generate_manifest(chunks_dir: Path, verbose: bool) -> dict:
     """Write chunks_manifest.json summarizing all generated chunks."""
     entries = []
+    _MANIFEST_SKIP = {"chunks_manifest.json", "bm25_index.json"}
     for f in sorted(chunks_dir.glob("*.json")):
-        if f.name == "chunks_manifest.json":
+        if f.name in _MANIFEST_SKIP:
             continue
         data = load_json(f)
         if not data:
@@ -2891,6 +2966,9 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
             report_dir, chunks_dir, verbose)
         summary["step_detail"] = generate_step_details(
             report_dir, chunks_dir, verbose)
+
+    # --- BM25 index (after all chunks written, before manifest) ---
+    summary["bm25_entries"] = generate_bm25_index(chunks_dir, verbose)
 
     # --- Manifest ---
     if verbose:
