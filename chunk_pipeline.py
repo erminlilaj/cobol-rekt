@@ -43,6 +43,10 @@ OVERLAP_TOKENS = 50
 # Set by run_pipeline() from parse_diagnostics.json before any write_chunk() call.
 _CURRENT_PARSE_QUALITY: str = "unknown"
 
+# Analysis run timestamp for the current program (from pipeline_report.json).
+# Set by run_pipeline() before any write_chunk() call; stamped into every chunk.
+_CURRENT_SOURCE_MTIME: str | None = None
+
 
 # =============================================================================
 # Utilities
@@ -97,6 +101,8 @@ def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     metadata["analysis_timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     metadata["content_hash"] = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
     metadata["parse_quality"] = _CURRENT_PARSE_QUALITY
+    if _CURRENT_SOURCE_MTIME:
+        metadata["analysis_run_timestamp"] = _CURRENT_SOURCE_MTIME
     chunk = {"text": text, "metadata": metadata}
     _atomic_write_json(chunks_dir / filename, chunk)
 
@@ -140,6 +146,20 @@ def _get_parse_diagnostics(report_dir: Path) -> dict:
     except (json.JSONDecodeError, OSError) as e:
         print(f"  [WARN] Corrupt parse_diagnostics.json: {e}", file=sys.stderr)
         return {}
+
+
+def _get_source_mtime(report_dir: Path) -> str | None:
+    """Return the analysis run timestamp from pipeline_report.json, or None if unavailable."""
+    pr_path = report_dir / "pipeline_report.json"
+    if pr_path.exists():
+        try:
+            pr = json.loads(pr_path.read_text(encoding="utf-8"))
+            ts = pr.get("timestamp")
+            if ts:
+                return ts
+        except (json.JSONDecodeError, OSError):
+            pass
+    return None
 
 
 def _compute_parse_quality(diag: dict) -> str:
@@ -269,8 +289,14 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
         "confidence": confidence,
     }
     struct = _load_cobol_structure(report_dir)
-    if struct and struct.get("known_system_copybooks"):
-        metadata["known_system_copybooks"] = struct["known_system_copybooks"]
+    if struct:
+        copy_stmts = struct.get("copy_statements", [])
+        if copy_stmts:
+            metadata["copybooks_used"] = list(dict.fromkeys(
+                cs["copybook"] for cs in copy_stmts
+            ))
+        if struct.get("known_system_copybooks"):
+            metadata["known_system_copybooks"] = struct["known_system_copybooks"]
     if parse_coverage_pct is not None:
         metadata["parse_coverage_pct"] = parse_coverage_pct
 
@@ -514,6 +540,13 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         "cics_commands": cics,
         "cics_calls": [{"command": c.get("command"), "target": c.get("target")} for c in cics_calls],
     }
+    struct = _load_cobol_structure(report_dir)
+    if struct:
+        copy_stmts = struct.get("copy_statements", [])
+        if copy_stmts:
+            metadata["copybooks_used"] = list(dict.fromkeys(
+                cs["copybook"] for cs in copy_stmts
+            ))
     write_chunk(
         chunks_dir, f"{program}__dependencies.json",
         "\n".join(lines), metadata,
@@ -1141,6 +1174,13 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
     all_vars = _load_all_variable_names(report_dir)        # R2.5
     var_usage = _build_variable_usage_from_cfg(report_dir, all_vars)  # R2.5
 
+    # Enhancement 2b — copybooks used by this program (added to every paragraph chunk)
+    struct = _load_cobol_structure(report_dir)
+    _copybooks_used: list[str] = []
+    if struct:
+        copy_stmts = struct.get("copy_statements", [])
+        _copybooks_used = list(dict.fromkeys(cs["copybook"] for cs in copy_stmts))
+
     enriched = 0
     for chunk_file in chunks_dir.glob(f"{program}__paragraph__*.json"):
         data = load_json(chunk_file)
@@ -1202,6 +1242,11 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
                     v: vs[:10] for v, vs in vars_in_chunk.items()
                 }
                 changed = True
+
+        # Enhancement 2b — copybooks used by this program
+        if _copybooks_used and "copybooks_used" not in data["metadata"]:
+            data["metadata"]["copybooks_used"] = _copybooks_used
+            changed = True
 
         if changed:
             # Recompute content_hash if text was extended
@@ -2116,6 +2161,7 @@ def enrich_variable_group_usage(chunks_dir: Path, report_dir: Path,
 
         if token_count(data["text"]) + token_count(usage_line) <= MAX_CHUNK_TOKENS:
             data["text"] += "\n" + usage_line
+            data["metadata"]["used_in_paragraphs"] = sorted(usages.keys())[:20]
             _refresh_hash(data)
             vg_file.write_text(
                 json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -2559,9 +2605,10 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
     print(f"Output: {chunks_dir}")
 
     # Set parse quality for this program (R7.1 — stamped into every chunk)
-    global _CURRENT_PARSE_QUALITY
+    global _CURRENT_PARSE_QUALITY, _CURRENT_SOURCE_MTIME
     _diag = _get_parse_diagnostics(report_dir)
     _CURRENT_PARSE_QUALITY = _compute_parse_quality(_diag)
+    _CURRENT_SOURCE_MTIME = _get_source_mtime(report_dir)
 
     summary = {}
 
