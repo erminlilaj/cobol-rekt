@@ -386,6 +386,21 @@ def update_program_summary_chunks(
                 f"called_by={len(prog['called_by'])} entries"
             )
 
+        # Enhancement 7 — also update the dependencies chunk with cross-program call data
+        deps_file = chunks_dir / f"{original_name}__dependencies.json"
+        if deps_file.is_file():
+            try:
+                with open(deps_file, "r") as f:
+                    deps_data = json.load(f)
+                deps_data["metadata"]["calls_programs"] = prog["calls"]
+                deps_data["metadata"]["called_by_programs"] = prog["called_by"]
+                deps_data["metadata"]["entry_type"] = prog["entry_type"]
+                with open(deps_file, "w") as f:
+                    json.dump(deps_data, f, indent=2, ensure_ascii=False)
+                    f.write("\n")
+            except Exception as e:
+                print(f"  Warning: could not update {deps_file.name}: {e}")
+
     return updated
 
 
