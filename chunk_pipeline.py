@@ -1175,6 +1175,66 @@ def _build_paragraph_subgraphs(report_dir: Path) -> dict[str, dict]:
     return result
 
 
+def _compute_reachable_paragraphs(report_dir: Path) -> set[str] | None:
+    """BFS from CFG root via all edge types to find reachable paragraphs.
+
+    Returns a set of paragraph names reachable from the root, or None if
+    CFG data is unavailable (consumers must skip the reachable flag).
+
+    COBOL fall-through semantics: a paragraph with no JUMPS_TO can still be
+    reached via FOLLOWED_BY from the prior paragraph. BFS over all edge types
+    (FOLLOWED_BY + STARTS_WITH + JUMPS_TO) correctly handles this.
+    """
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return None
+    cfg_files = list(cfg_dir.glob("cfg-*.json"))
+    if not cfg_files:
+        return None
+    data = load_json(cfg_files[0])
+    if not data:
+        return None
+
+    nodes = data.get("nodes", [])
+    edges = data.get("edges", [])
+    if not nodes:
+        return set()
+
+    node_by_id = {n["id"]: n for n in nodes}
+
+    # Forward adjacency across all edge types
+    adj: dict[str, list[str]] = {}
+    all_targets: set[str] = set()
+    for e in edges:
+        src, tgt = e[EDGE_SOURCE], e[EDGE_TARGET]
+        adj.setdefault(src, []).append(tgt)
+        all_targets.add(tgt)
+
+    # Root = node(s) with no incoming edges; fall back to first node
+    roots = [n["id"] for n in nodes if n["id"] not in all_targets]
+    if not roots:
+        roots = [nodes[0]["id"]]
+
+    # BFS
+    visited: set[str] = set()
+    queue = list(roots)
+    while queue:
+        nid = queue.pop(0)
+        if nid in visited:
+            continue
+        visited.add(nid)
+        for tgt in adj.get(nid, []):
+            if tgt not in visited:
+                queue.append(tgt)
+
+    return {
+        node_by_id[nid].get("name", "")
+        for nid in visited
+        if node_by_id.get(nid, {}).get("type") == "PARAGRAPH"
+        and node_by_id[nid].get("name", "")
+    }
+
+
 def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
                             program: str, verbose: bool) -> int:
     """Add complexity_local, node_count, variable values, and loop bounds to paragraph chunks."""
@@ -1190,6 +1250,9 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
     if struct:
         copy_stmts = struct.get("copy_statements", [])
         _copybooks_used = list(dict.fromkeys(cs["copybook"] for cs in copy_stmts))
+
+    # Enhancement 4 — dead code detection via CFG BFS
+    reachable_set = _compute_reachable_paragraphs(report_dir)
 
     enriched = 0
     for chunk_file in chunks_dir.glob(f"{program}__paragraph__*.json"):
@@ -1252,6 +1315,11 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
                     v: vs[:10] for v, vs in vars_in_chunk.items()
                 }
                 changed = True
+
+        # Enhancement 4 — dead code detection
+        if reachable_set is not None:
+            data["metadata"]["reachable"] = para_name in reachable_set
+            changed = True
 
         # Enhancement 2b — copybooks used by this program
         if _copybooks_used and "copybooks_used" not in data["metadata"]:
