@@ -43,7 +43,8 @@ public class TestTaskRunner {
                 dir("che-che4z-lsp-for-cobol-integration/server/dialect-idms/target/dialect-idms.jar"),
                 LanguageDialect.COBOL, new FullProgram(FlowchartOutputFormat.MERMAID, idProvider), idProvider, structureBuildStrategy, new ProgramSearch(resourceOperations), resourceOperations)
                 .runForPrograms(ImmutableList.of(task), ImmutableList.of(programName));
-        return results.get(programName).get(1);
+        List<AnalysisTaskResult> taskResults = results.get(programName);
+        return taskResults.get(taskResults.size() - 1);
     }
 
     public static String dir(String path) {

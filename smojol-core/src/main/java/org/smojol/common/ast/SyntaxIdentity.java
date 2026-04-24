@@ -12,14 +12,18 @@ public class SyntaxIdentity<T> {
     public static boolean PERFORM_PROCEDURE(ParseTree t) {
         if (!isStatementOfType(t, CobolParser.PerformStatementContext.class)) return false;
         CobolParser.StatementContext statement = (CobolParser.StatementContext) t;
-        CobolParser.PerformStatementContext performStatementContext = (CobolParser.PerformStatementContext) statement.getChild(0);
+        if (statement.getChildCount() == 0 || !(statement.getChild(0) instanceof CobolParser.PerformStatementContext performStatementContext)) {
+            return false;
+        }
         return performStatementContext.performProcedureStatement() != null;
     }
 
     public static boolean PERFORM_INLINE(ParseTree t) {
         if (!isStatementOfType(t, CobolParser.PerformStatementContext.class)) return false;
         CobolParser.StatementContext statement = (CobolParser.StatementContext) t;
-        CobolParser.PerformStatementContext performStatementContext = (CobolParser.PerformStatementContext) statement.getChild(0);
+        if (statement.getChildCount() == 0 || !(statement.getChild(0) instanceof CobolParser.PerformStatementContext performStatementContext)) {
+            return false;
+        }
         return performStatementContext.performInlineStatement() != null;
     }
 
@@ -30,6 +34,7 @@ public class SyntaxIdentity<T> {
     public static boolean isStatementOfType(ParseTree parseTree, Class clazz) {
         if (parseTree.getClass() != CobolParser.StatementContext.class) return false;
         CobolParser.StatementContext statement = (CobolParser.StatementContext) parseTree;
+        if (statement.getChildCount() == 0) return false;
         return statement.getChild(0).getClass() == clazz;
     }
 

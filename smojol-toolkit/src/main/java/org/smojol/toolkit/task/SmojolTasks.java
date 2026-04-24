@@ -92,6 +92,11 @@ public class SmojolTasks {
             } catch (Exception e) {
                 String taskName = commandLineAnalysisTasks.size() > i
                     ? commandLineAnalysisTasks.get(i).name() : "TASK_" + i;
+                if (i == 0) {
+                    LOGGER.severe("BUILD_BASE_ANALYSIS threw exception, aborting remaining tasks: " + e.getMessage());
+                    results.add(AnalysisTaskResult.ERROR(e, taskName));
+                    break;
+                }
                 LOGGER.warning("Task " + taskName + " threw exception, continuing: " + e.getMessage());
                 results.add(AnalysisTaskResult.ERROR(e, taskName));
             }

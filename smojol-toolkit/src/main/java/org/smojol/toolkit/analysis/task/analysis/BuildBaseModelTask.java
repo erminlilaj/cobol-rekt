@@ -16,6 +16,7 @@ import org.smojol.toolkit.ast.BuildFlowNodesTask;
 import org.smojol.toolkit.ast.FlowNodeServiceImpl;
 import com.mojo.algorithms.task.AnalysisTask;
 import com.mojo.algorithms.task.AnalysisTaskResult;
+import com.mojo.algorithms.task.CommandLineAnalysisTask;
 
 import java.io.IOException;
 import java.util.logging.Logger;
@@ -50,10 +51,10 @@ public class BuildBaseModelTask implements AnalysisTask {
                 LOGGER.warning("LENIENT MODE: Expression resolution failed on partial parse tree: "
                     + e.getMessage() + ". Continuing with unresolved expressions.");
             }
-            return AnalysisTaskResult.OK("BUILD_SEED_MODEL", new BaseAnalysisModel(navigator, rawAST, dataStructures,
+            return AnalysisTaskResult.OK(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS, new BaseAnalysisModel(navigator, rawAST, dataStructures,
                     symbolTable, flowRoot, serialisableAST));
         } catch (IOException e) {
-            return AnalysisTaskResult.ERROR(e, "BUILD_SEED_MODEL");
+            return AnalysisTaskResult.ERROR(e, CommandLineAnalysisTask.BUILD_BASE_ANALYSIS);
         }
     }
 }

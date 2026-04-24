@@ -1,6 +1,8 @@
 package org.smojol.toolkit.analysis.task.analysis;
 
 import com.mojo.woof.Neo4JDriverBuilder;
+import com.mojo.algorithms.task.AnalysisTaskResultError;
+import com.mojo.algorithms.task.AnalysisTaskResultOK;
 import lombok.Getter;
 import org.apache.commons.lang3.tuple.Pair;
 import org.eclipse.lsp.cobol.common.error.SyntaxError;
@@ -48,6 +50,7 @@ public class CodeTaskRunner {
     private static final String LLM_SUMMARY_DIR = "llm_summary";
     private static final String MERMAID_DIR = "mermaid";
     private static final String GRAPHVIZ_DIR = "graphviz";
+    private static final String ANALYSIS_HEALTH_FILENAME = "analysis_health.json";
 
     private final String sourceDir;
     private final List<File> copyBookPaths;
@@ -207,6 +210,7 @@ public class CodeTaskRunner {
         if (lenient && !pipeline.getParseErrors().isEmpty()) {
             writeParseDiagnostics(pipeline, programFilename, reportRootDir);
         }
+        writeAnalysisHealth(pipeline, effectiveTasks, taskResults, programFilename, reportRootDir, lenient);
         return taskResults;
     }
 
@@ -308,5 +312,120 @@ public class CodeTaskRunner {
         } catch (Exception ex) {
             LOGGER.warning("Failed to write parse diagnostics: " + ex.getMessage());
         }
+    }
+
+    private void writeAnalysisHealth(ParsePipeline pipeline, List<CommandLineAnalysisTask> requestedTasks,
+            List<AnalysisTaskResult> taskResults, String programFilename, String reportRootDir, boolean lenient) {
+        String programReportDir = String.format("%s.report", programFilename);
+        Path healthPath = Paths.get(reportRootDir, programReportDir, ANALYSIS_HEALTH_FILENAME)
+                .toAbsolutePath().normalize();
+        try {
+            JsonObject root = new JsonObject();
+            root.addProperty("program", programFilename);
+            root.addProperty("mode", lenient ? "lenient" : "strict");
+            root.addProperty("base_analysis_succeeded", baseAnalysisSucceeded(taskResults));
+            root.addProperty("parse_error_count", parseErrorCount(pipeline, taskResults));
+
+            Double coverage = coveragePercentage(pipeline, taskResults);
+            if (coverage != null) root.addProperty("coverage_percentage", coverage);
+            else root.add("coverage_percentage", JsonNull.INSTANCE);
+
+            root.addProperty("source_lines", pipeline.getSourceLineCount());
+            root.addProperty("total_tree_nodes", pipeline.getTotalTreeNodes());
+            root.addProperty("skipped_variable_count", pipeline.getSkippedDataStructures().size());
+            root.addProperty("data_structures_degraded", pipeline.isDataStructureDegraded());
+            root.add("requested_tasks", new Gson().toJsonTree(requestedTasks.stream()
+                    .map(CommandLineAnalysisTask::name).toList()));
+            root.add("completed_tasks", new Gson().toJsonTree(taskResults.stream()
+                    .filter(AnalysisTaskResult::isSuccess)
+                    .map(r -> ((AnalysisTaskResultOK) r).getTask())
+                    .toList()));
+            root.add("failed_tasks", new Gson().toJsonTree(taskResults.stream()
+                    .filter(r -> !r.isSuccess())
+                    .map(r -> ((AnalysisTaskResultError) r).getTask())
+                    .toList()));
+            root.add("primary_failure", primaryFailure(taskResults));
+
+            Files.createDirectories(healthPath.getParent());
+            Files.writeString(healthPath, new GsonBuilder().setPrettyPrinting().create().toJson(root));
+            LOGGER.info("Analysis health written to " + healthPath);
+        } catch (Exception ex) {
+            LOGGER.warning("Failed to write analysis health: " + ex.getMessage());
+        }
+    }
+
+    private boolean baseAnalysisSucceeded(List<AnalysisTaskResult> taskResults) {
+        if (taskResults.isEmpty()) return false;
+        AnalysisTaskResult firstResult = taskResults.getFirst();
+        return firstResult.isSuccess()
+                && firstResult instanceof AnalysisTaskResultOK ok
+                && CommandLineAnalysisTask.BUILD_BASE_ANALYSIS.name().equals(ok.getTask());
+    }
+
+    private int parseErrorCount(ParsePipeline pipeline, List<AnalysisTaskResult> taskResults) {
+        if (!pipeline.getParseErrors().isEmpty()) return pipeline.getParseErrors().size();
+        return taskResults.stream()
+                .filter(r -> !r.isSuccess())
+                .map(r -> ((AnalysisTaskResultError) r).getException())
+                .filter(ParseDiagnosticRuntimeError.class::isInstance)
+                .map(ParseDiagnosticRuntimeError.class::cast)
+                .findFirst()
+                .map(e -> e.getErrors().size())
+                .orElse(0);
+    }
+
+    private Double coveragePercentage(ParsePipeline pipeline, List<AnalysisTaskResult> taskResults) {
+        if (pipeline.getSourceLineCount() <= 0) return null;
+        List<SyntaxError> errors = !pipeline.getParseErrors().isEmpty()
+                ? pipeline.getParseErrors()
+                : taskResults.stream()
+                        .filter(r -> !r.isSuccess())
+                        .map(r -> ((AnalysisTaskResultError) r).getException())
+                        .filter(ParseDiagnosticRuntimeError.class::isInstance)
+                        .map(ParseDiagnosticRuntimeError.class::cast)
+                        .findFirst()
+                        .map(ParseDiagnosticRuntimeError::getErrors)
+                        .orElse(List.of());
+        if (errors.isEmpty()) return 100.0;
+        Set<Integer> errorLines = new HashSet<>();
+        int nullLocationErrors = 0;
+        for (SyntaxError error : errors) {
+            if (error.getLocation() != null && error.getLocation().getLocation() != null
+                    && error.getLocation().getLocation().getRange() != null
+                    && error.getLocation().getLocation().getRange().getStart() != null) {
+                var range = error.getLocation().getLocation().getRange();
+                if (range.getEnd() != null) {
+                    for (int l = range.getStart().getLine(); l <= range.getEnd().getLine(); l++) {
+                        errorLines.add(l);
+                    }
+                } else {
+                    errorLines.add(range.getStart().getLine());
+                }
+            } else {
+                nullLocationErrors++;
+            }
+        }
+
+        int affectedLines = errorLines.size() + (nullLocationErrors * 3);
+        double coverage = (pipeline.getSourceLineCount() - affectedLines) * 100.0 / pipeline.getSourceLineCount();
+        return Math.round(coverage * 100.0) / 100.0;
+    }
+
+    private JsonElement primaryFailure(List<AnalysisTaskResult> taskResults) {
+        Optional<AnalysisTaskResultError> maybeError = taskResults.stream()
+                .filter(r -> !r.isSuccess())
+                .map(r -> (AnalysisTaskResultError) r)
+                .findFirst();
+        if (maybeError.isEmpty()) return JsonNull.INSTANCE;
+
+        AnalysisTaskResultError error = maybeError.get();
+        JsonObject root = new JsonObject();
+        root.addProperty("task", error.getTask());
+        root.addProperty("exception_class", error.getException().getClass().getName());
+        root.addProperty("message", error.getException().getMessage());
+        if (error.getException() instanceof ParseDiagnosticRuntimeError parseDiagnosticRuntimeError) {
+            root.addProperty("parse_error_count", parseDiagnosticRuntimeError.getErrors().size());
+        }
+        return root;
     }
 }
