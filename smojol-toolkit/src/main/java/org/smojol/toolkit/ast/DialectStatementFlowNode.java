@@ -13,6 +13,7 @@ import org.smojol.common.navigation.CobolEntityNavigator;
 import org.smojol.common.vm.stack.StackFrames;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -108,9 +109,10 @@ public class DialectStatementFlowNode extends CobolFlowNode {
 
     @Override
     public Map<String, Object> metadata() {
+        Map<String, Object> metadata = new LinkedHashMap<>(DialectMetadataParser.parse(originalText()));
         List<Map<String, Object>> handlerBindings = CicsHandleBindingParser.parse(originalText());
-        if (handlerBindings.isEmpty()) return Map.of();
-        return Map.of("handler_bindings", handlerBindings);
+        if (!handlerBindings.isEmpty()) metadata.put("handler_bindings", handlerBindings);
+        return metadata;
     }
 
     @Override

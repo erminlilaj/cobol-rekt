@@ -41,6 +41,12 @@ class JavaHardeningRegressionTest {
         assertTrue(health.get("base_analysis_succeeded").getAsBoolean());
         assertTrue(jsonArrayContainsString(health.getAsJsonArray("requested_tasks"), "BUILD_BASE_ANALYSIS"));
         assertTrue(jsonArrayContainsString(health.getAsJsonArray("requested_tasks"), "WRITE_CFG"));
+
+        JsonObject selfEvaluation = readJson("hardening-features.cbl.report/analysis_self_evaluation.json");
+        assertEquals("1.0", selfEvaluation.get("schema_version").getAsString());
+        assertTrue(selfEvaluation.get("base_analysis_succeeded").getAsBoolean());
+        assertTrue(selfEvaluation.has("cfg_metrics"));
+        assertTrue(selfEvaluation.has("semantic_coverage"));
     }
 
     @Test
@@ -71,6 +77,37 @@ class JavaHardeningRegressionTest {
         assertTrue(hasHandlerBinding(nodes, "CONDITION", "MAPFAIL"));
         assertTrue(hasHandlerBinding(nodes, "AID", "CLEAR"));
         assertTrue(hasHandlerBinding(nodes, "ABEND", "LABEL"));
+        assertTrue(hasMetadataValue(nodes, "cics_command", "LINK"));
+        assertTrue(hasMetadataValue(nodes, "cics_target_program", "PAYPGM"));
+    }
+
+    @Test
+    void exportsCallGotoPerformAndTypedStatementMetadata() throws IOException {
+        new TestTaskRunner("metadata-features.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("metadata-features.cbl.report/cfg/cfg-metadata-features.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+
+        assertTrue(hasMetadataValue(nodes, "call_target", "SUBPROG"));
+        assertTrue(hasMetadataValue(nodes, "program_reference_type", "STATIC"));
+        assertTrue(hasMetadataValue(nodes, "call_target", "CALL-NAME"));
+        assertTrue(hasMetadataValue(nodes, "program_reference_type", "DYNAMIC"));
+        assertTrue(hasMetadataValue(nodes, "depending_on", "SWITCH-FLAG"));
+        assertTrue(hasMetadataValue(nodes, "perform_start", "LOOP-PARA"));
+        assertTrue(hasNodeType(nodes, "SET"));
+        assertTrue(hasNodeType(nodes, "INITIALIZE"));
+        assertTrue(hasNodeType(nodes, "ACCEPT"));
+        assertTrue(hasNodeType(nodes, "INSPECT"));
+        assertTrue(hasNodeType(nodes, "OPEN"));
+        assertTrue(hasNodeType(nodes, "READ"));
+        assertTrue(hasNodeType(nodes, "WRITE"));
+        assertTrue(hasNodeType(nodes, "CLOSE"));
+        assertTrue(hasNodeType(nodes, "CONTINUE"));
+        assertTrue(hasNodeType(nodes, "CANCEL"));
+
+        JsonObject selfEvaluation = readJson("metadata-features.cbl.report/analysis_self_evaluation.json");
+        assertTrue(selfEvaluation.getAsJsonObject("cfg_metrics").get("node_count").getAsInt() > 0);
     }
 
     @Test
@@ -95,12 +132,16 @@ class JavaHardeningRegressionTest {
 
         List<AnalysisTaskResult> taskResults = results.get("missing-copybook.cbl");
         assertEquals(1, taskResults.size());
-        assertTrue(taskResults.getFirst() instanceof AnalysisTaskResultError);
+        assertTrue(taskResults.get(0) instanceof AnalysisTaskResultError);
 
         JsonObject health = readJson("missing-copybook.cbl.report/analysis_health.json");
         assertFalse(health.get("base_analysis_succeeded").getAsBoolean());
         assertEquals(1, health.getAsJsonArray("failed_tasks").size());
         assertEquals("BUILD_BASE_ANALYSIS", health.get("primary_failure").getAsJsonObject().get("task").getAsString());
+
+        JsonObject selfEvaluation = readJson("missing-copybook.cbl.report/analysis_self_evaluation.json");
+        assertFalse(selfEvaluation.get("base_analysis_succeeded").getAsBoolean());
+        assertEquals("none", selfEvaluation.get("confidence_label").getAsString());
     }
 
     private JsonObject readJson(String relativePath) throws IOException {
@@ -137,6 +178,13 @@ class JavaHardeningRegressionTest {
                 .flatMap(metadata -> jsonObjects(metadata.getAsJsonArray("handler_bindings")).stream())
                 .anyMatch(binding -> kind.equals(binding.get("handler_kind").getAsString())
                         && handledKey.equals(binding.get("handled_key").getAsString()));
+    }
+
+    private boolean hasMetadataValue(JsonArray nodes, String key, String value) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.get("metadata").getAsJsonObject())
+                .anyMatch(metadata -> metadata.has(key) && value.equals(metadata.get(key).getAsString()));
     }
 
     private boolean jsonArrayContainsString(JsonArray array, String value) {

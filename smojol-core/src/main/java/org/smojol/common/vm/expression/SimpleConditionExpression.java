@@ -36,6 +36,7 @@ public class SimpleConditionExpression extends CobolExpression {
 
     @Override
     public String description() {
+        if (comparison == null) return operationMnemonic + "(" + lhs.description() + ")";
         return operationMnemonic + "(" + lhs.description() + ", " + comparison.description() + ")";
     }
 

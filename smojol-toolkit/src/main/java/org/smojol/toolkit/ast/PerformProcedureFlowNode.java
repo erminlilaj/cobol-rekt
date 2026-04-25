@@ -10,6 +10,7 @@ import org.smojol.common.ast.*;
 import org.smojol.common.pseudocode.SmojolSymbolTable;
 import org.smojol.common.vm.expression.FlowIterationBuilder;
 import org.smojol.common.vm.expression.FlowIteration;
+import org.smojol.common.vm.expression.CobolExpression;
 import org.smojol.common.vm.interpreter.CobolInterpreter;
 import org.smojol.common.vm.interpreter.CobolVmSignal;
 import org.smojol.common.vm.interpreter.FlowControl;
@@ -17,7 +18,9 @@ import org.smojol.common.vm.stack.StackFrames;
 import org.smojol.common.vm.structure.CobolDataStructure;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 public class PerformProcedureFlowNode extends CobolFlowNode implements InternalControlFlowNode {
@@ -140,11 +143,54 @@ public class PerformProcedureFlowNode extends CobolFlowNode implements InternalC
     }
 
     @Override
+    public Map<String, Object> metadata() {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        CobolParser.PerformStatementContext performStatement = new SyntaxIdentity<CobolParser.PerformStatementContext>(getExecutionContext()).get();
+        CobolParser.PerformProcedureStatementContext performProcedure = performStatement.performProcedureStatement();
+        if (performProcedure != null) {
+            metadata.put("perform_start", performProcedure.procedureName().getText());
+            if (performProcedure.through() != null) {
+                metadata.put("perform_end", performProcedure.through().procedureName().getText());
+                metadata.put("perform_through", true);
+            } else {
+                metadata.put("perform_through", false);
+            }
+        }
+        if (startNode != null) metadata.put("resolved_start", startNode.name());
+        if (endNode != null) metadata.put("resolved_end", endNode.name());
+        if (!procedures.isEmpty()) metadata.put("perform_targets", procedures.stream().map(FlowNode::name).toList());
+        if (nestedLoops != null && !nestedLoops.isEmpty()) {
+            metadata.put("loop_iterations", nestedLoops.stream().map(this::iterationMetadata).toList());
+        }
+        return metadata;
+    }
+
+    @Override
     public void resolve(SmojolSymbolTable symbolTable, CobolDataStructure dataStructures) {
         CobolParser.PerformStatementContext performStatement = new SyntaxIdentity<CobolParser.PerformStatementContext>(getExecutionContext()).get();
         CobolParser.PerformProcedureStatementContext performProcedureStatementContext = performStatement.performProcedureStatement();
         nestedLoops = performProcedureStatementContext.performType() != null
                 ? FlowIterationBuilder.build(performProcedureStatementContext.performType(), dataStructures)
                 : ImmutableList.of();
+    }
+
+    private Map<String, Object> iterationMetadata(FlowIteration iteration) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("loop_variable", expressionDescription(iteration.loopVariable()));
+        metadata.put("initial_value", expressionDescription(iteration.initialValue()));
+        metadata.put("max_value", expressionDescription(iteration.maxValue()));
+        metadata.put("condition", expressionDescription(iteration.condition()));
+        metadata.put("update_delta", expressionDescription(iteration.loopUpdate().updateDelta()));
+        metadata.put("condition_test_time", iteration.conditionTestTime().name());
+        return metadata;
+    }
+
+    private String expressionDescription(CobolExpression expression) {
+        if (expression == null) return "";
+        try {
+            return expression.description();
+        } catch (Exception e) {
+            return expression.toString();
+        }
     }
 }

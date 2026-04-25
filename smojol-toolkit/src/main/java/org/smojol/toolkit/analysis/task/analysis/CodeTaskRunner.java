@@ -211,6 +211,18 @@ public class CodeTaskRunner {
             writeParseDiagnostics(pipeline, programFilename, reportRootDir);
         }
         writeAnalysisHealth(pipeline, effectiveTasks, taskResults, programFilename, reportRootDir, lenient);
+        AnalysisSelfEvaluationWriter.write(programFilename, lenient ? "lenient" : "strict",
+                Paths.get(reportRootDir, programReportDir).toAbsolutePath().normalize(),
+                Map.of(
+                        "raw_ast", Path.of(cobolParseTreeOutputPath),
+                        "flow_ast", Path.of(flowASTOutputPath),
+                        "cfg", Path.of(cfgOutputPath),
+                        "data_structures", dataStructuresOutputConfig.outputDir()
+                                .resolve(dataStructuresOutputConfig.filename()),
+                        "unified_model", unifiedModelOutputConfig.outputDir()
+                                .resolve(unifiedModelOutputConfig.filename()),
+                        "analysis_health", Paths.get(reportRootDir, programReportDir, ANALYSIS_HEALTH_FILENAME)
+                ));
         return taskResults;
     }
 

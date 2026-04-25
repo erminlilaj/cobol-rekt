@@ -24,7 +24,9 @@ public class RelationExpression extends CobolExpression {
 
     @Override
     public String description() {
-        return operationMnemonic + "(" + relationalOperation.mnemonic() + ", " + rhs.description() + ")";
+        String operation = relationalOperation == null ? "UNKNOWN_RELATION" : relationalOperation.mnemonic();
+        String rightHandSide = rhs == null ? "<missing-rhs>" : rhs.description();
+        return operationMnemonic + "(" + operation + ", " + rightHandSide + ")";
     }
 
     @Override

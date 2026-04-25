@@ -25,8 +25,10 @@ public class ConditionVisitor extends AntlrCobolExpressionVisitor {
         // TODO: Handle dialect nodes, currently will fail if dialect node is present
         if (ctx.additionalCondition().isEmpty()) return expression;
         CobolExpression modifiedExpression = expression;
-        ComparisonOperator mostRecentOperator = expression.getClass() == SimpleConditionExpression.class ? ((SimpleConditionExpression) expression).getComparison().getRelationalOperation() : null;
-        CobolExpression mostRecentLhs = expression.getClass() == SimpleConditionExpression.class ? ((SimpleConditionExpression) expression).getLhs() : null;
+        SimpleConditionExpression simpleExpression = expression instanceof SimpleConditionExpression e ? e : null;
+        ComparisonOperator mostRecentOperator = simpleExpression != null && simpleExpression.getComparison() != null
+                ? simpleExpression.getComparison().getRelationalOperation() : null;
+        CobolExpression mostRecentLhs = simpleExpression != null ? simpleExpression.getLhs() : null;
         for (CobolParser.AdditionalConditionContext c : ctx.additionalCondition()) {
             AdditionalConditionVisitor additionalConditionVisitor = new AdditionalConditionVisitor(mostRecentLhs, mostRecentOperator, dataRoot);
             c.accept(additionalConditionVisitor);

@@ -22,7 +22,8 @@ public class IdmsExpression extends CobolExpression {
 
     @Override
     public String description() {
-        return operationMnemonic + "(" + expression.getText() + ")";
+        String expressionText = expression == null ? "<missing-expression>" : expression.getText();
+        return operationMnemonic + "(" + expressionText + ")";
     }
 
     // TODO: This is sus
