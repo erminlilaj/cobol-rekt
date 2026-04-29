@@ -147,3 +147,38 @@ artifacts/
 
 
 **/.venv/
+
+# ChromaDB vector store #
+##########################
+.chroma_db/
+
+# Codex agent config #
+######################
+.codex
+.vscode/
+
+# Generated RAG evaluation artifacts #
+######################################
+rag_kb_evaluation.json
+rag_kb_evaluation.csv
+rag_kb_evaluation_report.md
+rag_evaluation_report.md
+rag_index_stdout.txt
+batch_summary_report.json
+
+# Thesis writing files (kept locally, not in repo) #
+####################################################
+main.tex
+presentation.tex
+report_plan.md
+technical_report.md
+technical_report_answers.md
+thesis_progress.md
+ongoingPlan.md
+java_cfg_investigation.md
+improvement_report.md
+
+# AI agent config files #
+##########################
+AGENTS.md
+CLAUDE.md
