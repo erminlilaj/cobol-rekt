@@ -511,21 +511,22 @@ class SandboxEnvironment:
         if self._verbose:
             Colors.print_msg(f"  Source references {len(needed_copybooks)} copybooks", Colors.BLUE)
         
-        for name in needed_copybooks:
+        pending = set(needed_copybooks)
+        seen = set(pending)
+        while pending:
+            name = pending.pop()
             resolved = self._resolver.resolve(name)
             if resolved:
                 target = self._sandbox_copybooks_dir / f"{name}.cpy"
-                if not target.exists():
-                    try:
-                        shutil.copy2(resolved, target)
-                        copied += 1
-                        
-                        # Recursively scan the copybook for nested COPY statements
-                        nested = stub_gen.scan_for_copy_statements(resolved)
-                        needed_copybooks.update(nested)
-                    except Exception as e:
-                        if self._verbose:
-                            Colors.print_msg(f"    [WARN] Could not copy {resolved.name}: {e}", Colors.YELLOW)
+                try:
+                    shutil.copy2(resolved, target)
+                    copied += 1
+                    nested = stub_gen.scan_for_copy_statements(resolved) - seen
+                    seen.update(nested)
+                    pending.update(nested)
+                except Exception as e:
+                    if self._verbose:
+                        Colors.print_msg(f"    [WARN] Could not copy {resolved.name}: {e}", Colors.YELLOW)
         
         if self._verbose:
             Colors.print_msg(f"  Copied {copied} copybooks to sandbox", Colors.GREEN)
