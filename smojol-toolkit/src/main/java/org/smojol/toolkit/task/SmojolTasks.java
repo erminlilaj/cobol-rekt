@@ -84,15 +84,18 @@ public class SmojolTasks {
             try {
                 AnalysisTaskResult result = taskList.get(i).run();
                 results.add(result);
-                // BUILD_BASE_ANALYSIS is always first. If it fails, baseModel is null — abort.
-                if (i == 0 && result instanceof AnalysisTaskResultError) {
+                // Abort remaining tasks if BUILD_BASE_ANALYSIS failed — baseModel is null.
+                boolean isBaseTask = commandLineAnalysisTasks.size() > i
+                        && commandLineAnalysisTasks.get(i) == CommandLineAnalysisTask.BUILD_BASE_ANALYSIS;
+                if (isBaseTask && result instanceof AnalysisTaskResultError) {
                     LOGGER.severe("BUILD_BASE_ANALYSIS failed, aborting remaining tasks");
                     break;
                 }
             } catch (Exception e) {
                 String taskName = commandLineAnalysisTasks.size() > i
                     ? commandLineAnalysisTasks.get(i).name() : "TASK_" + i;
-                if (i == 0) {
+                boolean isBaseTask = CommandLineAnalysisTask.BUILD_BASE_ANALYSIS.name().equals(taskName);
+                if (isBaseTask) {
                     LOGGER.severe("BUILD_BASE_ANALYSIS threw exception, aborting remaining tasks: " + e.getMessage());
                     results.add(AnalysisTaskResult.ERROR(e, taskName));
                     break;

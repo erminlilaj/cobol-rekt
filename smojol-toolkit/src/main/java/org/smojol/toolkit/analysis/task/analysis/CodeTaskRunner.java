@@ -10,6 +10,7 @@ import org.smojol.common.dialect.LanguageDialect;
 import org.smojol.toolkit.analysis.pipeline.*;
 import org.smojol.common.resource.ResourceOperations;
 import com.mojo.algorithms.task.AnalysisTaskResult;
+import org.smojol.toolkit.analysis.error.BaseModelValidationException;
 import org.smojol.toolkit.analysis.error.ParseDiagnosticRuntimeError;
 import org.smojol.toolkit.analysis.graph.neo4j.NodeReferenceStrategy;
 import org.smojol.common.dependency.ComponentsBuilder;
@@ -435,6 +436,10 @@ public class CodeTaskRunner {
         root.addProperty("task", error.getTask());
         root.addProperty("exception_class", error.getException().getClass().getName());
         root.addProperty("message", error.getException().getMessage());
+        if (error.getException() instanceof BaseModelValidationException baseModelValidationException) {
+            root.addProperty("diagnostic_code", baseModelValidationException.getDiagnosticCode());
+            root.addProperty("analysis_stage", baseModelValidationException.getAnalysisStage());
+        }
         if (error.getException() instanceof ParseDiagnosticRuntimeError parseDiagnosticRuntimeError) {
             root.addProperty("parse_error_count", parseDiagnosticRuntimeError.getErrors().size());
         }

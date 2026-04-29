@@ -41,7 +41,9 @@ public class SectionParagraphMap {
 
     public Optional<ParagraphFlowNode> nextParagraph(ParagraphFlowNode n) {
         SectionFlowNode sectionFlowNode = paragraphToSectionMap.get(n);
+        if (sectionFlowNode == null) return Optional.empty();
         List<ParagraphFlowNode> parasForSection = sectionParagraphsMap.get(sectionFlowNode);
+        if (parasForSection == null || parasForSection.isEmpty()) return Optional.empty();
         int paraIndex = parasForSection.indexOf(n);
         if (paraIndex == -1) return Optional.empty();
         return paraIndex == parasForSection.size() - 1 ? Optional.empty() : Optional.of(parasForSection.get(paraIndex + 1));

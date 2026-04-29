@@ -17,6 +17,7 @@ import org.smojol.toolkit.analysis.pipeline.ProgramSearch;
 import org.smojol.toolkit.analysis.task.analysis.CodeTaskRunner;
 import org.smojol.toolkit.interpreter.FullProgram;
 import org.smojol.toolkit.interpreter.structure.OccursIgnoringFormat1DataStructureBuilder;
+import org.smojol.toolkit.task.TaskRunnerMode;
 
 import java.io.File;
 import java.io.IOException;
@@ -112,21 +113,8 @@ class JavaHardeningRegressionTest {
 
     @Test
     void abortsAfterBaseAnalysisFailureWithoutCascadeNoise() throws IOException {
-        LoggingConfig.setupLogging();
-        LocalFilesystemOperations resourceOperations = new LocalFilesystemOperations();
-        UUIDProvider idProvider = new UUIDProvider();
-        Map<String, List<AnalysisTaskResult>> results = new CodeTaskRunner(
-                TestTaskRunner.dir("test-code/flow-ast"),
-                TestTaskRunner.dir("test-code/out"),
-                ImmutableList.of(new File(TestTaskRunner.dir("test-code/flow-ast"))),
-                TestTaskRunner.dir("che-che4z-lsp-for-cobol-integration/server/dialect-idms/target/dialect-idms.jar"),
-                LanguageDialect.COBOL,
-                new FullProgram(FlowchartOutputFormat.MERMAID, idProvider),
-                idProvider,
-                new OccursIgnoringFormat1DataStructureBuilder(),
-                new ProgramSearch(resourceOperations),
-                resourceOperations
-        ).runForPrograms(
+        Map<String, List<AnalysisTaskResult>> results = runTasks(
+                TaskRunnerMode.PRODUCTION_MODE,
                 ImmutableList.of(CommandLineAnalysisTask.WRITE_CFG, CommandLineAnalysisTask.WRITE_FLOW_AST),
                 ImmutableList.of("missing-copybook.cbl"));
 
@@ -142,6 +130,57 @@ class JavaHardeningRegressionTest {
         JsonObject selfEvaluation = readJson("missing-copybook.cbl.report/analysis_self_evaluation.json");
         assertFalse(selfEvaluation.get("base_analysis_succeeded").getAsBoolean());
         assertEquals("none", selfEvaluation.get("confidence_label").getAsString());
+    }
+
+    @Test
+    void transpilerHandlesParagraphsWithoutSections() throws IOException {
+        AnalysisTaskResult taskResult = new TestTaskRunner("no-section-transpiler.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.BUILD_TRANSPILER_FLOWGRAPH);
+
+        assertTrue(taskResult.isSuccess(), taskResult::toString);
+    }
+
+    @Test
+    void reportsStructuredDiagnosticForMissingProcedureBody() throws IOException {
+        Map<String, List<AnalysisTaskResult>> results = runTasks(
+                TaskRunnerMode.PRODUCTION_MODE,
+                ImmutableList.of(CommandLineAnalysisTask.WRITE_CFG, CommandLineAnalysisTask.WRITE_FLOW_AST),
+                ImmutableList.of("missing-procedure-body.cbl"));
+        List<AnalysisTaskResult> taskResults = results.get("missing-procedure-body.cbl");
+
+        assertEquals(1, taskResults.size());
+        assertTrue(taskResults.get(0) instanceof AnalysisTaskResultError);
+
+        JsonObject health = readJson("missing-procedure-body.cbl.report/analysis_health.json");
+        JsonObject primaryFailure = health.get("primary_failure").getAsJsonObject();
+        assertFalse(health.get("base_analysis_succeeded").getAsBoolean());
+        assertEquals("BUILD_BASE_ANALYSIS", primaryFailure.get("task").getAsString());
+        assertEquals("MISSING_PROCEDURE_DIVISION_BODY", primaryFailure.get("diagnostic_code").getAsString());
+
+        JsonObject selfEvaluation = readJson("missing-procedure-body.cbl.report/analysis_self_evaluation.json");
+        assertEquals("MISSING_PROCEDURE_DIVISION_BODY",
+                selfEvaluation.get("primary_failure").getAsJsonObject().get("diagnostic_code").getAsString());
+        assertTrue(hasWarningCode(selfEvaluation.getAsJsonArray("warnings"), "MISSING_PROCEDURE_DIVISION_BODY"));
+    }
+
+    @Test
+    void writesHealthForMissingIdentificationDivisionInLenientMode() throws IOException {
+        runTasks(
+                TaskRunnerMode.LENIENT_MODE,
+                ImmutableList.of(CommandLineAnalysisTask.WRITE_CFG),
+                ImmutableList.of("missing-identification-division.cbl"));
+
+        JsonObject health = readJson("missing-identification-division.cbl.report/analysis_health.json");
+        assertEquals("lenient", health.get("mode").getAsString());
+        assertFalse(health.get("base_analysis_succeeded").getAsBoolean());
+        JsonObject primaryFailure = health.get("primary_failure").getAsJsonObject();
+        assertEquals("BUILD_BASE_ANALYSIS", primaryFailure.get("task").getAsString());
+        assertEquals("MISSING_IDENTIFICATION_DIVISION", primaryFailure.get("diagnostic_code").getAsString());
+
+        JsonObject selfEvaluation = readJson("missing-identification-division.cbl.report/analysis_self_evaluation.json");
+        assertEquals("MISSING_IDENTIFICATION_DIVISION",
+                selfEvaluation.get("primary_failure").getAsJsonObject().get("diagnostic_code").getAsString());
+        assertTrue(hasWarningCode(selfEvaluation.getAsJsonArray("warnings"), "MISSING_IDENTIFICATION_DIVISION"));
     }
 
     private JsonObject readJson(String relativePath) throws IOException {
@@ -195,10 +234,34 @@ class JavaHardeningRegressionTest {
         return false;
     }
 
+    private boolean hasWarningCode(JsonArray warnings, String code) {
+        return jsonObjects(warnings).stream()
+                .anyMatch(warning -> code.equals(warning.get("code").getAsString()));
+    }
+
     private List<JsonObject> jsonObjects(JsonArray array) {
         List<JsonObject> objects = new ArrayList<>();
         if (array == null) return objects;
         array.forEach(element -> objects.add(element.getAsJsonObject()));
         return objects;
+    }
+
+    private Map<String, List<AnalysisTaskResult>> runTasks(TaskRunnerMode mode,
+            List<CommandLineAnalysisTask> tasks, List<String> programs) throws IOException {
+        LoggingConfig.setupLogging();
+        LocalFilesystemOperations resourceOperations = new LocalFilesystemOperations();
+        UUIDProvider idProvider = new UUIDProvider();
+        return new CodeTaskRunner(
+                TestTaskRunner.dir("test-code/flow-ast"),
+                TestTaskRunner.dir("test-code/out"),
+                ImmutableList.of(new File(TestTaskRunner.dir("test-code/flow-ast"))),
+                TestTaskRunner.dir("che-che4z-lsp-for-cobol-integration/server/dialect-idms/target/dialect-idms.jar"),
+                LanguageDialect.COBOL,
+                new FullProgram(FlowchartOutputFormat.MERMAID, idProvider),
+                idProvider,
+                new OccursIgnoringFormat1DataStructureBuilder(),
+                new ProgramSearch(resourceOperations),
+                resourceOperations
+        ).runForPrograms(tasks, programs, mode);
     }
 }

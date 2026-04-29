@@ -35,6 +35,8 @@ public class AnalysisSelfEvaluationWriter {
                     || health.get("base_analysis_succeeded").getAsBoolean();
             root.addProperty("base_analysis_succeeded", baseSucceeded);
             root.add("artifact_presence", artifactPresence(artifacts));
+            JsonObject primaryFailure = object(health, "primary_failure");
+            if (primaryFailure.size() > 0) root.add("primary_failure", primaryFailure);
 
             Evaluation evaluation = new Evaluation();
             JsonObject cfgMetrics = cfgMetrics(cfg, evaluation);
@@ -47,6 +49,10 @@ public class AnalysisSelfEvaluationWriter {
             if (health.has("failed_tasks") && health.get("failed_tasks").isJsonArray()
                     && health.getAsJsonArray("failed_tasks").size() > 0) {
                 evaluation.warn("TASK_FAILURE", "high", "One or more Java analysis tasks failed");
+            }
+            if (primaryFailure.has("diagnostic_code")) {
+                evaluation.warn(primaryFailure.get("diagnostic_code").getAsString(), "high",
+                        string(primaryFailure, "message"));
             }
             if (!baseSucceeded) evaluation.warn("BASE_ANALYSIS_FAILED", "critical", "Base analysis failed; downstream artifacts may be absent");
 
@@ -101,7 +107,7 @@ public class AnalysisSelfEvaluationWriter {
             }
             if (metadata.has("dynamic_call") && metadata.get("dynamic_call").getAsBoolean()) unresolvedTransferCount++;
             if (metadata.has("depending_on")) unresolvedTransferCount++;
-            if (string(node, "originalText").toUpperCase().contains("HANDLE")) cicsHandleCount++;
+            if ("DIALECT".equals(type) && string(node, "originalText").toUpperCase().contains("EXEC CICS HANDLE")) cicsHandleCount++;
             if (metadata.has("handler_bindings") && metadata.get("handler_bindings").isJsonArray()) {
                 cicsHandleBindingCount += metadata.getAsJsonArray("handler_bindings").size();
             }
@@ -220,7 +226,7 @@ public class AnalysisSelfEvaluationWriter {
         if (element == null || element.isJsonNull()) return;
         if (element.isJsonObject()) {
             JsonObject object = element.getAsJsonObject();
-            if (object.has("name")) counts.variableCount++;
+            if (object.has("name") && !string(object, "levelNumber").isEmpty()) counts.variableCount++;
             String level = string(object, "levelNumber");
             if ("88".equals(level)) counts.level88Count++;
             String raw = string(object, "rawText").toUpperCase();
