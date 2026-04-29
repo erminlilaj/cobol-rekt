@@ -25,10 +25,8 @@ import yaml
 # Constants
 # =============================================================================
 
-CHUNK_SCHEMA_VERSION = "1.3"  # Adds business_rules + sql_operation chunk types; adds used_in_paragraphs,
-                               # copybooks_used, analysis_run_timestamp, reachable metadata; bm25_index.json;
-                               # Java fix: level-88 conditions now exported to data_structures JSON
-PIPELINE_VERSION = "1.3"
+CHUNK_SCHEMA_VERSION = "1.4"
+PIPELINE_VERSION = "1.4"
 
 # CFG JSON field names (NOT source/target/label as CLAUDE.md incorrectly states)
 EDGE_SOURCE = "fromNodeID"
@@ -40,6 +38,24 @@ EDGE_TYPE = "edgeType"
 MIN_CHUNK_TOKENS = 20
 MAX_CHUNK_TOKENS = 512
 OVERLAP_TOKENS = 50
+
+ALWAYS_INDEXABLE_THIN_TYPES = frozenset({
+    "cobol_analysis_health",
+    "analysis_health",
+    "jcl_analysis_health",
+})
+NEGATIVE_EVIDENCE_TYPES = frozenset({
+    "dependencies",
+    "cobol_analysis_health",
+    "analysis_health",
+    "jcl_analysis_health",
+})
+
+_COBOL_FIGURATIVE_CONSTANTS = frozenset({
+    "SPACE", "SPACES", "ZERO", "ZEROS", "ZEROES", "NULL", "NULLS",
+    "LOW-VALUE", "LOW-VALUES", "HIGH-VALUE", "HIGH-VALUES",
+    "QUOTE", "QUOTES",
+})
 
 # Parse quality for the current program being chunked.
 # Set by run_pipeline() from parse_diagnostics.json before any write_chunk() call.
@@ -88,6 +104,82 @@ def token_count(text: str) -> int:
     return len(text.split())
 
 
+def token_ids(text: str) -> list[int] | None:
+    """Return BPE token ids when the active counter supports them."""
+    if _USE_BPE and _BPE_ENCODING is not None:
+        return _BPE_ENCODING.encode(text)
+    return None
+
+
+def _decode_token_ids(ids: list[int]) -> str:
+    if _BPE_ENCODING is not None:
+        return _BPE_ENCODING.decode(ids)
+    return ""
+
+
+def _is_valid_program_target(value: str) -> bool:
+    target = str(value or "").strip().strip("'\"").upper()
+    if len(target) < 2:
+        return False
+    if target in _COBOL_FIGURATIVE_CONSTANTS:
+        return False
+    if target.isdigit():
+        return False
+    if any(ch.isspace() for ch in target):
+        return False
+    return bool(re.match(r"^[A-Z][A-Z0-9_-]*$", target))
+
+
+def mark_indexability(text: str, metadata: dict) -> dict:
+    """Set thin_chunk/indexable flags from chunk type and token size."""
+    chunk_type = metadata.get("chunk_type", "")
+    thin = token_count(text) < MIN_CHUNK_TOKENS
+    if chunk_type in ALWAYS_INDEXABLE_THIN_TYPES:
+        metadata["thin_chunk"] = False
+        metadata["indexable"] = True
+    elif thin:
+        metadata["thin_chunk"] = True
+        metadata["indexable"] = chunk_type in NEGATIVE_EVIDENCE_TYPES
+    else:
+        metadata["thin_chunk"] = False
+        metadata.setdefault("indexable", True)
+    return metadata
+
+
+def split_whitespace_text(text: str, max_tokens: int, overlap: int = OVERLAP_TOKENS) -> list[str]:
+    words = text.split()
+    if len(words) <= max_tokens:
+        return [text]
+    parts: list[str] = []
+    start = 0
+    step_overlap = max(0, min(overlap, max_tokens - 1))
+    while start < len(words):
+        end = min(start + max_tokens, len(words))
+        parts.append(" ".join(words[start:end]))
+        if end >= len(words):
+            break
+        start = end - step_overlap
+    return parts
+
+
+def split_bpe_text(text: str, max_tokens: int, overlap: int = OVERLAP_TOKENS) -> list[str]:
+    ids = token_ids(text)
+    if ids is None:
+        return split_whitespace_text(text, max_tokens, overlap)
+    if len(ids) <= max_tokens:
+        return [text]
+    parts: list[str] = []
+    start = 0
+    step_overlap = max(0, min(overlap, max_tokens - 1))
+    while start < len(ids):
+        end = min(start + max_tokens, len(ids))
+        parts.append(_decode_token_ids(ids[start:end]).strip())
+        if end >= len(ids):
+            break
+        start = end - step_overlap
+    return [p for p in parts if p]
+
+
 def _atomic_write_json(path: Path, data):
     """Write JSON atomically via temp file + rename."""
     import os
@@ -98,6 +190,7 @@ def _atomic_write_json(path: Path, data):
 
 def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     """Write a single chunk JSON file."""
+    metadata = mark_indexability(text, metadata)
     metadata["schema_version"] = CHUNK_SCHEMA_VERSION
     metadata["pipeline_version"] = PIPELINE_VERSION
     metadata["analysis_timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -150,6 +243,28 @@ def _get_parse_diagnostics(report_dir: Path) -> dict:
         return {}
 
 
+def _get_analysis_health(report_dir: Path) -> dict:
+    path = report_dir / "analysis_health.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  [WARN] Corrupt analysis_health.json: {e}", file=sys.stderr)
+        return {}
+
+
+def _get_analysis_self_evaluation(report_dir: Path) -> dict:
+    path = report_dir / "analysis_self_evaluation.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  [WARN] Corrupt analysis_self_evaluation.json: {e}", file=sys.stderr)
+        return {}
+
+
 def _get_source_mtime(report_dir: Path) -> str | None:
     """Return the analysis run timestamp from pipeline_report.json, or None if unavailable."""
     pr_path = report_dir / "pipeline_report.json"
@@ -164,8 +279,10 @@ def _get_source_mtime(report_dir: Path) -> str | None:
     return None
 
 
-def _compute_parse_quality(diag: dict) -> str:
+def _compute_parse_quality(diag: dict, health: dict | None = None) -> str:
     """Map parse diagnostics to a quality label: full / partial / degraded / unknown."""
+    if health and health.get("base_analysis_succeeded") is False:
+        return "degraded"
     if not diag:
         return "full"  # absent diagnostics = strict parse succeeded with zero errors
     if diag.get("data_structures_degraded", False):
@@ -921,7 +1038,7 @@ def generate_variable_groups(report_dir: Path, chunks_dir: Path,
 
     # Root node has children = level-01 records
     children = data.get("children", [])
-    count = 0
+    pending_chunks: list[tuple[str, str, dict]] = []
     filler_index = 0
     
     struct = _load_cobol_structure(report_dir)
@@ -1028,10 +1145,51 @@ def generate_variable_groups(report_dir: Path, chunks_dir: Path,
             "filler_count": filler_count,
         }
         safe_name = re.sub(r"[^\w\-]", "_", name)
-        write_chunk(
-            chunks_dir, f"{program}__variable_group__{safe_name}.json",
-            chunk_text, metadata,
-        )
+        pending_chunks.append((f"{program}__variable_group__{safe_name}.json", chunk_text, metadata))
+
+    merged_chunks: list[tuple[str, str, dict]] = []
+    i = 0
+    while i < len(pending_chunks):
+        filename, text, meta = pending_chunks[i]
+        if token_count(text) >= MIN_CHUNK_TOKENS or i + 1 >= len(pending_chunks):
+            merged_chunks.append((filename, text, meta))
+            i += 1
+            continue
+
+        group_names = [meta.get("group_name", "UNKNOWN")]
+        field_names = list(meta.get("field_names", []))
+        child_count = int(meta.get("child_count", 0) or 0)
+        merged_text = text
+        j = i + 1
+        while j < len(pending_chunks):
+            _, next_text, next_meta = pending_chunks[j]
+            if token_count(merged_text) >= MIN_CHUNK_TOKENS:
+                break
+            merged_text += "\n\n" + next_text
+            group_names.append(next_meta.get("group_name", "UNKNOWN"))
+            field_names.extend(next_meta.get("field_names", []))
+            child_count += int(next_meta.get("child_count", 0) or 0)
+            j += 1
+
+        if len(group_names) > 1:
+            meta = {
+                **meta,
+                "group_name": group_names[0],
+                "group_names": group_names,
+                "child_count": child_count,
+                "field_names": list(dict.fromkeys(field_names))[:50],
+            }
+            safe_first = re.sub(r"[^\w\-]", "_", group_names[0])
+            filename = f"{program}__variable_group__{safe_first}.json"
+            merged_chunks.append((filename, merged_text, meta))
+            i = j
+        else:
+            merged_chunks.append((filename, text, meta))
+            i += 1
+
+    count = 0
+    for filename, chunk_text, metadata in merged_chunks:
+        write_chunk(chunks_dir, filename, chunk_text, metadata)
         count += 1
 
     if verbose:
@@ -1937,6 +2095,25 @@ def apply_size_guard(chunks_dir: Path, program_or_job: str,
     return stats
 
 
+def _split_parts_with_context(text: str, metadata: dict) -> list[str]:
+    parts = split_bpe_text(text, MAX_CHUNK_TOKENS, OVERLAP_TOKENS)
+    if len(parts) <= 1:
+        return parts
+
+    chunk_type = metadata.get("chunk_type", "")
+    section = metadata.get("section", "")
+    if chunk_type == "section_summary" and section:
+        section_label = section if str(section).upper().startswith("SECTION") else f"SECTION {section}"
+        continued = f"## Continued section: {section_label}\n\n"
+        adjusted = [parts[0]]
+        budget = max(1, MAX_CHUNK_TOKENS - token_count(continued))
+        for part in parts[1:]:
+            subparts = split_bpe_text(part, budget, OVERLAP_TOKENS)
+            adjusted.extend(continued + subpart for subpart in subparts)
+        return adjusted
+    return parts
+
+
 def _split_if_needed(filepath: Path, chunks_dir: Path,
                      stats: dict, verbose: bool):
     """Split a chunk file if it exceeds MAX_CHUNK_TOKENS."""
@@ -1948,33 +2125,45 @@ def _split_if_needed(filepath: Path, chunks_dir: Path,
     if tc <= MAX_CHUNK_TOKENS:
         return
 
-    words = text.split()
-    parts = []
-    start = 0
-    while start < len(words):
-        end = min(start + MAX_CHUNK_TOKENS, len(words))
-        parts.append(" ".join(words[start:end]))
-        start = end - OVERLAP_TOKENS if end < len(words) else end
-
+    parts = _split_parts_with_context(text, data.get("metadata", {}))
     if len(parts) <= 1:
         return
 
     stem = filepath.stem
+    original_id = data["metadata"].get("chunk_id", stem)
     filepath.unlink()
     for idx, part_text in enumerate(parts, 1):
-        part_meta = {**data["metadata"], "part": idx, "total_parts": len(parts)}
-        part_meta["content_hash"] = hashlib.sha256(
-            part_text.encode("utf-8")
-        ).hexdigest()[:16]
-        part_data = {"text": part_text, "metadata": part_meta}
-        (chunks_dir / f"{stem}__part{idx}.json").write_text(
-            json.dumps(part_data, indent=2, ensure_ascii=False),
-            encoding="utf-8",
+        part_meta = {
+            **data["metadata"],
+            "chunk_id": f"{original_id}:part:{idx}",
+            "split_from": original_id,
+            "part": idx,
+            "part_index": idx,
+            "total_parts": len(parts),
+        }
+        write_chunk(
+            chunks_dir,
+            f"{stem}__part{idx}.json",
+            part_text,
+            part_meta,
         )
 
     stats["split"] += 1
     if verbose:
         print(f"    Split {stem} into {len(parts)} parts ({tc} tokens)")
+
+
+def apply_universal_size_guard(chunks_dir: Path, stats: dict | None = None,
+                               verbose: bool = False) -> dict:
+    """Split any chunk type that exceeds the configured token budget."""
+    if stats is None:
+        stats = {"split": 0}
+    _SKIP = {"chunks_manifest.json", "bm25_index.json"}
+    for f in sorted(chunks_dir.glob("*.json")):
+        if f.name in _SKIP or not f.exists():
+            continue
+        _split_if_needed(f, chunks_dir, stats, verbose)
+    return stats
 
 
 def generate_bm25_index(chunks_dir: Path, verbose: bool) -> int:
@@ -1997,6 +2186,8 @@ def generate_bm25_index(chunks_dir: Path, verbose: bool) -> int:
             continue
         text = data.get("text", "")
         meta = data.get("metadata", {})
+        if meta.get("indexable") is False:
+            continue
 
         # Tokenize: COBOL identifiers use [A-Za-z][A-Za-z0-9_-]{2,}
         tokens = re.findall(r'[A-Za-z][A-Za-z0-9_\-]{2,}', text)
@@ -2012,7 +2203,7 @@ def generate_bm25_index(chunks_dir: Path, verbose: bool) -> int:
         for field in ("paragraph", "group_name", "program", "section",
                       "sql_tables_read", "sql_tables_updated",
                       "field_names", "cics_commands", "calls", "tables",
-                      "conditions"):
+                      "conditions", "cics_call_targets"):
             val = meta.get(field)
             if isinstance(val, str) and val:
                 structured.add(val.upper())
@@ -2075,14 +2266,28 @@ def generate_manifest(chunks_dir: Path, verbose: bool) -> dict:
 
     # Summary by type
     type_counts = {}
+    hash_counts: dict[str, int] = {}
     for e in entries:
         ct = e["chunk_type"]
         type_counts[ct] = type_counts.get(ct, 0) + 1
+    for f in sorted(chunks_dir.glob("*.json")):
+        if f.name in _MANIFEST_SKIP:
+            continue
+        data = load_json(f)
+        if not data:
+            continue
+        h = data.get("metadata", {}).get("content_hash")
+        if h:
+            hash_counts[h] = hash_counts.get(h, 0) + 1
+    duplicate_count = sum(count - 1 for count in hash_counts.values() if count > 1)
 
     manifest = {
         "schema_version": CHUNK_SCHEMA_VERSION,
         "total_chunks": len(entries),
         "type_counts": type_counts,
+        "duplicate_content_hashes": duplicate_count,
+        "within_report_duplicate_content_hashes": duplicate_count,
+        "global_duplicate_content_hashes": duplicate_count,
         "chunks": entries,
     }
     _atomic_write_json(chunks_dir / "chunks_manifest.json", manifest)
@@ -2464,6 +2669,27 @@ def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
         "quality_flags": quality_flags,
         "confidence": confidence_label,
     }
+
+    health = _get_analysis_health(report_dir)
+    if health:
+        metadata["base_analysis_succeeded"] = health.get("base_analysis_succeeded")
+        metadata["completed_tasks"] = health.get("completed_tasks", [])
+        metadata["failed_tasks"] = health.get("failed_tasks", [])
+        metadata["mode"] = health.get("mode")
+
+    self_eval = _get_analysis_self_evaluation(report_dir)
+    if self_eval:
+        coverage = self_eval.get("coverage") or self_eval.get("semantic_coverage", {}) or {}
+        metadata["confidence_score"] = self_eval.get("confidence_score")
+        metadata["confidence_label"] = self_eval.get("confidence_label")
+        metadata["coverage"] = coverage
+        if "typed_node_ratio" in coverage:
+            metadata["typed_node_ratio"] = coverage.get("typed_node_ratio")
+        score = metadata.get("confidence_score")
+        label = metadata.get("confidence_label")
+        if score is not None and label:
+            text += f" Self-evaluation confidence score: {score}/100 ({label})."
+
     write_chunk(chunks_dir, f"{program}__analysis_health.json", text, metadata)
     if verbose:
         print(f"  cobol_analysis_health: confidence={confidence_label}, "
@@ -2549,6 +2775,58 @@ _SQL_KEYWORD_EXCLUSIONS = frozenset({
     'SELECT', 'VALUES', 'SET', 'WHERE', 'TABLE', 'NULL', 'NOT', 'AND', 'OR',
     'ON', 'AS', 'BY', 'ALL', 'IN', 'IS', 'AT', 'END', 'EXEC', 'SQL',
 })
+
+
+def generate_cics_operations(report_dir: Path, chunks_dir: Path,
+                             program: str, verbose: bool) -> int:
+    """Generate one cics_operations chunk from dependency CICS metadata."""
+    deps_path = report_dir / "knowledge_base" / "03_Dependencies.yaml"
+    if not deps_path.exists():
+        return 0
+    deps = load_yaml(deps_path)
+    if not deps:
+        return 0
+
+    cics = deps.get("cics", []) or []
+    raw_calls = deps.get("cics_calls", []) or []
+    cics_calls = [
+        {"command": c.get("command"), "target": str(c.get("target", "")).strip().strip("'\"").upper()}
+        for c in raw_calls
+        if _is_valid_program_target(c.get("target", ""))
+    ]
+    if not cics and not cics_calls:
+        return 0
+
+    commands = sorted({str(cmd).upper() for cmd in cics if cmd})
+    targets = sorted({c["target"] for c in cics_calls if c.get("target")})
+    lines = [f"CICS operations for program {program}:"]
+    if commands:
+        lines.append(f"CICS commands used: {', '.join(commands)}.")
+    if cics_calls:
+        lines.append("CICS program transfers:")
+        for call in cics_calls:
+            cmd = (call.get("command") or "LINK/XCTL").upper()
+            lines.append(f"- {cmd} to program {call['target']}")
+
+    metadata = {
+        "chunk_type": "cics_operations",
+        "chunk_id": f"{program}:cics_operations",
+        "parent_program_chunk": f"{program}:program_summary",
+        "program": program,
+        "cics_commands": commands,
+        "cics_command_count": len(set(commands)),
+        "cics_calls": cics_calls,
+        "cics_call_targets": targets,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__cics_operations.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        print(f"  cics_operations: commands={len(commands)}, targets={len(targets)}")
+    return 1
 
 
 def _extract_sql_tables(sql_text: str) -> list[str]:
@@ -2907,7 +3185,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
     # Set parse quality for this program (R7.1 — stamped into every chunk)
     global _CURRENT_PARSE_QUALITY, _CURRENT_SOURCE_MTIME
     _diag = _get_parse_diagnostics(report_dir)
-    _CURRENT_PARSE_QUALITY = _compute_parse_quality(_diag)
+    _CURRENT_PARSE_QUALITY = _compute_parse_quality(_diag, _get_analysis_health(report_dir))
     _CURRENT_SOURCE_MTIME = _get_source_mtime(report_dir)
 
     summary = {}
@@ -2919,6 +3197,8 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         summary["program_summary"] = generate_program_summary(
             report_dir, chunks_dir, program, verbose)
         summary["dependencies"] = generate_dependencies(
+            report_dir, chunks_dir, program, verbose)
+        summary["cics_operations"] = generate_cics_operations(
             report_dir, chunks_dir, program, verbose)
         summary["paragraph_logic"] = generate_paragraph_logic(
             report_dir, chunks_dir, program, verbose)
@@ -2968,6 +3248,10 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
             report_dir, chunks_dir, verbose)
         summary["step_detail"] = generate_step_details(
             report_dir, chunks_dir, verbose)
+
+    # --- Universal size guard (after all chunk generation, before indexing) ---
+    split_stats = apply_universal_size_guard(chunks_dir, {"split": 0}, verbose)
+    summary["universal_splits"] = split_stats.get("split", 0)
 
     # --- BM25 index (after all chunks written, before manifest) ---
     summary["bm25_entries"] = generate_bm25_index(chunks_dir, verbose)

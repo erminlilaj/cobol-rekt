@@ -39,12 +39,13 @@ except ImportError:
 
 
 REQUIRED_FIELDS = {"schema_version", "pipeline_version", "analysis_timestamp", "content_hash"}
+SUPPORTED_SCHEMA_VERSIONS = {"1.3", "1.4"}
 
 # All known chunk types as of schema 1.3
 VALID_COBOL_CHUNK_TYPES = {
     "program_summary", "dependencies", "paragraph_logic", "variable_group",
     "analysis_health", "cobol_analysis_health", "section_summary", "workflow",
-    "business_rules", "sql_operation",
+    "business_rules", "sql_operation", "cics_operations",
 }
 VALID_JCL_CHUNK_TYPES = {
     "job_flow", "step_detail",
@@ -96,10 +97,27 @@ def _check_chunk_type(meta: dict, chunk_id: str, warnings: list) -> None:
         warnings.append(f"  UNKNOWN_TYPE   {chunk_id}: unrecognized chunk_type '{ct}'")
 
 
-def _check_token_limit(text: str, max_tokens: int, chunk_id: str, warnings: list) -> None:
+def _check_schema_version(meta: dict, chunk_id: str, warnings: list) -> None:
+    version = meta.get("schema_version")
+    if version and version not in SUPPORTED_SCHEMA_VERSIONS:
+        warnings.append(f"  UNKNOWN_SCHEMA {chunk_id}: schema_version '{version}' not supported")
+
+
+def _check_optional_self_eval_fields(meta: dict, chunk_id: str, warnings: list) -> None:
+    if meta.get("chunk_type") == "cobol_analysis_health" and "confidence_score" not in meta:
+        warnings.append(f"  MISSING_SELF_EVAL {chunk_id}: optional self-evaluation fields absent")
+
+
+def _check_token_limit(text: str, max_tokens: int, chunk_id: str,
+                       meta: dict, errors: list, warnings: list) -> int:
     tc = _count(text)
     if tc > max_tokens:
-        warnings.append(f"  OVER_LIMIT     {chunk_id}: {tc} tokens > {max_tokens}")
+        msg = f"  OVER_LIMIT     {chunk_id}: {tc} tokens > {max_tokens}"
+        if meta.get("indexable") is False:
+            warnings.append(msg)
+        else:
+            errors.append(msg)
+    return tc
 
 
 def _collect_xrefs(meta: dict) -> list[str]:
@@ -127,10 +145,15 @@ def validate(report_dir: Path, corpus_index_path: Path, max_tokens: int, verbose
         "chunks_checked": 0,
         "required_field_errors": [],
         "hash_errors": [],
+        "token_errors": [],
         "token_warnings": [],
         "unknown_type_warnings": [],
+        "schema_warnings": [],
+        "self_eval_warnings": [],
         "xref_errors": [],
         "index_errors": [],
+        "max_token_count": 0,
+        "max_token_chunk_id": "",
     }
 
     # --- Collect all manifests and build global chunk_id → file lookup ---
@@ -153,6 +176,9 @@ def validate(report_dir: Path, corpus_index_path: Path, max_tokens: int, verbose
             meta = data.get("metadata", {})
             chunk_id = meta.get("chunk_id", fname)
             all_chunk_ids.add(chunk_id)
+            split_from = meta.get("split_from")
+            if split_from:
+                all_chunk_ids.add(split_from)
             if meta.get("chunk_type") == "program_summary":
                 program_summary_programs.add(meta.get("program", ""))
 
@@ -179,8 +205,16 @@ def validate(report_dir: Path, corpus_index_path: Path, max_tokens: int, verbose
 
             _check_required_fields(meta, chunk_id, results["required_field_errors"])
             _check_hash(text, meta, chunk_id, results["hash_errors"])
-            _check_token_limit(text, max_tokens, chunk_id, results["token_warnings"])
+            tc = _check_token_limit(
+                text, max_tokens, chunk_id, meta,
+                results["token_errors"], results["token_warnings"],
+            )
+            if tc > results["max_token_count"]:
+                results["max_token_count"] = tc
+                results["max_token_chunk_id"] = chunk_id
             _check_chunk_type(meta, chunk_id, results["unknown_type_warnings"])
+            _check_schema_version(meta, chunk_id, results["schema_warnings"])
+            _check_optional_self_eval_fields(meta, chunk_id, results["unknown_type_warnings"])
 
             # Cross-reference check
             for ref in _collect_xrefs(meta):
@@ -251,20 +285,25 @@ def main():
     total = results["chunks_checked"]
     req_errors = results["required_field_errors"]
     hash_errors = results["hash_errors"]
+    tok_errors = results["token_errors"]
     tok_warnings = results["token_warnings"]
     type_warnings = results["unknown_type_warnings"]
+    schema_warnings = results["schema_warnings"]
     xref_errors = results["xref_errors"]
     index_errors = results["index_errors"]
 
-    all_errors = req_errors + hash_errors + xref_errors + index_errors
-    all_warnings = tok_warnings + type_warnings
+    all_errors = req_errors + hash_errors + tok_errors + xref_errors + index_errors
+    all_warnings = tok_warnings + type_warnings + schema_warnings
 
     print(f"\n{'='*60}")
     print(f"Chunks checked:          {total}")
     print(f"Required-field errors:   {len(req_errors)}")
     print(f"Hash mismatches:         {len(hash_errors)}")
-    print(f"Over-token-limit chunks: {len(tok_warnings)}")
+    print(f"Over-token errors:       {len(tok_errors)}")
+    print(f"Over-token warnings:     {len(tok_warnings)}")
+    print(f"Max token count:         {results['max_token_count']} ({results['max_token_chunk_id']})")
     print(f"Unknown chunk types:     {len(type_warnings)}")
+    print(f"Schema warnings:         {len(schema_warnings)}")
     print(f"Dangling cross-refs:     {len(xref_errors)}")
     print(f"Index consistency errors:{len(index_errors)}")
     print(f"{'='*60}")
@@ -273,6 +312,7 @@ def main():
         for section, label in [
             (req_errors, "REQUIRED FIELD ERRORS"),
             (hash_errors, "HASH MISMATCHES"),
+            (tok_errors, "TOKEN LIMIT ERRORS"),
             (xref_errors, "DANGLING CROSS-REFERENCES"),
             (index_errors, "INDEX CONSISTENCY"),
         ]:
@@ -293,6 +333,11 @@ def main():
         for msg in type_warnings[:20]:
             print(msg)
 
+    if args.verbose and schema_warnings:
+        print(f"\n[SCHEMA WARNINGS ({len(schema_warnings)} chunks)]")
+        for msg in schema_warnings[:20]:
+            print(msg)
+
     if all_errors:
         print(f"\nFAIL — {len(all_errors)} error(s) found.")
         sys.exit(1)
@@ -302,6 +347,8 @@ def main():
             warn_parts.append(f"{len(tok_warnings)} over-limit")
         if type_warnings:
             warn_parts.append(f"{len(type_warnings)} unknown-type")
+        if schema_warnings:
+            warn_parts.append(f"{len(schema_warnings)} schema")
         warn_suffix = f" ({', '.join(warn_parts)} warnings)" if warn_parts else ""
         print(f"\nPASS — all checks passed.{warn_suffix}")
         sys.exit(0)
