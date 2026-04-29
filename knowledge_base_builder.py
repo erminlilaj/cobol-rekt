@@ -18,6 +18,13 @@ from typing import Optional
 from collections import defaultdict
 
 
+_COBOL_FIGURATIVE_CONSTANTS = frozenset({
+    "SPACE", "SPACES", "ZERO", "ZEROS", "ZEROES", "NULL", "NULLS",
+    "LOW-VALUE", "LOW-VALUES", "HIGH-VALUE", "HIGH-VALUES",
+    "QUOTE", "QUOTES",
+})
+
+
 class KnowledgeBaseBuilder:
     """Builds LLM-optimized knowledge base from analysis outputs."""
     
@@ -34,6 +41,19 @@ class KnowledgeBaseBuilder:
         self._data_structures = None
         self._comments = None
         self._enriched_comments = None
+
+    @staticmethod
+    def _is_valid_target(resolved: str) -> bool:
+        target = str(resolved or "").strip().strip("'\"").upper()
+        if len(target) < 2:
+            return False
+        if target in _COBOL_FIGURATIVE_CONSTANTS:
+            return False
+        if target.isdigit():
+            return False
+        if any(ch.isspace() for ch in target):
+            return False
+        return bool(re.match(r"^[A-Z][A-Z0-9_-]*$", target))
     
     def build(self) -> Path:
         """Build complete knowledge base. Returns output directory."""
@@ -124,6 +144,8 @@ class KnowledgeBaseBuilder:
                 content += f"> - … and {len(dangling) - 15} more\n"
             content += "\n"
 
+        content += self._build_analysis_quality_section()
+
         output_path = self.kb_dir / "00_Executive_Summary.md"
         output_path.write_text(content, encoding='utf-8')
         
@@ -190,6 +212,61 @@ class KnowledgeBaseBuilder:
                 dangling.append({'type': ref_type, 'name': ref_name, 'from_para': container})
 
         return dangling
+
+    def _load_copybook_manifest(self) -> dict:
+        path = self.report_dir / "copybook_manifest.json"
+        if not path.exists():
+            return {}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _build_analysis_quality_section(self) -> str:
+        manifest = self._load_copybook_manifest()
+        summary = manifest.get("summary", {}) if manifest else {}
+        total = summary.get("total_copybooks", manifest.get("total", 0))
+        resolved = summary.get("resolved", manifest.get("resolved", 0))
+        pct = summary.get("resolved_percentage")
+        if pct is None:
+            pct = round((resolved / total) * 100, 1) if total else 100.0
+
+        parse_errors = 0
+        diag_path = self.report_dir / "parse_diagnostics.json"
+        if diag_path.exists():
+            try:
+                diag = json.loads(diag_path.read_text(encoding="utf-8"))
+                parse_errors = int(diag.get("error_summary", {}).get("total_errors", 0) or 0)
+            except (json.JSONDecodeError, OSError, ValueError):
+                parse_errors = 0
+
+        stubbed = [
+            (name, info)
+            for name, info in (manifest.get("copybooks", {}) if manifest else {}).items()
+            if info.get("is_stub")
+        ]
+        if not manifest and parse_errors == 0:
+            return ""
+
+        if parse_errors == 0 and not stubbed:
+            confidence = "High"
+        elif parse_errors <= 5 and len(stubbed) <= 3:
+            confidence = "Medium"
+        else:
+            confidence = "Low"
+
+        content = "\n## Analysis Quality\n\n"
+        content += "| Metric | Value |\n|--------|-------|\n"
+        content += f"| Confidence | **{confidence}** |\n"
+        content += f"| Copybook Resolution | {resolved} / {total} ({pct:.1f}%) |\n"
+        content += f"| Parse Errors | {parse_errors} |\n"
+        if stubbed:
+            content += "\n### Stubbed Copybooks\n\n"
+            content += "| Copybook | Status |\n|----------|--------|\n"
+            for name, info in sorted(stubbed):
+                status = info.get("status", "stubbed")
+                content += f"| `{name}` | {status} |\n"
+        return content
 
     def _calculate_complexity(self, cfg: dict) -> str:
         """Calculate complexity score based on CFG structure."""
@@ -343,11 +420,18 @@ This document describes the program flow in a linear, readable format.
                     content += self._format_evaluate(node, nodes, outgoing)
                 elif 'EXEC' in original_text.upper():
                     content += self._format_exec_block(node)
-                elif node_type in ('MOVE', 'SENTENCE', 'COMPUTE', 'ADD', 'SUBTRACT'):
+                elif node_type == 'GOTO':
+                    content += self._format_goto(node)
+                elif node_type in ('MOVE', 'SENTENCE', 'COMPUTE', 'ADD', 'SUBTRACT',
+                                   'MULTIPLY', 'DIVIDE', 'SET', 'READ', 'INITIALIZE'):
                     # Simple statement - just show it
                     clean_text = self._clean_statement(original_text)
                     if clean_text:
                         content += f"- `{clean_text}`\n"
+                elif node_type == 'EXIT':
+                    content += self._format_exit(node)
+                elif node_type == 'STOP':
+                    content += self._format_stop(node)
                 elif node_type in ('PERFORM',):
                     upper_orig = original_text.upper()
                     if 'VARYING' in upper_orig or re.match(r'\s*PERFORM\s+UNTIL\b', upper_orig):
@@ -468,8 +552,39 @@ This document describes the program flow in a linear, readable format.
     def _format_evaluate(self, node: dict, nodes: dict, outgoing: dict) -> str:
         """Format EVALUATE as structured Markdown."""
         original = node.get('originalText', '')
-        result = f"\n### EVALUATE Block\n```cobol\n{original[:200]}...\n```\n\n"
+        if len(original) <= 500:
+            return f"\n### EVALUATE Block\n```cobol\n{original}\n```\n\n"
+        result = "\n### EVALUATE Block\n"
+        whens = re.findall(r"^\s*WHEN\s+(.+?)\s*$", original, re.IGNORECASE | re.MULTILINE)
+        for when in whens:
+            result += f"- **WHEN** `{self._clean_statement(when)}`\n"
+        result += "\n"
         return result
+
+    def _format_goto(self, node: dict) -> str:
+        original = node.get('originalText', '')
+        match = re.search(r'\bGO\s+TO\s+([A-Za-z0-9_-]+)', original, re.IGNORECASE)
+        target = match.group(1) if match else self._clean_statement(original)
+        return f"- **GO TO** `{target}`\n"
+
+    def _format_exit(self, node: dict) -> str:
+        clean = self._clean_statement(node.get('originalText', ''))
+        upper = clean.upper()
+        if upper in {'EXIT', 'EXIT.'}:
+            return ''
+        if upper.startswith('EXIT PERFORM'):
+            return "- **EXIT PERFORM**\n"
+        if upper.startswith('EXIT PARAGRAPH'):
+            return "- **EXIT PARAGRAPH**\n"
+        if upper.startswith('EXIT SECTION'):
+            return "- **EXIT SECTION**\n"
+        return f"- **EXIT** `{clean}`\n"
+
+    def _format_stop(self, node: dict) -> str:
+        clean = self._clean_statement(node.get('originalText', ''))
+        if clean.upper().startswith('STOP RUN'):
+            return "- **STOP RUN**\n"
+        return f"- **STOP** `{clean}`\n"
     
     # SQL structural markers that belong to the DATA DIVISION — not executable
     # statements. Filter them from the procedure narrative (Fix 6).
@@ -575,7 +690,7 @@ This document describes the program flow in a linear, readable format.
             content += f"| {level:02d} | {name} | {pic} | {dtype} | {section} |\n"
 
         # Linkage section
-        ls_vars = [v for v in variables if v.get('section') == 'LINKAGE_SECTION']
+        ls_vars = [v for v in variables if v.get('section') == 'LINKAGE']
         if ls_vars:
             content += f"\n## Linkage Section Variables\n\n"
             content += "| Level | Variable Name | Picture Clause | Data Type |\n"
@@ -704,7 +819,7 @@ This document describes the program flow in a linear, readable format.
                 if 'CALL' in original and node_type == 'CALL':
                     target = self._extract_literal_call_target(original)
                     using_params = self._extract_call_using(original)
-                    if target:
+                    if target and self._is_valid_target(target):
                         existing = [c.get('target') for c in deps['calls']]
                         if target not in existing:
                             entry = {'target': target}
@@ -722,7 +837,7 @@ This document describes the program flow in a linear, readable format.
                             if known_vals:
                                 for val in known_vals:
                                     resolved = val.strip("'\"").upper()
-                                    if resolved and resolved not in [
+                                    if self._is_valid_target(resolved) and resolved not in [
                                         c.get('target') for c in deps['calls']
                                     ]:
                                         call_entry: dict = {
@@ -752,7 +867,7 @@ This document describes the program flow in a linear, readable format.
                     # Extract PROGRAM() target for LINK and XCTL commands
                     if cics_cmd in ('LINK', 'XCTL'):
                         cics_prog = self._extract_cics_program(original)
-                        if cics_prog:
+                        if cics_prog and self._is_valid_target(cics_prog):
                             deps['cics_calls'].append({'command': cics_cmd, 'target': cics_prog})
                         else:
                             # Indirect target: PROGRAM(VARIABLE-NAME)
@@ -762,7 +877,7 @@ This document describes the program flow in a linear, readable format.
                                 known_vals = var_values.get(prog_var, [])
                                 for val in known_vals:
                                     resolved = val.strip("'\"").upper()
-                                    if resolved:
+                                    if self._is_valid_target(resolved):
                                         deps['cics_calls'].append({
                                             'command': cics_cmd,
                                             'target': resolved,
