@@ -7,4 +7,4 @@
 	url = https://github.com/asengupta/woof.git
 [submodule "mojo-common"]
 	path = mojo-common
-	url = https://github.com/asengupta/mojo-common.git
+	url = git@github.com:erminlilaj/mojo-common.git
