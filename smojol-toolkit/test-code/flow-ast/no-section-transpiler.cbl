@@ -1,0 +1,13 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. NO-SECTION.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+           01 WS-VALUE PIC 9 VALUE 1.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           DISPLAY "START".
+           PERFORM SECOND-PARA.
+           GOBACK.
+       SECOND-PARA.
+           DISPLAY WS-VALUE.
+           GOBACK.
