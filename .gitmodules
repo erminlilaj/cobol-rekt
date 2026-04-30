@@ -1,7 +1,7 @@
 [submodule "che-che4z-lsp-for-cobol-integration"]
 	path = che-che4z-lsp-for-cobol-integration
-	url = https://github.com/avishek-sen-gupta/che-che4z-lsp-for-cobol-integration.git
-	branch = poc
+	url = git@github.com:erminlilaj/che-che4z-lsp-for-cobol-integration.git
+	branch = cobol-rekt-integration
 [submodule "woof"]
 	path = woof
 	url = https://github.com/asengupta/woof.git
