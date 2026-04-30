@@ -8,3 +8,6 @@
 [submodule "mojo-common"]
 	path = mojo-common
 	url = git@github.com:erminlilaj/mojo-common.git
+[submodule "thesis-documentation"]
+	path = thesis-documentation
+	url = git@github.com:erminlilaj/thesis-documentation.git

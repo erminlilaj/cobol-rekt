@@ -4,6 +4,20 @@ Most recent entries first.
 
 ---
 
+## 2026-04-30 — corpus_baseline.py + branch/tag safety infrastructure (proposal 0005 Steps 1+0)
+
+**File(s):** `corpus_baseline.py`, `baselines/submodule_pins_pre_step1.txt`, `baselines/baseline_pre_integration.json`, `baselines/baseline_self_diff.log`
+**What changed:** Created `feature/integration-research` branch, tagged `snapshot/pre-integration`, recorded submodule pins, and implemented read-only corpus baseline tool. Generated pre-integration baseline (486 programs) and verified self-diff reports zero changes.
+**Why:** Proposal 0005 gate — every Che4z/IMS/CICS integration step is gated by a baseline diff before commit. Captures parse coverage, CFG metrics, construct presence (EVALUATE, EXEC DLI, COPY REPLACING), dependency counts, and chunk stats per program.
+
+---
+
+## 2026-04-29 — Restore RAG readiness Python changes after reset
+
+**File(s):** `analysis/sandbox_manager.py`, `chunk_pipeline.py`, `validate_chunks.py`, `knowledge_base_builder.py`, `test_chunk_pipeline.py`, `test_knowledge_base_builder.py`, `test_rag_kb_evaluator.py`
+**What changed:** Re-implemented the lost schema 1.4 chunk pipeline changes, validation updates, knowledge-base narrative hardening, and recursive copybook BFS fix. Sanitized test fixtures to use generic placeholder program names.
+**Why:** Recovery after an accidental hard reset removed uncommitted tracked-file changes while the regression tests and evaluator files survived.
+
 ## 2026-04-16 — Fix Java level-88 condition export in data structures JSON
 
 **File(s):** `smojol-core/src/main/java/org/smojol/common/vm/structure/Format1DataStructure.java`
