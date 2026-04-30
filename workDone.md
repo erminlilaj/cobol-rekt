@@ -4,6 +4,14 @@ Most recent entries first.
 
 ---
 
+## 2026-04-30 — Che4z EVALUATE backport + Step 1 baseline artifacts (proposal 0005 Step 1)
+
+**File(s):** `che-che4z-lsp-for-cobol-integration` (cherry-picks 595c7886f + c2ba1be4f), `baselines/mvn_test_pre_step1.log`, `baselines/mvn_test_post_step1.log`, `baselines/mvn_verify_post_step1.log`, `baselines/evaluate-programs.txt`, `baselines/evaluate-programs-resolved.tsv`, `baselines/evaluate-programs-unresolved.txt`, `baselines/baseline_after_evaluate_backport.json`, `baselines/evaluate_backport_regression_analysis.md`
+**What changed:** Applied two Che4z EVALUATE grammar commits to the submodule (stricter END-EVALUATE + recovery fix). Ran pre/post Java test suites (both BUILD SUCCESS). Built source map for all 108 EVALUATE programs (105/108 resolved; 3 unavailable — COND88, IFEVAL, NOTBOOL from April 16 analysis, source files no longer in workspace, all strict-parse successes with zero errors). Reran analyze.py on 105 resolved programs. Generated post-backport baseline and diff.
+**Why:** Proposal 0005 Step 1 — EVALUATE backport prerequisite for IMS/CICS extraction work. Diff reported 9 regressions; none are EVALUATE-related (see baselines/evaluate_backport_regression_analysis.md). Awaiting Codex sign-off before committing submodule pointer.
+
+---
+
 ## 2026-04-30 — corpus_baseline.py + branch/tag safety infrastructure (proposal 0005 Steps 1+0)
 
 **File(s):** `corpus_baseline.py`, `baselines/submodule_pins_pre_step1.txt`, `baselines/baseline_pre_integration.json`, `baselines/baseline_self_diff.log`

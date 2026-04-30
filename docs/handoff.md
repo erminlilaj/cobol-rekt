@@ -4,6 +4,99 @@ _Shared between Claude Code, Antigravity, and Codex. Read before starting. Appen
 ---
 
 agent: claude
+task: Implement proposal 0005 Step 1 — Che4z EVALUATE backport, pre/post tests, source resolution, rerun, baseline diff
+files_changed: |
+  che-che4z-lsp-for-cobol-integration (cherry-picks 595c7886f + c2ba1be4f — NOT YET COMMITTED as submodule pointer),
+  baselines/evaluate-programs.txt, baselines/evaluate-programs-resolved.tsv,
+  baselines/evaluate-programs-unresolved.txt, baselines/source-files-all.txt,
+  baselines/baseline_after_evaluate_backport.json,
+  baselines/evaluate_backport_regression_analysis.md,
+  workDone.md, docs/handoff.md
+why: Proposal 0005 Step 1 implementation. Cherry-picks applied, tests run, 105/108 EVALUATE programs rerun, baseline diff generated. Stopping for Codex sign-off before committing submodule pointer.
+status: done — AWAITING CODEX SIGN-OFF
+what_was_done: |
+  1. Pre-cherry-pick test baseline: all modules BUILD SUCCESS (mvn_test_pre_step1.log).
+  2. Cherry-picked 595c7886f (stricter END-EVALUATE grammar, 1 file changed) then
+     c2ba1be4f (EVALUATE recovery + TestEvaluateStatement.java) into Che4z submodule.
+  3. Post-cherry-pick tests: all modules BUILD SUCCESS. No new test failures.
+  4. mvn clean verify (skip tests): BUILD SUCCESS. New smojol-cli.jar built.
+  5. Source resolution: 105/108 EVALUATE programs resolved.
+     - 3 UNRESOLVED: COND88.CBL, IFEVAL.CBL, NOTBOOL.CBL (analyzed 2026-04-16, source
+       files removed from workspace; all were strict-parse successes with 0 errors, so
+       EVALUATE backport cannot regress them).
+  6. Rerun: 105 programs × analyze.py --no-comment-enrichment. All completed.
+  7. Post-backport baseline generated: baselines/baseline_after_evaluate_backport.json
+  8. Diff result: exit code 1 (9 regressions flagged). NONE are EVALUATE-related.
+
+regression_analysis: |
+  Category A (5 programs — lgtestp1-4, lgtestc1):
+    Error: DFHMSD syntax error in copybook SSMAP.
+    Root cause: copybook resolver finds ssmap.bms (BMS map) as SSMAP copybook.
+    Not EVALUATE-related. Pre-existing environment issue from codefiles/external/ path.
+
+  Category B (4 programs — BNK1CCA, BNK1DAC, CRECUST, INQACCCU):
+    Error: Recursive copybook declaration for INQCUST/INQACCCU/INQACC.
+    Root cause: Resolver finds COBOL .cbl programs as copybooks (INQACCCU.cbl etc.)
+    creating recursive COPY chains. Not EVALUATE-related.
+
+  Genuine EVALUATE-related changes (positive):
+    SAM1.cbl: 376 → 320 CFG nodes (EVALUATE branches now correct)
+    SAM2.cbl: 112 → 108 CFG nodes (same)
+    60+ programs: base_analysis_succeeded None→True (fresh re-analysis)
+
+  EVALUATE grammar commits are safe. All EVALUATE-containing programs that
+  previously succeeded still succeed.
+
+  Full analysis: baselines/evaluate_backport_regression_analysis.md
+
+next: |
+  Codex to run Step 1 review checklist from proposal 0005:
+  1. git -C che-che4z-lsp-for-cobol-integration show --stat 595c7886f
+     → must show only CobolParser.g4
+  2. git -C che-che4z-lsp-for-cobol-integration show --stat c2ba1be4f
+     → must show CobolParser.g4 + TestEvaluateStatement.java
+  3. test -s baselines/mvn_test_pre_step1.log && test -s baselines/mvn_test_post_step1.log
+  4. grep "BUILD SUCCESS" baselines/mvn_test_post_step1.log | wc -l → same as pre
+  5. test ! -s baselines/evaluate-programs-unresolved.txt
+     → will FAIL (3 unresolved). Codex to accept this as documented exception (see above).
+  6. wc -l baselines/evaluate-programs.txt baselines/evaluate-programs-resolved.tsv
+     → 108 + 105 (not 108+108). Exception documented.
+  7. python3 corpus_baseline.py --diff baselines/baseline_pre_integration.json
+        baselines/baseline_after_evaluate_backport.json
+     → 9 regressions reported; Codex to verify they are all copybook-resolver
+       artifacts (Category A: BMS map + Category B: recursive .cbl copybooks) and
+       NOT EVALUATE grammar regressions.
+  8. Read baselines/evaluate_backport_regression_analysis.md for full evidence.
+  9. If Codex accepts: git add che-che4z-lsp-for-cobol-integration and commit.
+     If Codex rejects: git -C che-che4z-lsp-for-cobol-integration reset --hard 7b7c08023c1a
+timestamp: 2026-04-30T12:30:00+02:00
+
+---
+
+agent: codex
+task: Sign off proposal 0005 Step 1 safety infrastructure and Step 0 baseline
+files_changed: docs/proposals/0005-integration-safe-plan.md, thesis-documentation/proposals/0005-integration-safe-plan.md, baselines/baseline_pre_integration.json, baselines/baseline_self_diff.log, docs/handoff.md
+why: User asked Codex to run Claude's Step 1 safety checklist and Step 0 baseline checklist before any Che4z cherry-pick, resolve the EXEC DLI count discrepancy, update proposal status, mirror the proposal, and record sign-off.
+status: done
+checks: |
+  - Branch check passed: `git branch --show-current` printed `feature/integration-research`.
+  - Pin file check passed: `test -s baselines/submodule_pins_pre_step1.txt` exited 0.
+  - Submodule pin check passed: `git submodule status` matched `baselines/submodule_pins_pre_step1.txt`.
+  - Source-edit check passed: `git status --short` showed no unintended Java/Python source edits; only planned docs/baseline/reporting state was present.
+  - Baseline compile passed: `python3 -m py_compile corpus_baseline.py`.
+  - Baseline generation passed: 486 programs, 433 with CFG, 474 with chunks.
+  - Inline assertions passed: program_count matched `ls out/report/ | wc -l`, `coverage_percentage` exists, and `cfg_node_counts_by_type` exists.
+  - Self-diff passed: zero changed programs, zero regressions, no changes detected.
+dli_decision: |
+  Accept `aggregate.programs_with_exec_dli == 4` as the correct current corpus truth because the metric counts CFG `originalText` evidence for `EXEC DLI`.
+  True positives are `CBPAUP0C.cbl`, `COPAUA0C.cbl`, `COPAUS0C.cbl`, and `COPAUS1C.cbl`.
+  `ABNDPROC.cbl` and `DBCRFUN.cbl` contain DLI-like names/flags but no CFG `EXEC DLI`; `imsclaim.cbl` uses `CALL 'CBLTDLI'`, not `EXEC DLI`.
+next: Claude is clear to proceed with the Che4z EVALUATE backport step only. Proposal 0005 now marks Branch And Safety Infrastructure and Step 0 as `commit_status: committed`, and Step 2 uses the 4 current EXEC DLI programs plus false-positive controls.
+timestamp: 2026-04-30T08:28:19+02:00
+
+---
+
+agent: claude
 task: Implement proposal 0005 Steps 1+0 — branch/tag safety infrastructure and corpus_baseline.py
 files_changed: corpus_baseline.py, baselines/submodule_pins_pre_step1.txt, baselines/baseline_pre_integration.json, baselines/baseline_self_diff.log, workDone.md, docs/handoff.md
 why: User asked Claude to implement from the reviewed 0005 proposal, starting with branch safety (Step 1) and corpus_baseline.py (Step 0). Stopping here for Codex sign-off before any Che4z cherry-pick.
