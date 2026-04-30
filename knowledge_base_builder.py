@@ -779,6 +779,7 @@ This document describes the program flow in a linear, readable format.
             'calls': [],
             'cics': [],
             'cics_calls': [],
+            'cics_operations': [],
         }
         
         var_values = self._load_variable_values()
@@ -864,6 +865,25 @@ This document describes the program flow in a linear, readable format.
                     cics_cmd = self._extract_cics_command(original)
                     if cics_cmd:
                         deps['cics'].append(cics_cmd)
+
+                    # Structured operation from Java-enriched metadata
+                    meta = node.get('metadata', {})
+                    if meta.get('cics_operation_type'):
+                        op: dict = {
+                            'command': meta.get('cics_command', cics_cmd or ''),
+                            'type': meta['cics_operation_type'],
+                        }
+                        target_kind = meta.get('cics_target_kind', 'UNKNOWN')
+                        if target_kind != 'UNKNOWN':
+                            op['target_kind'] = target_kind
+                        cics_target = meta.get('cics_target')
+                        if cics_target:
+                            op['target'] = cics_target
+                        target_source = meta.get('cics_target_source')
+                        if target_source and target_source not in ('unknown',):
+                            op['target_source'] = target_source
+                        deps['cics_operations'].append(op)
+
                     # Extract PROGRAM() target for LINK and XCTL commands
                     if cics_cmd in ('LINK', 'XCTL'):
                         cics_prog = self._extract_cics_program(original)
@@ -890,6 +910,15 @@ This document describes the program flow in a linear, readable format.
         deps['database']['tables_updated'] = sorted(set(deps['database']['tables_updated']))
         deps['database']['sql_statements'] = sorted(set(deps['database']['sql_statements']))
         deps['cics'] = sorted(set(deps['cics']))
+        # Deduplicate cics_operations by (command, type, target_kind, target)
+        _seen_ops: set = set()
+        _deduped_ops: list = []
+        for _op in deps['cics_operations']:
+            _op_key = (_op.get('command'), _op.get('type'), _op.get('target_kind'), _op.get('target'), _op.get('target_source'))
+            if _op_key not in _seen_ops:
+                _seen_ops.add(_op_key)
+                _deduped_ops.append(_op)
+        deps['cics_operations'] = _deduped_ops
         # Deduplicate cics_calls by (command, target) key
         _seen_cics_calls: set = set()
         _deduped_cics_calls: list = []
@@ -909,6 +938,8 @@ This document describes the program flow in a linear, readable format.
             del deps['cics']
         if not deps['cics_calls']:
             del deps['cics_calls']
+        if not deps['cics_operations']:
+            del deps['cics_operations']
         
         output_path = self.kb_dir / "03_Dependencies.yaml"
         output_path.write_text(yaml.dump(deps, default_flow_style=False, sort_keys=False), encoding='utf-8')

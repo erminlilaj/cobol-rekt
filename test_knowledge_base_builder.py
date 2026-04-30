@@ -453,6 +453,57 @@ def test_cics_resolver_excludes_spaces_figurative():
     print('PASS test_cics_resolver_excludes_spaces_figurative')
 
 
+def test_cics_operations_from_metadata():
+    """cics_operations: key is built from Java-enriched metadata on CFG nodes."""
+    with tempfile.TemporaryDirectory() as td:
+        report = Path(td) / 'META.CBL.report'
+        report.mkdir(parents=True)
+        cfg = _make_cfg(nodes=[
+            {'id': 'n1', 'type': 'DIALECT',
+             'originalText': 'EXEC CICS STARTBR DATASET(CUSTFILE) END-EXEC',
+             'name': '', 'label': '',
+             'metadata': {
+                 'dialect_family': 'CICS', 'cics_command': 'STARTBR',
+                 'cics_operation_type': 'browse', 'cics_target_kind': 'DATASET',
+                 'cics_target': 'CUSTFILE', 'cics_target_source': 'literal',
+                 'dialect_semantics_status': 'metadata_only'}},
+            {'id': 'n2', 'type': 'DIALECT',
+             'originalText': 'EXEC CICS XCTL PROGRAM(WS-PROG) END-EXEC',
+             'name': '', 'label': '',
+             'metadata': {
+                 'dialect_family': 'CICS', 'cics_command': 'XCTL',
+                 'cics_operation_type': 'program_transfer', 'cics_target_kind': 'PROGRAM',
+                 'cics_target': 'WS-PROG', 'cics_target_source': 'identifier',
+                 'dialect_semantics_status': 'metadata_only'}},
+        ])
+        (report / 'cfg').mkdir()
+        (report / 'cfg' / 'cfg-META.CBL.json').write_text(json.dumps(cfg))
+        (report / 'variable_values.json').write_text('[]')
+        b = _builder(report, 'META.CBL')
+        b.kb_dir = Path(td) / 'kb'
+        b.kb_dir.mkdir(parents=True)
+        b._generate_dependencies()
+        import yaml as _yaml
+        deps = _yaml.safe_load((b.kb_dir / '03_Dependencies.yaml').read_text())
+
+    ops = deps.get('cics_operations', [])
+    assert ops, "cics_operations must be present when metadata has cics_operation_type"
+    cmds = {o['command'] for o in ops}
+    assert 'STARTBR' in cmds, f"Expected STARTBR in cics_operations, got {cmds}"
+    assert 'XCTL' in cmds, f"Expected XCTL in cics_operations, got {cmds}"
+    startbr = next(o for o in ops if o['command'] == 'STARTBR')
+    assert startbr['type'] == 'browse', f"STARTBR type must be browse, got {startbr['type']}"
+    assert startbr.get('target_kind') == 'DATASET'
+    assert startbr.get('target') == 'CUSTFILE'
+    xctl = next(o for o in ops if o['command'] == 'XCTL')
+    assert xctl['type'] == 'program_transfer'
+    assert xctl.get('target_kind') == 'PROGRAM'
+    cics_list = deps.get('cics', [])
+    assert 'STARTBR' in cics_list, "cics: backward-compat list must still contain STARTBR"
+    assert 'XCTL' in cics_list, "cics: backward-compat list must still contain XCTL"
+    print('PASS test_cics_operations_from_metadata')
+
+
 def test_prog_cics_cics_calls_excludes_spaces():
     """After Bug 3 fix, PROG_CICS cics_calls must contain no figurative constants."""
     if not PROG_CICS_REPORT.exists():
@@ -695,6 +746,7 @@ if __name__ == '__main__':
         test_is_valid_target_accepts_real_program_names,
         test_is_valid_target_rejects_edge_cases,
         test_cics_resolver_excludes_spaces_figurative,
+        test_cics_operations_from_metadata,
         test_prog_cics_cics_calls_excludes_spaces,
         test_prog_complex_cics_calls_unaffected_by_bug3_fix,
         # Codex phase-2 fixes

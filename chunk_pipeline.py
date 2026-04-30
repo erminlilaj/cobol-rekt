@@ -2794,13 +2794,21 @@ def generate_cics_operations(report_dir: Path, chunks_dir: Path,
         for c in raw_calls
         if _is_valid_program_target(c.get("target", ""))
     ]
+    cics_ops = deps.get("cics_operations", []) or []
     if not cics and not cics_calls:
         return 0
 
     commands = sorted({str(cmd).upper() for cmd in cics if cmd})
     targets = sorted({c["target"] for c in cics_calls if c.get("target")})
     lines = [f"CICS operations for program {program}:"]
-    if commands:
+    if cics_ops:
+        lines.append("CICS structured operations:")
+        for op in cics_ops:
+            line = f"- {op.get('command', '?')} ({op.get('type', 'other')})"
+            if op.get('target'):
+                line += f" -> {op['target']} [{op.get('target_kind', 'UNKNOWN')}]"
+            lines.append(line + ".")
+    elif commands:
         lines.append(f"CICS commands used: {', '.join(commands)}.")
     if cics_calls:
         lines.append("CICS program transfers:")

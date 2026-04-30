@@ -23,12 +23,10 @@ public class ClassConditionBuilder {
         else if (fixedComparisonContext.ZERO() != null) return IsNumericCondition.isZero(expression);
         else if (fixedComparisonContext.DBCS() != null || fixedComparisonContext.KANJI() != null) {
             return IsAlphabeticCondition.isAlphabetic(expression);
-        }
-        else if (fixedComparisonContext.className() != null) {
+        } else if (fixedComparisonContext.className() != null) {
             LOGGER.warning("User-defined class condition '" + fixedComparisonContext.className().getText()
                 + "' approximated as IS ALPHABETIC");
             return IsAlphabeticCondition.isAlphabetic(expression);
-        }
-        else throw new UnsupportedClassConditionException(fixedComparisonContext.getText());
+        } else throw new UnsupportedClassConditionException(fixedComparisonContext.getText());
     }
 }

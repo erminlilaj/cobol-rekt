@@ -1,0 +1,55 @@
+program: COACCT01.cbl
+calls:
+- target: MQCLOSE
+  using:
+  - MQ-HCONN
+  - MQ-HOBJ
+  - MQ-OPTIONS
+  - MQ-CONDITION-CODE
+  - MQ-REASON-CODE
+- target: MQPUT
+  using:
+  - MQ-HCONN
+  - ERROR-QUEUE-HANDLE
+  - MQ-MESSAGE-DESCRIPTOR
+  - MQ-PUT-MESSAGE-OPTIONS
+  - MQ-BUFFER-LENGTH
+  - MQ-BUFFER
+  - MQ-CONDITION-CODE
+  - MQ-REASON-CODE
+- target: MQGET
+  using:
+  - MQ-HCONN
+  - MQ-HOBJ
+  - MQ-MESSAGE-DESCRIPTOR
+  - MQ-GET-MESSAGE-OPTIONS
+  - MQ-BUFFER-LENGTH
+  - MQ-BUFFER
+  - MQ-DATA-LENGTH
+  - MQ-CONDITION-CODE
+  - MQ-REASON-CODE
+- target: MQOPEN
+  using:
+  - QMGR-HANDLE-CONN
+  - MQ-OBJECT-DESCRIPTOR
+  - MQ-OPTIONS
+  - MQ-HOBJ
+  - MQ-CONDITION-CODE
+  - MQ-REASON-CODE
+cics:
+- READ
+- RETRIEVE
+- RETURN
+- SYNCPOINT
+cics_operations:
+- command: RETURN
+  type: program_transfer
+- command: READ
+  type: file_read
+  target_kind: DATASET
+  target: LIT-ACCTFILENAME
+  target_source: identifier
+- command: SYNCPOINT
+  type: other
+- command: RETRIEVE
+  type: other

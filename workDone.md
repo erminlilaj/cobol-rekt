@@ -4,6 +4,22 @@ Most recent entries first.
 
 ---
 
+## 2026-04-30 — Fix `target_source` accuracy for unquoted CICS FILE/MAP/QUEUE/TRANSID targets
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/DialectMetadataParser.java`, `knowledge_base_builder.py`, `smojol-core/.../ClassConditionBuilder.java`, `baselines/cics_yaml_after/`
+**What changed:** (1) Split optional-quote patterns into `_QUOTED`/`_UNQUOTED` pairs in Java; `resolveTargetKindAndSource()` reads stored `*_source` keys instead of hardcoding `"literal"`. (2) `knowledge_base_builder.py` now forwards `cics_target_source` into each `cics_operations` entry. (3) Fixed pre-existing `RightCurly` checkstyle violations in `ClassConditionBuilder.java` (blocking `mvn compile`). (4) Rebuilt JAR and re-analyzed 4 CICS programs; updated baseline YAMLs now contain `target_source` (17 `identifier`, 4 `literal`).
+**Why:** Unquoted FILE/DATASET names like `LIT-ACCTFILENAME` are Working-Storage identifiers, not string literals. Tagging them `literal` would mislead downstream RAG consumers. Checkstyle fix was required to allow `mvn compile` to pass without `-Dcheckstyle.skip=true`.
+
+---
+
+## 2026-04-30 — Step 3: Extended CICS extraction (proposal 0005)
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/DialectMetadataParser.java`, `knowledge_base_builder.py`, `chunk_pipeline.py`, `test_knowledge_base_builder.py`, `baselines/cics_yaml_after/`, `baselines/baseline_after_cics.json`
+**What changed:** Added structured CICS metadata extraction. Java `DialectMetadataParser.parseCics()` now emits `cics_operation_type` (browse/file_read/file_write/file_delete/program_transfer/transaction_start/other), `cics_target_kind` (FILE/DATASET/PROGRAM/MAP/QUEUE/TRANSID/UNKNOWN), `cics_target`, `cics_target_source`, and `cics_transid` on every DIALECT CFG node. Python `knowledge_base_builder.py` reads these fields and writes a `cics_operations:` list to `03_Dependencies.yaml` while keeping `cics:` and `cics_calls:` intact. `chunk_pipeline.py` prefers structured `cics_operations` in chunk text when available.
+**Why:** Proposal 0005 Step 3 — add semantic CICS classification to the pipeline without breaking existing consumers.
+
+---
+
 ## 2026-04-30 — Che4z EVALUATE backport + Step 1 baseline artifacts (proposal 0005 Step 1)
 
 **File(s):** `che-che4z-lsp-for-cobol-integration` (cherry-picks 595c7886f + c2ba1be4f), `baselines/mvn_test_pre_step1.log`, `baselines/mvn_test_post_step1.log`, `baselines/mvn_verify_post_step1.log`, `baselines/evaluate-programs.txt`, `baselines/evaluate-programs-resolved.tsv`, `baselines/evaluate-programs-unresolved.txt`, `baselines/baseline_after_evaluate_backport.json`, `baselines/evaluate_backport_regression_analysis.md`

@@ -1,0 +1,53 @@
+program: COACTVWC.cbl
+cics:
+- ABEND
+- HANDLE
+- READ
+- RECEIVE
+- RETURN
+- SEND
+- XCTL
+cics_operations:
+- command: ABEND
+  type: other
+- command: HANDLE
+  type: other
+- command: SEND
+  type: other
+- command: RETURN
+  type: program_transfer
+- command: READ
+  type: file_read
+  target_kind: DATASET
+  target: LIT-CUSTFILENAME
+  target_source: identifier
+- command: READ
+  type: file_read
+  target_kind: DATASET
+  target: LIT-ACCTFILENAME
+  target_source: identifier
+- command: READ
+  type: file_read
+  target_kind: DATASET
+  target: LIT-CARDXREFNAME-ACCT-PATH
+  target_source: identifier
+- command: RECEIVE
+  type: other
+  target_kind: MAP
+  target: LIT-THISMAP
+  target_source: identifier
+- command: SEND
+  type: other
+  target_kind: MAP
+  target: CCARD-NEXT-MAP
+  target_source: identifier
+- command: RETURN
+  type: program_transfer
+  target_kind: TRANSID
+  target: LIT-THISTRANID
+  target_source: identifier
+- command: XCTL
+  type: program_transfer
+  target_kind: PROGRAM
+  target: CDEMO-TO-PROGRAM
+  target_source: identifier
