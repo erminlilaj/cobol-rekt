@@ -11,12 +11,30 @@ Output format:
     "PARAGRAPH-NAME": ["Comment line 1", "Comment line 2"],
     "ANOTHER-PARA": ["Its comment"]
 }
+
+Code-like comment blocks are written to a sibling commented_out_code.json
+artifact by extract_comments_to_json(). They are intentionally excluded from
+comments.json so inactive COBOL cannot be indexed as active paragraph logic.
 """
 
 import json
 import re
 from pathlib import Path
 from typing import Optional
+
+
+_COBOL_COMMENT_CODE_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"^\s*(EXEC\s+(CICS|SQL|DLI|IMS)\b)",
+        r"^\s*(MOVE|PERFORM|GO\s+TO|GOBACK|STOP\s+RUN|EXIT|IF|THEN|ELSE|END-IF|"
+        r"EVALUATE|WHEN|READ|READNEXT|READPREV|WRITE|REWRITE|DELETE|START|STARTBR|"
+        r"ENDBR|RESETBR|CALL|COPY|ADD|SUBTRACT|COMPUTE|INITIALIZE|SET)\b",
+        r"^\s*[A-Z0-9][A-Z0-9_-]+\.\s*$",
+        r"^\s*(INPUT|OUTPUT)\s*:\s*$",
+        r"^\s*\d{2}\s+[A-Z0-9_-]+\b",
+    )
+)
 
 
 def is_noise_line(text: str) -> bool:
@@ -50,7 +68,63 @@ def is_noise_line(text: str) -> bool:
     return False
 
 
-def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list[str]]:
+def is_code_like_comment_line(text: str) -> bool:
+    """Return True when a comment line looks like deactivated COBOL."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    return any(pattern.search(stripped) for pattern in _COBOL_COMMENT_CODE_PATTERNS)
+
+
+def is_code_like_comment_block(lines: list[str]) -> bool:
+    """Detect comment blocks that are more likely inactive code than prose."""
+    non_empty = [line for line in lines if line.strip()]
+    if not non_empty:
+        return False
+    code_like = [line for line in non_empty if is_code_like_comment_line(line)]
+    has_exec = any(re.search(r"\bEXEC\s+(CICS|SQL|DLI|IMS)\b", line, re.IGNORECASE)
+                   for line in non_empty)
+    has_paragraph_label = any(re.match(r"^\s*[A-Z0-9][A-Z0-9_-]+\.\s*$", line, re.IGNORECASE)
+                              for line in non_empty)
+    if len(code_like) >= 3:
+        return True
+    if has_exec and len(code_like) >= 2:
+        return True
+    if has_exec and has_paragraph_label:
+        return True
+    return len(code_like) >= 2 and (len(code_like) / len(non_empty)) >= 0.5
+
+
+def _comment_text(entry: dict) -> str:
+    return str(entry.get("text", ""))
+
+
+def _assign_pending_comments(
+    target: str,
+    pending_comments: list[dict],
+    prose_comments: dict[str, list[str]],
+    commented_out_code: dict[str, list[dict]],
+) -> None:
+    if not pending_comments:
+        return
+    lines = [_comment_text(entry) for entry in pending_comments]
+    if is_code_like_comment_block(lines):
+        commented_out_code.setdefault(target, []).append({
+            "line_start": pending_comments[0]["line"],
+            "line_end": pending_comments[-1]["line"],
+            "line_count": len(lines),
+            "reason": "code_like_comment_block",
+            "active": False,
+            "lines": lines,
+        })
+        return
+    prose_comments[target] = lines
+
+
+def extract_comments_with_inactive_code(
+    source_file: Path,
+    verbose: bool = False,
+) -> tuple[dict[str, list[str]], dict[str, list[dict]]]:
     """
     Extract comments from a COBOL source file.
     
@@ -64,14 +138,15 @@ def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list
         verbose: Print progress messages
         
     Returns:
-        Dictionary mapping paragraph names (uppercase) to their comments
+        Tuple of prose comments and inactive code comment blocks, both keyed by
+        paragraph name (uppercase) or _PROGRAM_SUMMARY.
     """
     try:
         content = source_file.read_text(encoding='utf-8', errors='replace')
     except Exception as e:
         if verbose:
             print(f"[WARN] Could not read {source_file}: {e}")
-        return {}
+        return {}, {}
     
     lines = content.split('\n')
     
@@ -84,7 +159,8 @@ def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list
     # Pattern to detect PROCEDURE DIVISION
     proc_div_pattern = re.compile(r'PROCEDURE\s+DIVISION', re.IGNORECASE)
     
-    result = {}
+    result: dict[str, list[str]] = {}
+    commented_out_code: dict[str, list[dict]] = {}
     pending_comments = []
     in_procedure_division = False
     
@@ -97,7 +173,7 @@ def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list
         'PROGRAM-ID', 'AUTHOR', 'DATE-WRITTEN', 'DATE-COMPILED'
     }
     
-    for i, line in enumerate(lines):
+    for i, line in enumerate(lines, start=1):
         # Skip short lines
         if len(line) < 7:
             continue
@@ -113,7 +189,7 @@ def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list
                 # Clean trailing asterisks used as decoration
                 clean_text = re.sub(r'\s*\*+\s*$', '', comment_text).strip()
                 if clean_text:
-                    pending_comments.append(clean_text)
+                    pending_comments.append({"line": i, "text": clean_text})
             continue
         
         # Skip continuation lines and debug lines
@@ -124,7 +200,9 @@ def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list
         if proc_div_pattern.search(line):
             # Assign pending comments to program summary
             if pending_comments:
-                result['_PROGRAM_SUMMARY'] = pending_comments.copy()
+                _assign_pending_comments(
+                    '_PROGRAM_SUMMARY', pending_comments, result, commented_out_code
+                )
                 if verbose:
                     print(f"  _PROGRAM_SUMMARY: {len(pending_comments)} comment(s)")
                 pending_comments = []
@@ -147,7 +225,9 @@ def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list
             
             # Associate pending comments with this paragraph
             if pending_comments:
-                result[para_name] = pending_comments.copy()
+                _assign_pending_comments(
+                    para_name, pending_comments, result, commented_out_code
+                )
                 if verbose:
                     print(f"  {para_name}: {len(pending_comments)} comment(s)")
                 pending_comments = []
@@ -161,10 +241,24 @@ def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list
     if verbose:
         total = len(result)
         has_summary = '_PROGRAM_SUMMARY' in result
-        print(f"[Comment Extractor] Found comments for {total} items" + 
-              (" (includes program summary)" if has_summary else ""))
+        inactive_count = sum(len(blocks) for blocks in commented_out_code.values())
+        print(f"[Comment Extractor] Found comments for {total} items" +
+              (" (includes program summary)" if has_summary else "") +
+              f"; inactive code blocks: {inactive_count}")
     
-    return result
+    return result, commented_out_code
+
+
+def extract_comments(source_file: Path, verbose: bool = False) -> dict[str, list[str]]:
+    """
+    Extract prose comments from a COBOL source file.
+
+    Code-like comment blocks are omitted from this legacy return value. Use
+    extract_comments_with_inactive_code() when the inactive-code artifact is
+    needed by callers.
+    """
+    comments, _ = extract_comments_with_inactive_code(source_file, verbose)
+    return comments
 
 
 def extract_comments_to_json(source_file: Path, output_file: Optional[Path] = None,
@@ -180,13 +274,19 @@ def extract_comments_to_json(source_file: Path, output_file: Optional[Path] = No
     Returns:
         Path to the output JSON file
     """
-    comments = extract_comments(source_file, verbose)
+    comments, commented_out_code = extract_comments_with_inactive_code(source_file, verbose)
     
     if output_file is None:
         output_file = source_file.parent / f"{source_file.stem}.comments.json"
     
     output_file.write_text(
         json.dumps(comments, indent=2, ensure_ascii=False),
+        encoding='utf-8'
+    )
+
+    inactive_output = output_file.parent / "commented_out_code.json"
+    inactive_output.write_text(
+        json.dumps(commented_out_code, indent=2, ensure_ascii=False),
         encoding='utf-8'
     )
     
