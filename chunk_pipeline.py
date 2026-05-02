@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -2374,6 +2375,90 @@ def generate_manifest(chunks_dir: Path, verbose: bool) -> dict:
     return manifest
 
 
+def generate_rag_bundle(report_dir: Path, chunks_dir: Path,
+                        program: str, verbose: bool) -> int:
+    """Create report-local knowledge-base_rag folder for downstream RAG ingestion."""
+    bundle_dir = report_dir / "knowledge-base_rag"
+    if bundle_dir.exists():
+        shutil.rmtree(bundle_dir)
+    bundle_dir.mkdir(parents=True)
+
+    bundle_chunks = bundle_dir / "chunks"
+    bundle_kb = bundle_dir / "knowledge_base"
+    bundle_artifacts = bundle_dir / "artifacts"
+    bundle_chunks.mkdir()
+    bundle_kb.mkdir()
+    bundle_artifacts.mkdir()
+
+    chunk_count = 0
+    for chunk_file in sorted(chunks_dir.glob("*.json")):
+        shutil.copy2(chunk_file, bundle_chunks / chunk_file.name)
+        chunk_count += 1
+
+    kb_count = 0
+    kb_dir = report_dir / "knowledge_base"
+    if kb_dir.is_dir():
+        for kb_file in sorted(kb_dir.iterdir()):
+            if kb_file.is_file() and kb_file.suffix.lower() in {".md", ".yaml", ".yml", ".json"}:
+                shutil.copy2(kb_file, bundle_kb / kb_file.name)
+                kb_count += 1
+
+    artifact_names = [
+        "analysis_health.json",
+        "analysis_self_evaluation.json",
+        "cobol_structure.json",
+        "commented_out_code.json",
+        "copybook_manifest.json",
+        "parse_diagnostics.json",
+        "pipeline_report.json",
+        "variable_values.json",
+    ]
+    artifact_count = 0
+    for name in artifact_names:
+        source = report_dir / name
+        if source.is_file():
+            shutil.copy2(source, bundle_artifacts / name)
+            artifact_count += 1
+
+    manifest = {
+        "program": program,
+        "schema_version": CHUNK_SCHEMA_VERSION,
+        "pipeline_version": PIPELINE_VERSION,
+        "recommended_index_path": "chunks",
+        "chunks_path": "chunks",
+        "knowledge_base_path": "knowledge_base",
+        "artifacts_path": "artifacts",
+        "chunk_count": chunk_count,
+        "knowledge_base_file_count": kb_count,
+        "artifact_count": artifact_count,
+        "notes": [
+            "Index files under chunks/ for normal RAG retrieval.",
+            "Use artifacts/ for diagnostics, confidence, copybook status, and static value provenance.",
+            "Inactive COBOL comments are separated in artifacts/commented_out_code.json when detected.",
+        ],
+    }
+    _atomic_write_json(bundle_dir / "manifest.json", manifest)
+    (bundle_dir / "README.md").write_text(
+        "\n".join([
+            f"# RAG Bundle: {program}",
+            "",
+            "This folder contains the curated artifacts needed by the downstream COBOL RAG pipeline.",
+            "",
+            "- `chunks/`: index this directory for retrieval.",
+            "- `knowledge_base/`: deterministic human-readable summaries.",
+            "- `artifacts/`: diagnostics and supporting JSON for confidence/provenance checks.",
+            "- `manifest.json`: machine-readable bundle inventory.",
+            "",
+            "Do not index the whole report directory for normal answers; use `chunks/` first.",
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    if verbose:
+        print(f"  knowledge-base_rag: chunks={chunk_count}, kb={kb_count}, artifacts={artifact_count}")
+    return 1
+
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -3350,6 +3435,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         print()
     manifest = generate_manifest(chunks_dir, verbose)
     summary["total"] = manifest.get("total_chunks", 0)
+    summary["rag_bundle"] = generate_rag_bundle(report_dir, chunks_dir, program, verbose)
 
     return summary
 

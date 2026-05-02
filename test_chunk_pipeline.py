@@ -16,6 +16,7 @@ from chunk_pipeline import (
     generate_cobol_analysis_health,
     generate_dependencies,
     generate_manifest,
+    generate_rag_bundle,
     generate_static_values,
     generate_variable_groups,
     split_bpe_text,
@@ -315,6 +316,38 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertTrue(data["metadata"]["indexable"])
             self.assertEqual(["TWCOB-FASE", "WABEND-CODE"], data["metadata"]["variables"])
             self.assertIn("- WABEND-CODE: 'BR00', 'AV05'", data["text"])
+
+    def test_generate_rag_bundle_copies_chunks_kb_and_supporting_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "BUNDLE.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            kb_dir = report_dir / "knowledge_base"
+            chunks_dir.mkdir(parents=True)
+            kb_dir.mkdir()
+            write_chunk(
+                chunks_dir,
+                "BUNDLE.CBL__dependencies.json",
+                "External dependencies for program BUNDLE.CBL: none.",
+                {
+                    "chunk_type": "dependencies",
+                    "chunk_id": "BUNDLE.CBL:dependencies",
+                    "program": "BUNDLE.CBL",
+                },
+            )
+            (kb_dir / "03_Dependencies.yaml").write_text("program: BUNDLE.CBL\n", encoding="utf-8")
+            chunk_pipeline._atomic_write_json(report_dir / "parse_diagnostics.json", {
+                "coverage_percentage": 100.0,
+            })
+
+            count = generate_rag_bundle(report_dir, chunks_dir, "BUNDLE.CBL", False)
+            manifest = chunk_pipeline.load_json(report_dir / "knowledge-base_rag" / "manifest.json")
+
+            self.assertEqual(1, count)
+            self.assertTrue((report_dir / "knowledge-base_rag" / "chunks" / "BUNDLE.CBL__dependencies.json").exists())
+            self.assertTrue((report_dir / "knowledge-base_rag" / "knowledge_base" / "03_Dependencies.yaml").exists())
+            self.assertTrue((report_dir / "knowledge-base_rag" / "artifacts" / "parse_diagnostics.json").exists())
+            self.assertEqual("chunks", manifest["recommended_index_path"])
+            self.assertEqual(1, manifest["chunk_count"])
 
     def test_analysis_health_includes_self_evaluation_when_available(self) -> None:
         report = Path("out/report/PROG_SIMPLE.cbl.report")
