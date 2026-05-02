@@ -72,9 +72,12 @@ public class DialectMetadataParser {
             case "LINK", "XCTL", "RETURN" -> "program_transfer";
             case "START" -> "transaction_start";
             case "READ" -> "file_read";
+            case "READQ" -> "queue_read";
             case "STARTBR", "READNEXT", "READPREV", "ENDBR", "RESETBR" -> "browse";
             case "WRITE", "REWRITE" -> "file_write";
+            case "WRITEQ" -> "queue_write";
             case "DELETE" -> "file_delete";
+            case "DELETEQ" -> "queue_delete";
             default -> "other";
         };
     }

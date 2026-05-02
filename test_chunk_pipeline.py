@@ -248,6 +248,55 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertEqual(0, count)
             self.assertEqual([], list(chunks_dir.glob("*cics_operations*.json")))
 
+    def test_dependencies_chunk_includes_structured_cics_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "RES.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            kb_dir = report_dir / "knowledge_base"
+            chunks_dir.mkdir(parents=True)
+            kb_dir.mkdir()
+            (kb_dir / "03_Dependencies.yaml").write_text(
+                "\n".join([
+                    "program: RES.CBL",
+                    "cics:",
+                    "- WRITEQ",
+                    "- SEND",
+                    "cics_operations:",
+                    "- command: WRITEQ",
+                    "  type: queue_write",
+                    "  target_kind: QUEUE",
+                    "  target: TWCOB-TS-CODA",
+                    "  target_source: identifier",
+                    "- command: SEND",
+                    "  type: other",
+                    "  target_kind: MAP",
+                    "  target: PDB3051",
+                    "  target_source: literal",
+                ]),
+                encoding="utf-8",
+            )
+
+            count = generate_dependencies(report_dir, chunks_dir, "RES.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "RES.CBL__dependencies.json")
+
+            self.assertEqual(1, count)
+            self.assertIn("CICS resources: QUEUE TWCOB-TS-CODA, MAP PDB3051.", data["text"])
+            self.assertEqual(
+                [
+                    {
+                        "target_kind": "QUEUE",
+                        "target": "TWCOB-TS-CODA",
+                        "target_source": "identifier",
+                    },
+                    {
+                        "target_kind": "MAP",
+                        "target": "PDB3051",
+                        "target_source": "literal",
+                    },
+                ],
+                data["metadata"]["cics_resources"],
+            )
+
     def test_static_values_chunk_aggregates_variable_values(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             report_dir = Path(td) / "VALUES.CBL.report"

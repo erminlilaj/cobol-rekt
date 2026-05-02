@@ -630,6 +630,8 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
     calls = [c.get("target", "") for c in (deps.get("calls", []) or [])]
     cics = deps.get("cics", []) or []
     cics_calls = deps.get("cics_calls", []) or []
+    cics_operations = deps.get("cics_operations", []) or []
+    cics_resources = _summarize_cics_resources(cics_operations)
 
     # Build human-readable text
     lines = [f"External dependencies for program {program}:"]
@@ -646,7 +648,13 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
     if cics_calls:
         targets = [c.get("target", "?") for c in cics_calls]
         lines.append(f"CICS program transfers (LINK/XCTL): {', '.join(targets)}.")
-    if not any([tables_read, tables_updated, sql_stmts, calls, cics, cics_calls]):
+    if cics_resources:
+        rendered = [
+            f"{resource['target_kind']} {resource['target']}"
+            for resource in cics_resources
+        ]
+        lines.append(f"CICS resources: {', '.join(rendered)}.")
+    if not any([tables_read, tables_updated, sql_stmts, calls, cics, cics_calls, cics_resources]):
         lines.append("No external dependencies detected.")
 
     metadata = {
@@ -659,6 +667,8 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         "calls": calls,
         "cics_commands": cics,
         "cics_calls": [{"command": c.get("command"), "target": c.get("target")} for c in cics_calls],
+        "cics_operations": cics_operations,
+        "cics_resources": cics_resources,
     }
     struct = _load_cobol_structure(report_dir)
     if struct:
@@ -675,6 +685,32 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         print(f"  dependencies: tables_r={len(tables_read)}, "
               f"calls={len(calls)}, cics={len(cics)}")
     return 1
+
+
+def _summarize_cics_resources(cics_operations: list[dict]) -> list[dict]:
+    """Return non-program CICS targets for dependency/resource questions."""
+    resources = []
+    seen = set()
+    for op in cics_operations:
+        if not isinstance(op, dict):
+            continue
+        target = str(op.get("target", "")).strip()
+        target_kind = str(op.get("target_kind", "")).strip().upper()
+        if not target or not target_kind or target_kind in {"PROGRAM", "UNKNOWN"}:
+            continue
+        key = (target_kind, target.upper())
+        if key in seen:
+            continue
+        seen.add(key)
+        entry = {
+            "target_kind": target_kind,
+            "target": target,
+        }
+        target_source = op.get("target_source")
+        if target_source:
+            entry["target_source"] = target_source
+        resources.append(entry)
+    return resources
 
 
 def generate_static_values(report_dir: Path, chunks_dir: Path,
@@ -2837,7 +2873,7 @@ def generate_cics_operations(report_dir: Path, chunks_dir: Path,
         if _is_valid_program_target(c.get("target", ""))
     ]
     cics_ops = deps.get("cics_operations", []) or []
-    if not cics and not cics_calls:
+    if not cics and not cics_calls and not cics_ops:
         return 0
 
     commands = sorted({str(cmd).upper() for cmd in cics if cmd})
@@ -2867,6 +2903,7 @@ def generate_cics_operations(report_dir: Path, chunks_dir: Path,
         "cics_command_count": len(set(commands)),
         "cics_calls": cics_calls,
         "cics_call_targets": targets,
+        "cics_operations": cics_ops,
     }
     write_chunk(
         chunks_dir,
