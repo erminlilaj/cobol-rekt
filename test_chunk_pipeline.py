@@ -16,6 +16,7 @@ from chunk_pipeline import (
     generate_cobol_analysis_health,
     generate_dependencies,
     generate_manifest,
+    generate_static_values,
     generate_variable_groups,
     split_bpe_text,
     token_count,
@@ -246,6 +247,25 @@ class ChunkPipelineTest(unittest.TestCase):
 
             self.assertEqual(0, count)
             self.assertEqual([], list(chunks_dir.glob("*cics_operations*.json")))
+
+    def test_static_values_chunk_aggregates_variable_values(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "VALUES.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            chunks_dir.mkdir(parents=True)
+            chunk_pipeline._atomic_write_json(report_dir / "variable_values.json", [
+                ["WABEND-CODE", ["'BR00'", "'AV05'"]],
+                ["TWCOB-FASE", ["'1'", "'2'"]],
+            ])
+
+            count = generate_static_values(report_dir, chunks_dir, "VALUES.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "VALUES.CBL__static_values.json")
+
+            self.assertEqual(1, count)
+            self.assertEqual("static_values", data["metadata"]["chunk_type"])
+            self.assertTrue(data["metadata"]["indexable"])
+            self.assertEqual(["TWCOB-FASE", "WABEND-CODE"], data["metadata"]["variables"])
+            self.assertIn("- WABEND-CODE: 'BR00', 'AV05'", data["text"])
 
     def test_analysis_health_includes_self_evaluation_when_available(self) -> None:
         report = Path("out/report/PROG_SIMPLE.cbl.report")

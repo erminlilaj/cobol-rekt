@@ -45,7 +45,7 @@ SUPPORTED_SCHEMA_VERSIONS = {"1.3", "1.4"}
 VALID_COBOL_CHUNK_TYPES = {
     "program_summary", "dependencies", "paragraph_logic", "variable_group",
     "analysis_health", "cobol_analysis_health", "section_summary", "workflow",
-    "business_rules", "sql_operation", "cics_operations",
+    "business_rules", "sql_operation", "cics_operations", "static_values",
 }
 VALID_JCL_CHUNK_TYPES = {
     "job_flow", "step_detail",

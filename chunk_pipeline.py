@@ -43,6 +43,7 @@ ALWAYS_INDEXABLE_THIN_TYPES = frozenset({
     "cobol_analysis_health",
     "analysis_health",
     "jcl_analysis_health",
+    "static_values",
 })
 NEGATIVE_EVIDENCE_TYPES = frozenset({
     "dependencies",
@@ -673,6 +674,47 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
     if verbose:
         print(f"  dependencies: tables_r={len(tables_read)}, "
               f"calls={len(calls)}, cics={len(cics)}")
+    return 1
+
+
+def generate_static_values(report_dir: Path, chunks_dir: Path,
+                           program: str, verbose: bool) -> int:
+    """Create one aggregate chunk for statically assigned COBOL values."""
+    values = _load_variable_values(report_dir)
+    if not values:
+        return 0
+
+    entries = []
+    for variable, assigned_values in sorted(values.items()):
+        clean_values = [str(v) for v in assigned_values if str(v).strip()]
+        if clean_values:
+            entries.append({"variable": variable, "values": clean_values})
+    if not entries:
+        return 0
+
+    lines = [f"Static and forced values for program {program}:"]
+    for entry in entries:
+        rendered_values = ", ".join(entry["values"])
+        lines.append(f"- {entry['variable']}: {rendered_values}")
+
+    metadata = {
+        "chunk_type": "static_values",
+        "chunk_id": f"{program}:static_values",
+        "parent_program_chunk": f"{program}:program_summary",
+        "program": program,
+        "variables": [entry["variable"] for entry in entries],
+        "variable_count": len(entries),
+        "value_count": sum(len(entry["values"]) for entry in entries),
+        "static_values": entries,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__static_values.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        print(f"  static_values: variables={len(entries)}")
     return 1
 
 
@@ -3207,6 +3249,8 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         summary["dependencies"] = generate_dependencies(
             report_dir, chunks_dir, program, verbose)
         summary["cics_operations"] = generate_cics_operations(
+            report_dir, chunks_dir, program, verbose)
+        summary["static_values"] = generate_static_values(
             report_dir, chunks_dir, program, verbose)
         summary["paragraph_logic"] = generate_paragraph_logic(
             report_dir, chunks_dir, program, verbose)
