@@ -204,6 +204,17 @@ def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     _atomic_write_json(chunks_dir / filename, chunk)
 
 
+def clear_existing_chunks(chunks_dir: Path) -> int:
+    """Remove generated chunk JSON files before a fresh chunk pipeline run."""
+    removed = 0
+    if not chunks_dir.exists():
+        return 0
+    for path in chunks_dir.glob("*.json"):
+        path.unlink()
+        removed += 1
+    return removed
+
+
 def load_json(path: Path) -> dict | list | None:
     """Load a JSON file, return None on failure."""
     try:
@@ -3345,6 +3356,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
 
     chunks_dir = report_dir / "chunks"
     chunks_dir.mkdir(exist_ok=True)
+    removed_stale_chunks = clear_existing_chunks(chunks_dir)
 
     mode = []
     if is_cobol:
@@ -3353,6 +3365,8 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         mode.append("JCL")
     print(f"Mode: {' + '.join(mode)} | Schema: v{CHUNK_SCHEMA_VERSION}")
     print(f"Output: {chunks_dir}")
+    if verbose and removed_stale_chunks:
+        print(f"Cleared {removed_stale_chunks} stale chunk JSON file(s)")
 
     # Set parse quality for this program (R7.1 — stamped into every chunk)
     global _CURRENT_PARSE_QUALITY, _CURRENT_SOURCE_MTIME

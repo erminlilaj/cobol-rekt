@@ -11,6 +11,7 @@ import chunk_pipeline
 import validate_chunks
 from chunk_pipeline import (
     _split_if_needed,
+    clear_existing_chunks,
     generate_bm25_index,
     generate_cics_operations,
     generate_cobol_analysis_health,
@@ -121,6 +122,18 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertEqual(0, len(validation["token_warnings"]))
             self.assertEqual([], validation["xref_errors"])
             self.assertLessEqual(validation["max_token_count"], 45)
+
+    def test_clear_existing_chunks_removes_stale_json_only(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            chunks_dir = Path(td)
+            (chunks_dir / "OLD__paragraph.json").write_text("{}", encoding="utf-8")
+            (chunks_dir / "bm25_index.json").write_text("{}", encoding="utf-8")
+            (chunks_dir / "notes.txt").write_text("keep", encoding="utf-8")
+
+            removed = clear_existing_chunks(chunks_dir)
+
+            self.assertEqual(2, removed)
+            self.assertEqual(["notes.txt"], sorted(p.name for p in chunks_dir.iterdir()))
 
     def test_health_thin_chunk_remains_indexable(self) -> None:
         with tempfile.TemporaryDirectory() as td:
