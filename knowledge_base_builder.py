@@ -800,7 +800,7 @@ This document describes the program flow in a linear, readable format.
                 original = node.get('originalText', '').upper()
 
                 # SQL detection — only on statement-level nodes
-                if 'EXEC SQL' in original and node_type in _ATOMIC_TYPES:
+                if re.search(r'\bEXEC\s+SQL\b', original) and node_type in _ATOMIC_TYPES:
                     # Flag dynamic SQL (PREPARE / EXECUTE IMMEDIATE)
                     if self._is_dynamic_sql(original):
                         deps['database']['dynamic_sql'] = True
@@ -861,7 +861,7 @@ This document describes the program flow in a linear, readable format.
                                     deps['calls'].append(unknown_entry)
 
                 # CICS detection — only on statement-level nodes
-                if 'EXEC CICS' in original and node_type in _ATOMIC_TYPES:
+                if re.search(r'\bEXEC\s+CICS\b', original) and node_type in _ATOMIC_TYPES:
                     cics_cmd = self._extract_cics_command(original)
                     if cics_cmd:
                         deps['cics'].append(cics_cmd)

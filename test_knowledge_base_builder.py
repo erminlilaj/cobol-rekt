@@ -475,6 +475,14 @@ def test_cics_operations_from_metadata():
                  'cics_operation_type': 'program_transfer', 'cics_target_kind': 'PROGRAM',
                  'cics_target': 'WS-PROG', 'cics_target_source': 'identifier',
                  'dialect_semantics_status': 'metadata_only'}},
+            {'id': 'n3', 'type': 'DIALECT',
+             'originalText': 'EXEC  CICS  WRITEQ TS QUEUE(TWCOB-TS-CODA) END-EXEC',
+             'name': '', 'label': '',
+             'metadata': {
+                 'dialect_family': 'CICS', 'cics_command': 'WRITEQ',
+                 'cics_operation_type': 'queue_write', 'cics_target_kind': 'QUEUE',
+                 'cics_target': 'TWCOB-TS-CODA', 'cics_target_source': 'identifier',
+                 'dialect_semantics_status': 'metadata_only'}},
         ])
         (report / 'cfg').mkdir()
         (report / 'cfg' / 'cfg-META.CBL.json').write_text(json.dumps(cfg))
@@ -491,6 +499,7 @@ def test_cics_operations_from_metadata():
     cmds = {o['command'] for o in ops}
     assert 'STARTBR' in cmds, f"Expected STARTBR in cics_operations, got {cmds}"
     assert 'XCTL' in cmds, f"Expected XCTL in cics_operations, got {cmds}"
+    assert 'WRITEQ' in cmds, f"Expected WRITEQ in cics_operations, got {cmds}"
     startbr = next(o for o in ops if o['command'] == 'STARTBR')
     assert startbr['type'] == 'browse', f"STARTBR type must be browse, got {startbr['type']}"
     assert startbr.get('target_kind') == 'DATASET'
@@ -498,9 +507,14 @@ def test_cics_operations_from_metadata():
     xctl = next(o for o in ops if o['command'] == 'XCTL')
     assert xctl['type'] == 'program_transfer'
     assert xctl.get('target_kind') == 'PROGRAM'
+    writeq = next(o for o in ops if o['command'] == 'WRITEQ')
+    assert writeq['type'] == 'queue_write'
+    assert writeq.get('target_kind') == 'QUEUE'
+    assert writeq.get('target') == 'TWCOB-TS-CODA'
     cics_list = deps.get('cics', [])
     assert 'STARTBR' in cics_list, "cics: backward-compat list must still contain STARTBR"
     assert 'XCTL' in cics_list, "cics: backward-compat list must still contain XCTL"
+    assert 'WRITEQ' in cics_list, "cics: backward-compat list must still contain WRITEQ"
     print('PASS test_cics_operations_from_metadata')
 
 
