@@ -49,6 +49,8 @@ ALWAYS_INDEXABLE_THIN_TYPES = frozenset({
     "datasets_tables_resources",
     "copybook_mentions",
     "copybook_fields",
+    "comments",
+    "commented_out_code",
 })
 NEGATIVE_EVIDENCE_TYPES = frozenset({
     "dependencies",
@@ -57,6 +59,8 @@ NEGATIVE_EVIDENCE_TYPES = frozenset({
     "jcl_analysis_health",
     "external_program_calls",
     "datasets_tables_resources",
+    "comments",
+    "commented_out_code",
 })
 
 _COBOL_FIGURATIVE_CONSTANTS = frozenset({
@@ -834,6 +838,201 @@ def _format_copy_statement(stmt: dict) -> str:
     else:
         text = f"COPY {copybook}"
     return text if text.endswith(".") else text + "."
+
+
+def generate_comments(report_dir: Path, chunks_dir: Path,
+                      program: str, verbose: bool) -> int:
+    """Generate a curated comments chunk from extracted COBOL prose comments."""
+    comments_path = report_dir / "comments.json"
+    produced = comments_path.exists()
+    comments_data = load_json(comments_path) if produced else None
+    blocks = _normalize_comment_blocks(comments_data)
+
+    lines = [f"Source comments for {program}:"]
+    if not produced:
+        lines.append(
+            "Status: not produced. Comment extraction did not produce comments.json."
+        )
+    elif not blocks:
+        lines.append("Status: produced. No ordinary source comments were detected.")
+    else:
+        lines.append("Status: produced.")
+        for block in blocks:
+            loc = _format_line_range(block.get("line_start"), block.get("line_end"))
+            prefix = f"- {block['target']}"
+            if loc:
+                prefix += f" at {loc}"
+            rendered_comments = " / ".join(block["comments"])
+            lines.append(f"{prefix}: {rendered_comments}.")
+
+    metadata = {
+        "chunk_type": "comments",
+        "chunk_id": f"{program}:comments",
+        "program": program,
+        "analysis_status": "produced" if produced else "not_produced",
+        "comment_block_count": len(blocks),
+        "comment_count": sum(len(block["comments"]) for block in blocks),
+        "comment_blocks": blocks,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__comments.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        status = "produced" if produced else "not_produced"
+        print(f"  comments: status={status}, blocks={len(blocks)}")
+    return 1
+
+
+def generate_commented_out_code(report_dir: Path, chunks_dir: Path,
+                                program: str, verbose: bool) -> int:
+    """Generate inactive/commented-out COBOL evidence as a separate chunk."""
+    inactive_path = report_dir / "commented_out_code.json"
+    produced = inactive_path.exists()
+    inactive_data = load_json(inactive_path) if produced else None
+    blocks = _normalize_inactive_comment_blocks(inactive_data)
+
+    lines = [f"Commented-out or inactive COBOL evidence for {program}:"]
+    if not produced:
+        lines.append(
+            "Status: not produced. Inactive-code comment extraction did not produce commented_out_code.json."
+        )
+    elif not blocks:
+        lines.append("Status: produced. No commented-out COBOL code blocks were detected.")
+    else:
+        lines.append("Status: produced.")
+        for block in blocks:
+            loc = _format_line_range(block.get("line_start"), block.get("line_end"))
+            categories = ", ".join(block["categories"]) if block["categories"] else "code-like comment"
+            prefix = f"- {block['target']}"
+            if loc:
+                prefix += f" at {loc}"
+            evidence = " / ".join(block["lines"][:3])
+            if len(block["lines"]) > 3:
+                evidence += f" / ... {len(block['lines']) - 3} more line(s)"
+            lines.append(f"{prefix}: inactive categories: {categories}. Evidence: {evidence}.")
+
+    metadata = {
+        "chunk_type": "commented_out_code",
+        "chunk_id": f"{program}:commented_out_code",
+        "program": program,
+        "analysis_status": "produced" if produced else "not_produced",
+        "inactive_block_count": len(blocks),
+        "inactive_line_count": sum(len(block["lines"]) for block in blocks),
+        "blocks": blocks,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__commented_out_code.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        status = "produced" if produced else "not_produced"
+        print(f"  commented_out_code: status={status}, blocks={len(blocks)}")
+    return 1
+
+
+def _normalize_comment_blocks(data) -> list[dict]:
+    if not isinstance(data, dict):
+        return []
+
+    blocks: list[dict] = []
+    for target, raw_entries in data.items():
+        entries = raw_entries if isinstance(raw_entries, list) else [raw_entries]
+        comments: list[str] = []
+        line_numbers: list[int] = []
+        for entry in entries:
+            if isinstance(entry, str):
+                text = entry.strip()
+                if text:
+                    comments.append(text)
+            elif isinstance(entry, dict):
+                text = str(entry.get("text") or entry.get("comment") or "").strip()
+                if text:
+                    comments.append(text)
+                line = entry.get("line") or entry.get("source_line")
+                if isinstance(line, int):
+                    line_numbers.append(line)
+                line_start = entry.get("line_start")
+                line_end = entry.get("line_end")
+                if isinstance(line_start, int):
+                    line_numbers.append(line_start)
+                if isinstance(line_end, int):
+                    line_numbers.append(line_end)
+        if not comments:
+            continue
+        block = {
+            "target": str(target),
+            "comments": comments,
+            "line_count": len(comments),
+        }
+        if line_numbers:
+            block["line_start"] = min(line_numbers)
+            block["line_end"] = max(line_numbers)
+        blocks.append(block)
+    return blocks
+
+
+def _normalize_inactive_comment_blocks(data) -> list[dict]:
+    if not isinstance(data, dict):
+        return []
+
+    blocks: list[dict] = []
+    for target, raw_blocks in data.items():
+        entries = raw_blocks if isinstance(raw_blocks, list) else [raw_blocks]
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            raw_lines = entry.get("lines", [])
+            lines = [str(line).strip() for line in raw_lines if str(line).strip()]
+            if not lines:
+                continue
+            block = {
+                "target": str(target),
+                "line_start": entry.get("line_start"),
+                "line_end": entry.get("line_end"),
+                "line_count": entry.get("line_count", len(lines)),
+                "reason": entry.get("reason", "code_like_comment_block"),
+                "active": False,
+                "categories": _classify_inactive_comment_lines(lines),
+                "lines": lines,
+            }
+            blocks.append(block)
+    return blocks
+
+
+def _classify_inactive_comment_lines(lines: list[str]) -> list[str]:
+    joined = "\n".join(lines).upper()
+    categories: list[str] = []
+    if re.search(r"\bEXEC\s+CICS\b", joined):
+        categories.append("commented-out CICS")
+    if re.search(r"\bEXEC\s+SQL\b", joined):
+        categories.append("commented-out SQL")
+    if re.search(r"\bEXEC\s+(DLI|IMS)\b", joined):
+        categories.append("commented-out DLI/IMS")
+    if re.search(r"\bCALL\b", joined) or re.search(r"\b(LINK|XCTL)\b", joined):
+        categories.append("commented-out call/transfer")
+    if re.search(r"\bCOPY\b", joined):
+        categories.append("commented-out COPY")
+    if (
+        re.search(r"\b(DATASET|FILE|FD|SELECT|OPEN|READ|READNEXT|READPREV|WRITE|REWRITE|DELETE|START|STARTBR|ENDBR)\b", joined)
+        or "DATASET(" in joined
+    ):
+        categories.append("commented-out file/dataset")
+    return list(dict.fromkeys(categories))
+
+
+def _format_line_range(line_start, line_end) -> str:
+    if isinstance(line_start, int) and isinstance(line_end, int):
+        if line_start == line_end:
+            return f"source line {line_start}"
+        return f"source lines {line_start}-{line_end}"
+    if isinstance(line_start, int):
+        return f"source line {line_start}"
+    return ""
 
 
 def generate_copybook_fields(report_dir: Path, chunks_dir: Path,
@@ -3060,6 +3259,8 @@ def _split_parts_with_context(text: str, metadata: dict) -> list[str]:
         "datasets_tables_resources",
         "copybook_mentions",
         "copybook_fields",
+        "comments",
+        "commented_out_code",
     }:
         return _split_line_based_chunk(text, chunk_type)
 
@@ -4298,6 +4499,10 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         summary["copybook_mentions"] = generate_copybook_mentions(
             report_dir, chunks_dir, program, verbose)
         summary["copybook_fields"] = generate_copybook_fields(
+            report_dir, chunks_dir, program, verbose)
+        summary["comments"] = generate_comments(
+            report_dir, chunks_dir, program, verbose)
+        summary["commented_out_code"] = generate_commented_out_code(
             report_dir, chunks_dir, program, verbose)
         summary["external_program_calls"] = generate_external_program_calls(
             report_dir, chunks_dir, program, verbose)
