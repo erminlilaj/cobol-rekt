@@ -825,7 +825,7 @@ def _summarize_cics_resources(cics_operations: list[dict]) -> list[dict]:
 
 
 def _extract_cics_literal_arguments_from_cfg(report_dir: Path) -> dict[str, list[str]]:
-    """Extract single-quoted CICS arguments from Java CFG node originalText."""
+    """Extract literal CICS arguments from Java CFG metadata, with text fallback for stale reports."""
     result = {
         "MAP": [],
         "MAPSET": [],
@@ -845,7 +845,18 @@ def _extract_cics_literal_arguments_from_cfg(report_dir: Path) -> dict[str, list
         key: re.compile(rf"\b{key}\s*\(\s*'([^']+)'\s*\)", re.IGNORECASE)
         for key in result
     }
+    patterns["FILE"] = re.compile(r"\bFILE\s*\(\s*'([^']+)'\s*\)", re.IGNORECASE)
     seen = {key: set() for key in result}
+
+    def add_value(key: str, value: object) -> None:
+        target_key = "DATASET" if key == "FILE" else key
+        if target_key not in result:
+            return
+        value_text = str(value).strip()
+        value_u = value_text.upper()
+        if value_u and value_u not in seen[target_key]:
+            seen[target_key].add(value_u)
+            result[target_key].append(value_text)
 
     for cfg_file in cfg_files:
         data = load_json(cfg_file)
@@ -858,13 +869,16 @@ def _extract_cics_literal_arguments_from_cfg(report_dir: Path) -> dict[str, list
             node_type = str(node.get("type") or "").upper()
             if "EXEC CICS" not in original.upper() and node_type not in {"DIALECT", "EXEC_CICS"}:
                 continue
+            metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+            for argument in metadata.get("cics_arguments", []) or []:
+                if not isinstance(argument, dict):
+                    continue
+                if str(argument.get("value_source", "")).lower() != "literal":
+                    continue
+                add_value(str(argument.get("name", "")).upper(), argument.get("value"))
             for key, pattern in patterns.items():
                 for match in pattern.findall(original):
-                    value = str(match).strip()
-                    value_u = value.upper()
-                    if value_u and value_u not in seen[key]:
-                        seen[key].add(value_u)
-                        result[key].append(value)
+                    add_value(key, match)
     return result
 
 

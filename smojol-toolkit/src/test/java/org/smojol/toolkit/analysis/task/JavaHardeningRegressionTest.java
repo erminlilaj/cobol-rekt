@@ -80,6 +80,13 @@ class JavaHardeningRegressionTest {
         assertTrue(hasHandlerBinding(nodes, "ABEND", "LABEL"));
         assertTrue(hasMetadataValue(nodes, "cics_command", "LINK"));
         assertTrue(hasMetadataValue(nodes, "cics_target_program", "PAYPGM"));
+        assertTrue(hasMetadataValue(nodes, "cics_map", "PAYMAP"));
+        assertTrue(hasMetadataValue(nodes, "cics_mapset", "PAYMAPS"));
+        assertTrue(hasMetadataValue(nodes, "cics_transid", "PAYT"));
+        assertTrue(hasCicsArgument(nodes, "PROGRAM", "PAYPGM", "literal"));
+        assertTrue(hasCicsArgument(nodes, "MAP", "PAYMAP", "literal"));
+        assertTrue(hasCicsArgument(nodes, "MAPSET", "PAYMAPS", "literal"));
+        assertTrue(hasCicsArgument(nodes, "TRANSID", "PAYT", "literal"));
     }
 
     @Test
@@ -251,6 +258,17 @@ class JavaHardeningRegressionTest {
                 .filter(node -> node.has("metadata"))
                 .map(node -> node.get("metadata").getAsJsonObject())
                 .anyMatch(metadata -> metadata.has(key) && value.equals(metadata.get(key).getAsString()));
+    }
+
+    private boolean hasCicsArgument(JsonArray nodes, String name, String value, String valueSource) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.get("metadata").getAsJsonObject())
+                .filter(metadata -> metadata.has("cics_arguments"))
+                .flatMap(metadata -> jsonObjects(metadata.getAsJsonArray("cics_arguments")).stream())
+                .anyMatch(argument -> name.equals(argument.get("name").getAsString())
+                        && value.equals(argument.get("value").getAsString())
+                        && valueSource.equals(argument.get("value_source").getAsString()));
     }
 
     private JsonObject findNode(JsonArray nodes, String key, String value) {

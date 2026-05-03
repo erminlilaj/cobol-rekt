@@ -18,6 +18,11 @@
            EXEC CICS LINK PROGRAM('PAYPGM')
                 COMMAREA(WS-MSG)
            END-EXEC
+           EXEC CICS SEND MAP('PAYMAP')
+                MAPSET('PAYMAPS')
+           END-EXEC
+           EXEC CICS RETURN TRANSID('PAYT')
+           END-EXEC
            GOBACK.
        ERROR-HANDLER.
            DISPLAY WS-MSG.

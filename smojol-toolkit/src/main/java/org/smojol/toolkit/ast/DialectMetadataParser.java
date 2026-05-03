@@ -14,6 +14,8 @@ public class DialectMetadataParser {
     private static final Pattern PROGRAM_VARIABLE = Pattern.compile("\\bPROGRAM\\s*\\(\\s*(?!['\"])([A-Z][A-Z0-9-]*)\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MAP_QUOTED = Pattern.compile("\\bMAP\\s*\\(\\s*['\"]([A-Z0-9-]+)['\"]\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MAP_UNQUOTED = Pattern.compile("\\bMAP\\s*\\(\\s*(?!['\"])([A-Z][A-Z0-9-]*)\\s*\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MAPSET_QUOTED = Pattern.compile("\\bMAPSET\\s*\\(\\s*['\"]([A-Z0-9-]+)['\"]\\s*\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MAPSET_UNQUOTED = Pattern.compile("\\bMAPSET\\s*\\(\\s*(?!['\"])([A-Z][A-Z0-9-]*)\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern QUEUE_QUOTED = Pattern.compile("\\bQUEUE\\s*\\(\\s*['\"]([A-Z0-9-]+)['\"]\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern QUEUE_UNQUOTED = Pattern.compile("\\bQUEUE\\s*\\(\\s*(?!['\"])([A-Z][A-Z0-9-]*)\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern FILE_QUOTED = Pattern.compile("\\b(FILE|DATASET)\\s*\\(\\s*['\"]([A-Z0-9-]+)['\"]\\s*\\)", Pattern.CASE_INSENSITIVE);
@@ -49,6 +51,7 @@ public class DialectMetadataParser {
         addFirstGroup(metadata, "cics_target_program", PROGRAM_LITERAL.matcher(text));
         addFirstGroup(metadata, "cics_target_variable", PROGRAM_VARIABLE.matcher(text));
         addFirstGroupWithSource(metadata, "cics_map", text, MAP_QUOTED, MAP_UNQUOTED);
+        addFirstGroupWithSource(metadata, "cics_mapset", text, MAPSET_QUOTED, MAPSET_UNQUOTED);
         addFirstGroupWithSource(metadata, "cics_queue", text, QUEUE_QUOTED, QUEUE_UNQUOTED);
         addFirstGroupWithSource(metadata, "cics_transid", text, TRANSID_QUOTED, TRANSID_UNQUOTED);
         Matcher fileQuotedMatcher = FILE_QUOTED.matcher(text);
@@ -64,6 +67,7 @@ public class DialectMetadataParser {
         }
         if (command != null) metadata.put("cics_operation_type", classifyOperationType(command));
         resolveTargetKindAndSource(metadata);
+        addCicsArguments(metadata);
         metadata.put("dialect_semantics_status", "metadata_only");
     }
 
@@ -112,6 +116,30 @@ public class DialectMetadataParser {
             metadata.put("cics_target_kind", "UNKNOWN");
             metadata.put("cics_target_source", "unknown");
         }
+    }
+
+    private static void addCicsArguments(Map<String, Object> metadata) {
+        List<Map<String, Object>> arguments = new ArrayList<>();
+        addArgument(arguments, "PROGRAM", metadata.get("cics_target_program"), "literal");
+        addArgument(arguments, "PROGRAM", metadata.get("cics_target_variable"), "identifier");
+        addArgument(arguments, "MAP", metadata.get("cics_map"), metadata.get("cics_map_source"));
+        addArgument(arguments, "MAPSET", metadata.get("cics_mapset"), metadata.get("cics_mapset_source"));
+        addArgument(arguments, "QUEUE", metadata.get("cics_queue"), metadata.get("cics_queue_source"));
+        addArgument(arguments, "TRANSID", metadata.get("cics_transid"), metadata.get("cics_transid_source"));
+        if (metadata.containsKey("cics_file")) {
+            addArgument(arguments, String.valueOf(metadata.getOrDefault("cics_file_keyword", "FILE")),
+                    metadata.get("cics_file"), metadata.get("cics_file_source"));
+        }
+        if (!arguments.isEmpty()) metadata.put("cics_arguments", arguments);
+    }
+
+    private static void addArgument(List<Map<String, Object>> arguments, String name, Object value, Object source) {
+        if (value == null) return;
+        Map<String, Object> argument = new LinkedHashMap<>();
+        argument.put("name", name);
+        argument.put("value", String.valueOf(value).toUpperCase(Locale.ROOT));
+        argument.put("value_source", source == null ? "unknown" : String.valueOf(source));
+        arguments.add(argument);
     }
 
     private static void parseSql(String text, Map<String, Object> metadata) {

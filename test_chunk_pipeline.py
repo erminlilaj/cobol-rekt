@@ -878,17 +878,23 @@ class ChunkPipelineTest(unittest.TestCase):
                 "nodes": [
                     {
                         "type": "DIALECT",
-                        "originalText": (
-                            "EXEC CICS SEND MAP('BNK1DA') MAPSET('BNK1DAM') "
-                            "RESP(WS-RESP) END-EXEC"
-                        ),
+                        "originalText": "EXEC CICS SEND RESP(WS-RESP) END-EXEC",
+                        "metadata": {
+                            "cics_arguments": [
+                                {"name": "MAP", "value": "BNK1DA", "value_source": "literal"},
+                                {"name": "MAPSET", "value": "BNK1DAM", "value_source": "literal"},
+                            ],
+                        },
                     },
                     {
                         "type": "EXEC_CICS",
-                        "originalText": (
-                            "EXEC CICS RETURN TRANSID('OMEN') "
-                            "QUEUE(WS-QUEUE-NAME) END-EXEC"
-                        ),
+                        "originalText": "EXEC CICS RETURN QUEUE(WS-QUEUE-NAME) END-EXEC",
+                        "metadata": {
+                            "cics_arguments": [
+                                {"name": "TRANSID", "value": "OMEN", "value_source": "literal"},
+                                {"name": "QUEUE", "value": "WS-QUEUE-NAME", "value_source": "identifier"},
+                            ],
+                        },
                     },
                 ],
             })
