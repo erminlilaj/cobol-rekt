@@ -127,7 +127,7 @@ public class SmojolTasks {
         @Override
         public AnalysisTaskResult run() {
             return new WriteDataStructuresTask(baseModel.dataStructures(), dataStructuresOutputConfig,
-                    resourceOperations).run();
+                    resourceOperations, baseModel.extendedDocument(), baseModel.copybooksRepository()).run();
         }
     };
 

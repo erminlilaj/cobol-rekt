@@ -659,6 +659,67 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertNotIn("RAW-FALLBACK-ONLY", data["text"])
             self.assertIn("field-to-copybook ownership is not available", data["text"])
 
+    def test_copybook_fields_uses_java_copybook_origin_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "OWNED.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            ds_dir = report_dir / "data_structures"
+            chunks_dir.mkdir(parents=True)
+            ds_dir.mkdir()
+            chunk_pipeline._atomic_write_json(report_dir / "cobol_structure.json", {
+                "copy_statements": [{"copybook": "PARAMS", "line": 10}],
+            })
+            chunk_pipeline._atomic_write_json(report_dir / "copybook_manifest.json", {
+                "copybooks": {
+                    "PARAMS": {
+                        "file": "PARAMS.cpy",
+                        "path": "copybooks/PARAMS.cpy",
+                        "is_stub": False,
+                        "status": "resolved",
+                    },
+                },
+            })
+            chunk_pipeline._atomic_write_json(ds_dir / "OWNED.CBL-data.json", {
+                "children": [
+                    {
+                        "levelNumber": 1,
+                        "name": "LOCAL-FIELD",
+                        "rawText": "01 LOCAL-FIELD PIC X(4).",
+                        "sourceSection": "WORKING_STORAGE",
+                        "dataType": "STRING",
+                        "originalSourceUri": "file:///tmp/OWNED.CBL",
+                        "children": [],
+                    },
+                    {
+                        "levelNumber": 1,
+                        "name": "COPY-FIELD",
+                        "rawText": "01 COPY-FIELD PIC X(5).",
+                        "pictureClause": "X(5)",
+                        "sourceSection": "WORKING_STORAGE",
+                        "dataType": "STRING",
+                        "originalSourceUri": "file:///tmp/PARAMS.cpy",
+                        "originalSourceLine": 1,
+                        "copybookOrigin": "PARAMS",
+                        "children": [],
+                    },
+                ],
+            })
+
+            count = generate_copybook_fields(report_dir, chunks_dir, "OWNED.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "OWNED.CBL__copybook_fields.json")
+
+            self.assertEqual(1, count)
+            self.assertEqual("produced", data["metadata"]["analysis_status"])
+            self.assertTrue(data["metadata"]["copybook_origin_available"])
+            params = data["metadata"]["copybooks"][0]
+            self.assertEqual("PARAMS", params["copybook"])
+            self.assertEqual(1, params["field_count"])
+            self.assertEqual("COPY-FIELD", params["fields"][0]["name"])
+            self.assertEqual("PARAMS", params["fields"][0]["copybook_origin"])
+            self.assertIn("- PARAMS: COPY-FIELD", data["text"])
+            self.assertIn("copybook PARAMS", data["text"])
+            self.assertIn("LOCAL-FIELD", data["text"])
+
     def test_copybook_fields_unavailable_for_null_java_data_structure_sentinel(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             report_dir = Path(td) / "NULLFIELDS.CBL.report"

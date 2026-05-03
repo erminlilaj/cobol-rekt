@@ -75,7 +75,7 @@ public class BuildBaseModelTask implements AnalysisTask {
                     + e.getMessage() + ". Continuing with unresolved expressions.");
             }
             return AnalysisTaskResult.OK(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS, new BaseAnalysisModel(navigator, rawAST, dataStructures,
-                    symbolTable, flowRoot, serialisableAST));
+                    symbolTable, flowRoot, serialisableAST, pipeline.getExtendedDocument(), pipeline.getCopybooksRepository()));
         } catch (BaseModelValidationException e) {
             return AnalysisTaskResult.ERROR(e, CommandLineAnalysisTask.BUILD_BASE_ANALYSIS);
         } catch (IOException e) {

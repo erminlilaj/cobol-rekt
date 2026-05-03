@@ -29,6 +29,7 @@ import org.eclipse.lsp.cobol.core.engine.analysis.AnalysisContext;
 import org.eclipse.lsp.cobol.core.engine.dialects.DialectService;
 import org.eclipse.lsp.cobol.core.engine.errors.ErrorFinalizerService;
 import org.eclipse.lsp.cobol.core.preprocessor.delegates.GrammarPreprocessor;
+import org.eclipse.lsp.cobol.core.semantics.CopybooksRepository;
 import org.eclipse.lsp.cobol.dialects.TrueDialectServiceImpl;
 import org.eclipse.lsp.cobol.dialects.ibm.*;
 import org.smojol.common.dependency.ComponentsBuilder;
@@ -74,6 +75,8 @@ public class ParsePipeline {
     @Getter private int sourceLineCount = 0;
     @Getter private List<org.smojol.common.structure.SkippedVariable> skippedDataStructures = List.of();
     @Getter private boolean dataStructureDegraded = false;
+    @Getter private ExtendedDocument extendedDocument;
+    @Getter private CopybooksRepository copybooksRepository;
 
     public ParsePipeline(SourceConfig sourceConfig, ComponentsBuilder ops, LanguageDialect dialect) {
         this.src = sourceConfig.source();
@@ -133,8 +136,10 @@ public class ParsePipeline {
                         new ExtendedDocument(resultWithErrors.getResult(), text),
                         dialect.analysisConfig(dialectJarPath),
                         benchmarkService.startSession(), src.toURI().toString(), text, CobolLanguageId.COBOL);
+        extendedDocument = ctx.getExtendedDocument();
         ctx.getAccumulatedErrors().addAll(resultWithErrors.getErrors());
         PipelineResult pipelineResult = pipeline.run(ctx);
+        copybooksRepository = ctx.getCopybooksRepository();
         Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(new ExclusionStrategy() {
             @Override
             public boolean shouldSkipField(FieldAttributes fieldAttributes) {

@@ -1,6 +1,8 @@
 package org.smojol.toolkit.analysis.pipeline;
 
 import org.eclipse.lsp.cobol.core.CobolParser;
+import org.eclipse.lsp.cobol.common.mapping.ExtendedDocument;
+import org.eclipse.lsp.cobol.core.semantics.CopybooksRepository;
 import org.smojol.common.ast.CobolContextAugmentedTreeNode;
 import org.smojol.common.ast.FlowNode;
 import org.smojol.common.navigation.CobolEntityNavigator;
@@ -12,5 +14,7 @@ public record BaseAnalysisModel(CobolEntityNavigator navigator,
                                 CobolDataStructure dataStructures,
                                 SmojolSymbolTable symbolTable,
                                 FlowNode flowRoot,
-                                CobolContextAugmentedTreeNode serialisableAST) {
+                                CobolContextAugmentedTreeNode serialisableAST,
+                                ExtendedDocument extendedDocument,
+                                CopybooksRepository copybooksRepository) {
 }

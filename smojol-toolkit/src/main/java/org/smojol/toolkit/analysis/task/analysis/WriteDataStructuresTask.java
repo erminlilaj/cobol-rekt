@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonWriter;
 import org.smojol.common.resource.ResourceOperations;
 import com.mojo.algorithms.task.CommandLineAnalysisTask;
+import org.eclipse.lsp.cobol.common.mapping.ExtendedDocument;
+import org.eclipse.lsp.cobol.core.semantics.CopybooksRepository;
 import org.smojol.toolkit.analysis.pipeline.DataStructureExporter;
 import org.smojol.toolkit.analysis.pipeline.SerialisableCobolDataStructure;
 import com.mojo.algorithms.task.AnalysisTask;
@@ -19,17 +21,23 @@ import java.nio.file.Files;
 public class WriteDataStructuresTask implements AnalysisTask {
     private final CobolDataStructure dataStructures;
     private final OutputArtifactConfig outputArtifactConfig;
+    private final ExtendedDocument extendedDocument;
+    private final CopybooksRepository copybooksRepository;
 
-    public WriteDataStructuresTask(CobolDataStructure dataStructures, OutputArtifactConfig outputArtifactConfig, ResourceOperations resourceOperations) {
+    public WriteDataStructuresTask(CobolDataStructure dataStructures, OutputArtifactConfig outputArtifactConfig,
+                                   ResourceOperations resourceOperations, ExtendedDocument extendedDocument,
+                                   CopybooksRepository copybooksRepository) {
         this.dataStructures = dataStructures;
         this.outputArtifactConfig = outputArtifactConfig;
+        this.extendedDocument = extendedDocument;
+        this.copybooksRepository = copybooksRepository;
     }
 
     @Override
     public AnalysisTaskResult run() {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         SerialisableCobolDataStructure root = new SerialisableCobolDataStructure();
-        DataStructureExporter visitor = new DataStructureExporter(root);
+        DataStructureExporter visitor = new DataStructureExporter(root, extendedDocument, copybooksRepository);
         dataStructures.acceptScopedVisitor(visitor);
         SerialisableCobolDataStructure realRoot = root.getChild(0);
         try {

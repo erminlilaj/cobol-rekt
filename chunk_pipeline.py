@@ -1311,15 +1311,32 @@ def _write_java_data_copybook_fields_chunk(
     manifest: dict[str, dict],
     java_fields: list[dict],
 ) -> int:
+    copybook_field_map: dict[str, list[dict]] = {}
+    program_fields: list[dict] = []
+    unknown_origin_fields: list[dict] = []
+    for field in java_fields:
+        origin = str(field.get("copybook_origin", "")).upper()
+        if origin:
+            copybook_field_map.setdefault(origin, []).append(field)
+        elif field.get("original_source_uri"):
+            program_fields.append(field)
+        else:
+            unknown_origin_fields.append(field)
+    copybook_origin_available = bool(copybook_field_map)
+
     entries = []
     for name in ordered_names:
         info = manifest.get(name, {})
         limitations = []
         if info.get("is_stub"):
             limitations.append("copybook is stubbed; real copybook-owned fields are unavailable")
-        limitations.append(
-            "field-to-copybook ownership is unavailable in current Java data export"
-        )
+        fields = copybook_field_map.get(name, [])
+        if not copybook_origin_available:
+            limitations.append(
+                "field-to-copybook ownership is unavailable in this Java data export"
+            )
+        elif not fields and not info.get("is_stub"):
+            limitations.append("no Java fields were attributed to this copybook")
         entries.append({
             "copybook": name,
             "resolved": info.get("status") == "resolved",
@@ -1327,21 +1344,27 @@ def _write_java_data_copybook_fields_chunk(
             "status": info.get("status", "unknown"),
             "file": info.get("file"),
             "path": info.get("path"),
-            "field_count": 0,
-            "fields": [],
+            "field_count": len(fields),
+            "fields": fields[:50],
             "limitations": limitations,
         })
 
-    rendered_fields = java_fields[:120]
-    omitted_count = max(0, len(java_fields) - len(rendered_fields))
-    status = "incomplete" if ordered_names else "produced"
+    rendered_fields = (program_fields + unknown_origin_fields)[:120]
+    omitted_count = max(0, len(program_fields) + len(unknown_origin_fields) - len(rendered_fields))
+    status = "produced" if copybook_origin_available or not ordered_names else "incomplete"
 
     lines = [f"Copybook fields for {program}:"]
     if ordered_names:
-        lines.append(
-            "Status: incomplete. Java data-structure export was used for field facts, "
-            "but exact field-to-copybook ownership is not available in this report schema."
-        )
+        if copybook_origin_available:
+            lines.append(
+                "Status: produced. Java original-source mapping was used to attribute "
+                "fields to their owning copybook."
+            )
+        else:
+            lines.append(
+                "Status: incomplete. Java data-structure export was used for field facts, "
+                "but exact field-to-copybook ownership is not available in this report schema."
+            )
         lines.append("Included copybooks: " + ", ".join(ordered_names) + ".")
     else:
         lines.append(
@@ -1349,8 +1372,24 @@ def _write_java_data_copybook_fields_chunk(
             "fields are listed for program data context."
         )
 
+    for entry in entries:
+        if entry["fields"]:
+            rendered = [_format_field_fact(field) for field in entry["fields"][:25]]
+            suffix = ""
+            if entry["field_count"] > 25:
+                suffix = f" ... and {entry['field_count'] - 25} more"
+            lines.append(f"- {entry['copybook']}: " + "; ".join(rendered) + suffix + ".")
+        else:
+            reason = "; ".join(entry["limitations"])
+            lines.append(f"- {entry['copybook']}: {reason}.")
+
     if rendered_fields:
-        lines.append("Java-parsed program data fields after copybook expansion:")
+        heading = (
+            "Java-parsed program data fields:"
+            if copybook_origin_available else
+            "Java-parsed program data fields after copybook expansion:"
+        )
+        lines.append(heading)
         for field in rendered_fields:
             lines.append("- " + _format_field_fact(field) + ".")
         if omitted_count:
@@ -1359,11 +1398,7 @@ def _write_java_data_copybook_fields_chunk(
                 "see variable_group chunks for full grouped field context."
             )
     else:
-        lines.append("No Java-parsed data fields were available.")
-
-    for entry in entries:
-        reason = "; ".join(entry["limitations"])
-        lines.append(f"- {entry['copybook']}: {reason}.")
+        lines.append("No Java-parsed program-owned or unknown-origin data fields were available.")
 
     metadata = {
         "chunk_type": "copybook_fields",
@@ -1371,7 +1406,7 @@ def _write_java_data_copybook_fields_chunk(
         "program": program,
         "analysis_status": status,
         "field_source": "java_structured_fields",
-        "copybook_origin_available": False,
+        "copybook_origin_available": copybook_origin_available,
         "copybook_count": len(entries),
         "copybooks": entries,
         "program_field_count": len(java_fields),
@@ -1435,6 +1470,16 @@ def _load_java_data_structure_fields(report_dir: Path) -> list[dict] | None:
                     field[target_key] = node[source_key]
             if node.get("sourceName"):
                 field["source_name"] = node["sourceName"]
+            if node.get("originalSourceUri"):
+                field["original_source_uri"] = node["originalSourceUri"]
+            for source_key, target_key in [
+                ("originalSourceLine", "original_source_line"),
+                ("originalSourceColumn", "original_source_column"),
+            ]:
+                if node.get(source_key) is not None:
+                    field[target_key] = node[source_key]
+            if node.get("copybookOrigin"):
+                field["copybook_origin"] = str(node["copybookOrigin"]).upper()
             if node.get("isRedefinition"):
                 field["redefines"] = node.get("redefines", "")
             categories = node.get("categories")
@@ -1472,8 +1517,12 @@ def _format_field_fact(field: dict) -> str:
         parts.append(f"byte_offset {field['byte_offset']}")
     if field.get("source_line") is not None:
         parts.append(f"source line {field['source_line']}")
+    if field.get("original_source_line") is not None:
+        parts.append(f"original source line {field['original_source_line']}")
     if field.get("source_section"):
         parts.append(f"section {field['source_section']}")
+    if field.get("copybook_origin"):
+        parts.append(f"copybook {field['copybook_origin']}")
     if field.get("redefines"):
         parts.append(f"REDEFINES {field['redefines']}")
     if field.get("parent"):

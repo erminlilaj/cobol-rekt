@@ -53,6 +53,27 @@ class WriteDataStructuresTaskRegressionTest {
         assertEquals("ITEM-COUNT", itemTable.get("occursDependingOn").getAsString());
     }
 
+    @Test
+    void exportsCopybookOriginFromOriginalSourceMapping() throws IOException {
+        AnalysisTaskResult taskResult = new TestTaskRunner("copybook-owner.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_DATA_STRUCTURES, new DefaultFormat1DataStructureBuilder());
+        assertTrue(taskResult.isSuccess());
+
+        SerialisableCobolDataStructure root = ((AnalysisTaskResultOK) taskResult).getDetail();
+        JsonObject rootJson = new Gson().toJsonTree(root).getAsJsonObject();
+        JsonObject localField = findByName(rootJson, "LOCAL-FIELD");
+        JsonObject copyField = findByName(rootJson, "COPY-FIELD");
+
+        assertNotNull(localField);
+        assertNotNull(copyField);
+        assertTrue(localField.has("originalSourceUri"));
+        assertTrue(copyField.has("originalSourceUri"));
+        assertTrue(copyField.get("originalSourceUri").getAsString().endsWith("OWNCPY.cpy"));
+        assertEquals("OWNCPY", copyField.get("copybookOrigin").getAsString());
+        assertTrue(copyField.getAsJsonArray("declarationFacts").get(0).getAsJsonObject().has("copybook_origin"));
+        assertTrue(!localField.has("copybookOrigin"));
+    }
+
     private static JsonObject findByName(JsonObject node, String name) {
         if (node.has("name") && name.equals(node.get("name").getAsString())) return node;
         if (!node.has("children")) return null;

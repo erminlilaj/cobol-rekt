@@ -1,6 +1,11 @@
 package org.smojol.toolkit.analysis.pipeline;
 
 import com.google.common.collect.ImmutableList;
+import org.eclipse.lsp.cobol.common.mapping.ExtendedDocument;
+import org.eclipse.lsp.cobol.core.semantics.CopybooksRepository;
+import org.eclipse.lsp4j.Location;
+import org.eclipse.lsp4j.Position;
+import org.eclipse.lsp4j.Range;
 import org.antlr.v4.runtime.Token;
 import org.smojol.common.structure.DataStructureContext;
 import org.smojol.common.structure.SourceSection;
@@ -35,10 +40,19 @@ public class SerialisableCobolDataStructure {
     private Integer sourceLine;
     private Integer sourceColumn;
     private String sourceName;
+    private String originalSourceUri;
+    private Integer originalSourceLine;
+    private Integer originalSourceColumn;
+    private String copybookOrigin;
     private List<String> valueLiterals;
     private List<Map<String, Object>> declarationFacts;
 
     public SerialisableCobolDataStructure(CobolDataStructure data) {
+        this(data, null, null);
+    }
+
+    public SerialisableCobolDataStructure(CobolDataStructure data, ExtendedDocument extendedDocument,
+                                          CopybooksRepository copybooksRepository) {
         name = data.name();
         dataType = data.getDataType().abstractType().name();
         content = data.content();
@@ -57,8 +71,19 @@ public class SerialisableCobolDataStructure {
             sourceLine = sourceLine(format1);
             sourceColumn = sourceColumn(format1);
             sourceName = sourceName(format1);
+            Location originalLocation = originalLocation(format1, extendedDocument);
+            if (originalLocation != null) {
+                originalSourceUri = originalLocation.getUri();
+                if (originalLocation.getRange() != null && originalLocation.getRange().getStart() != null) {
+                    originalSourceLine = originalLocation.getRange().getStart().getLine() + 1;
+                    originalSourceColumn = originalLocation.getRange().getStart().getCharacter();
+                }
+                if (copybooksRepository != null) {
+                    copybookOrigin = copybooksRepository.getCopybookIdByUri(originalLocation.getUri());
+                }
+            }
             valueLiterals = valueLiterals(format1);
-            declarationFacts = declarationFacts(format1, valueLiterals);
+            declarationFacts = declarationFacts(format1, valueLiterals, copybookOrigin);
         } else {
             redefines = "";
         }
@@ -140,6 +165,19 @@ public class SerialisableCobolDataStructure {
         return start.getTokenSource().getSourceName();
     }
 
+    private static Location originalLocation(Format1DataStructure data, ExtendedDocument extendedDocument) {
+        Token start = sourceToken(data);
+        if (start == null || extendedDocument == null) return null;
+        try {
+            int line = Math.max(0, start.getLine() - 1);
+            int column = Math.max(0, start.getCharPositionInLine());
+            Range range = new Range(new Position(line, column), new Position(line, column + Math.max(1, start.getText().length())));
+            return extendedDocument.mapLocation(range);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     private static Token sourceToken(Format1DataStructure data) {
         return data.getDataDescription() == null ? null : data.getDataDescription().getStart();
     }
@@ -156,7 +194,8 @@ public class SerialisableCobolDataStructure {
         return values.isEmpty() ? null : values;
     }
 
-    private static List<Map<String, Object>> declarationFacts(Format1DataStructure data, List<String> values) {
+    private static List<Map<String, Object>> declarationFacts(Format1DataStructure data, List<String> values,
+                                                              String copybookOrigin) {
         if (values == null || values.isEmpty() || data.getLevelNumber() == 88) return null;
         List<Map<String, Object>> facts = new ArrayList<>();
         values.forEach(value -> {
@@ -168,6 +207,7 @@ public class SerialisableCobolDataStructure {
             fact.put("statement_text", data.getRawText());
             fact.put("provenance_source", "java_data_value_clause");
             if (data.getSourceSection() != null) fact.put("source_section", data.getSourceSection().name());
+            if (copybookOrigin != null) fact.put("copybook_origin", copybookOrigin);
             Integer line = sourceLine(data);
             if (line != null) fact.put("source_line", line);
             facts.add(fact);
