@@ -31,7 +31,7 @@ try:
     def _count(text: str) -> int:
         return len(_BPE_ENC.encode(text))
     _COUNTER_LABEL = "BPE"
-except ImportError:
+except Exception:
     _BPE_ENC = None
     def _count(text: str) -> int:
         return len(text.split())
@@ -39,13 +39,15 @@ except ImportError:
 
 
 REQUIRED_FIELDS = {"schema_version", "pipeline_version", "analysis_timestamp", "content_hash"}
-SUPPORTED_SCHEMA_VERSIONS = {"1.3", "1.4"}
+SUPPORTED_SCHEMA_VERSIONS = {"1.3", "1.4", "1.5"}
 
 # All known chunk types as of schema 1.3
 VALID_COBOL_CHUNK_TYPES = {
     "program_summary", "dependencies", "paragraph_logic", "variable_group",
     "analysis_health", "cobol_analysis_health", "section_summary", "workflow",
     "business_rules", "sql_operation", "cics_operations", "static_values",
+    "external_program_calls", "datasets_tables_resources", "copybook_mentions",
+    "copybook_fields",
 }
 VALID_JCL_CHUNK_TYPES = {
     "job_flow", "step_detail",

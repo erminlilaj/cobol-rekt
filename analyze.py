@@ -411,18 +411,26 @@ class AnalysisPipeline:
         stubbed = [s.upper() for s in getattr(self.sandbox, 'stubs_created', [])]
         stubbed.extend(s.upper() for s in self._pre_stub_names)
         manifest = {"program": self.target_file, "copybooks": {}, "summary": {}}
+        report_copybooks_dir = self.report_subdir / "copybooks"
+        report_copybooks_dir.mkdir(parents=True, exist_ok=True)
 
         for cpf in sorted(Path(cpb_dir).glob("*")):
             if not cpf.is_file():
                 continue
             name = cpf.stem.upper()
             is_stub = name in stubbed
+            report_copy_path = report_copybooks_dir / cpf.name
+            try:
+                shutil.copy2(cpf, report_copy_path)
+            except OSError:
+                report_copy_path = None
             try:
                 lines = len(cpf.read_text(errors='replace').splitlines())
             except OSError:
                 lines = 0
             manifest["copybooks"][name] = {
                 "file": cpf.name,
+                "path": f"copybooks/{cpf.name}" if report_copy_path else None,
                 "is_stub": is_stub,
                 "lines": lines,
                 "status": "stubbed" if is_stub else "resolved",

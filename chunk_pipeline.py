@@ -26,8 +26,8 @@ import yaml
 # Constants
 # =============================================================================
 
-CHUNK_SCHEMA_VERSION = "1.4"
-PIPELINE_VERSION = "1.4"
+CHUNK_SCHEMA_VERSION = "1.5"
+PIPELINE_VERSION = "1.5"
 
 # CFG JSON field names (NOT source/target/label as CLAUDE.md incorrectly states)
 EDGE_SOURCE = "fromNodeID"
@@ -45,12 +45,18 @@ ALWAYS_INDEXABLE_THIN_TYPES = frozenset({
     "analysis_health",
     "jcl_analysis_health",
     "static_values",
+    "external_program_calls",
+    "datasets_tables_resources",
+    "copybook_mentions",
+    "copybook_fields",
 })
 NEGATIVE_EVIDENCE_TYPES = frozenset({
     "dependencies",
     "cobol_analysis_health",
     "analysis_health",
     "jcl_analysis_health",
+    "external_program_calls",
+    "datasets_tables_resources",
 })
 
 _COBOL_FIGURATIVE_CONSTANTS = frozenset({
@@ -80,7 +86,7 @@ try:
     def _bpe_count(text: str) -> int:
         return len(_BPE_ENCODING.encode(text))
     _TIKTOKEN_AVAILABLE = True
-except ImportError:
+except Exception:
     _BPE_ENCODING = None
     _TIKTOKEN_AVAILABLE = False
 
@@ -725,6 +731,657 @@ def _summarize_cics_resources(cics_operations: list[dict]) -> list[dict]:
     return resources
 
 
+def generate_copybook_mentions(report_dir: Path, chunks_dir: Path,
+                               program: str, verbose: bool) -> int:
+    """Generate COPY statement mentions with source lines and resolution status."""
+    struct = _load_cobol_structure(report_dir)
+    copy_stmts = struct.get("copy_statements", []) if struct else []
+    manifest = _load_copybook_manifest(report_dir)
+
+    mentions: list[dict] = []
+    for stmt in copy_stmts:
+        if not isinstance(stmt, dict):
+            continue
+        copybook = str(stmt.get("copybook", "")).strip()
+        if not copybook:
+            continue
+        manifest_info = manifest.get(copybook.upper(), {})
+        mention = {
+            "copybook": copybook,
+            "source_line": stmt.get("line"),
+            "statement": _format_copy_statement(stmt),
+            "division": stmt.get("division"),
+            "section": stmt.get("section"),
+            "replacing": stmt.get("replacing"),
+            "resolved": manifest_info.get("status") == "resolved",
+            "stubbed": bool(manifest_info.get("is_stub", False)),
+            "status": manifest_info.get("status", "unknown"),
+        }
+        if stmt.get("impact"):
+            mention["impact"] = stmt.get("impact")
+        if manifest_info.get("file"):
+            mention["file"] = manifest_info.get("file")
+        if manifest_info.get("path"):
+            mention["path"] = manifest_info.get("path")
+        mentions.append(mention)
+
+    lines = [f"Copybook mentions for {program}:"]
+    if mentions:
+        for mention in mentions:
+            line = (
+                f"- {mention['statement']} at source line "
+                f"{mention.get('source_line', 'unknown')}"
+            )
+            status = mention.get("status", "unknown")
+            if status == "resolved":
+                line += ", resolved: yes"
+            elif mention.get("stubbed"):
+                line += ", resolved: no, stubbed: yes"
+            else:
+                line += f", resolved: {status}"
+            if mention.get("file"):
+                line += f", file: {mention['file']}"
+            if mention.get("division"):
+                line += f", division: {mention['division']}"
+            if mention.get("section"):
+                line += f", section: {mention['section']}"
+            if mention.get("impact"):
+                line += f", impact: {mention['impact']}"
+            lines.append(line + ".")
+    else:
+        lines.append("No COPY statements were found in the indexed COBOL structure.")
+
+    metadata = {
+        "chunk_type": "copybook_mentions",
+        "chunk_id": f"{program}:copybook_mentions",
+        "program": program,
+        "mention_count": len(mentions),
+        "copybooks": [mention["copybook"] for mention in mentions],
+        "mentions": mentions,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__copybook_mentions.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        print(f"  copybook_mentions: mentions={len(mentions)}")
+    return 1
+
+
+def _load_copybook_manifest(report_dir: Path) -> dict[str, dict]:
+    manifest_path = report_dir / "copybook_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    data = load_json(manifest_path) or {}
+    if not isinstance(data, dict):
+        return {}
+    copybooks = data.get("copybooks", {}) or {}
+    if not isinstance(copybooks, dict):
+        return {}
+    return {str(name).upper(): info for name, info in copybooks.items() if isinstance(info, dict)}
+
+
+def _format_copy_statement(stmt: dict) -> str:
+    raw_statement = str(stmt.get("statement", "")).strip()
+    if raw_statement:
+        return raw_statement if raw_statement.endswith(".") else raw_statement + "."
+    copybook = str(stmt.get("copybook", "")).strip()
+    replacing = stmt.get("replacing")
+    if replacing:
+        text = f"COPY {copybook} REPLACING {replacing}"
+    else:
+        text = f"COPY {copybook}"
+    return text if text.endswith(".") else text + "."
+
+
+def generate_copybook_fields(report_dir: Path, chunks_dir: Path,
+                             program: str, verbose: bool) -> int:
+    """Generate copybook field/parameter facts from report-local copybook files."""
+    manifest = _load_copybook_manifest(report_dir)
+    struct = _load_cobol_structure(report_dir)
+    mentioned = []
+    if struct:
+        for stmt in struct.get("copy_statements", []) or []:
+            if isinstance(stmt, dict) and stmt.get("copybook"):
+                mentioned.append(str(stmt["copybook"]).upper())
+    ordered_names = list(dict.fromkeys(mentioned + sorted(manifest.keys())))
+
+    entries: list[dict] = []
+    for name in ordered_names:
+        info = manifest.get(name, {})
+        copy_path = _resolve_report_copybook_path(report_dir, name, info)
+        fields: list[dict] = []
+        limitations: list[str] = []
+        if info.get("is_stub"):
+            limitations.append("copybook is stubbed; real fields are unavailable")
+        elif not copy_path:
+            limitations.append("copybook file is not available in the report")
+        else:
+            fields = _extract_copybook_fields(copy_path)
+            if not fields:
+                limitations.append("no COBOL data-description fields were extracted")
+
+        entries.append({
+            "copybook": name,
+            "resolved": info.get("status") == "resolved",
+            "stubbed": bool(info.get("is_stub", False)),
+            "status": info.get("status", "unknown"),
+            "file": info.get("file"),
+            "path": str(copy_path.relative_to(report_dir)) if copy_path and copy_path.is_relative_to(report_dir) else info.get("path"),
+            "field_count": len(fields),
+            "fields": fields,
+            "limitations": limitations,
+        })
+
+    lines = [f"Copybook fields for {program}:"]
+    if entries:
+        for entry in entries:
+            prefix = f"- {entry['copybook']}"
+            if entry.get("stubbed"):
+                lines.append(f"{prefix}: stubbed; real fields unavailable.")
+                continue
+            if entry["fields"]:
+                rendered = []
+                for field in entry["fields"][:25]:
+                    part = f"{field['name']} (level {field['level']}"
+                    if field.get("picture"):
+                        part += f", PIC {field['picture']}"
+                    if field.get("value"):
+                        part += f", VALUE {field['value']}"
+                    part += f", line {field['line']})"
+                    rendered.append(part)
+                suffix = ""
+                if len(entry["fields"]) > 25:
+                    suffix = f" ... and {len(entry['fields']) - 25} more"
+                lines.append(f"{prefix}: " + "; ".join(rendered) + suffix + ".")
+            else:
+                reason = "; ".join(entry["limitations"]) or "field extraction unavailable"
+                lines.append(f"{prefix}: {reason}.")
+    else:
+        lines.append("No copybooks were available for field extraction.")
+
+    metadata = {
+        "chunk_type": "copybook_fields",
+        "chunk_id": f"{program}:copybook_fields",
+        "program": program,
+        "copybook_count": len(entries),
+        "copybooks": entries,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__copybook_fields.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        extracted = sum(entry["field_count"] for entry in entries)
+        print(f"  copybook_fields: copybooks={len(entries)}, fields={extracted}")
+    return 1
+
+
+def _resolve_report_copybook_path(report_dir: Path, name: str, info: dict) -> Path | None:
+    candidates: list[Path] = []
+    raw_path = info.get("path")
+    if raw_path:
+        path = Path(str(raw_path))
+        candidates.append(path if path.is_absolute() else report_dir / path)
+    file_name = info.get("file") or f"{name}.cpy"
+    for base in [
+        report_dir / "copybooks",
+        report_dir / "artifacts" / "copybooks",
+        report_dir / "knowledge-base_rag" / "artifacts" / "copybooks",
+    ]:
+        candidates.append(base / str(file_name))
+        candidates.append(base / f"{name}.cpy")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _extract_copybook_fields(copybook_path: Path) -> list[dict]:
+    fields: list[dict] = []
+    for lineno, raw_line in enumerate(copybook_path.read_text(
+        encoding="utf-8", errors="replace"
+    ).splitlines(), start=1):
+        code = _copybook_code_area(raw_line)
+        if not code:
+            continue
+        match = re.match(
+            r"^\s*(0?[1-9]|[1-4][0-9]|66|77|88)\s+([A-Z0-9_$#@-]+)\b(.*)$",
+            code,
+            re.IGNORECASE,
+        )
+        if not match:
+            continue
+        level, field_name, rest = match.groups()
+        field = {
+            "name": field_name.upper(),
+            "level": level.zfill(2) if level.isdigit() and len(level) == 1 else level,
+            "line": lineno,
+        }
+        picture = _extract_copybook_picture(rest)
+        value = _extract_copybook_value(rest)
+        if picture:
+            field["picture"] = picture
+        if value:
+            field["value"] = value
+        if "REDEFINES" in rest.upper():
+            redef = re.search(r"\bREDEFINES\s+([A-Z0-9_$#@-]+)", rest, re.IGNORECASE)
+            if redef:
+                field["redefines"] = redef.group(1).upper()
+        fields.append(field)
+    return fields
+
+
+def _copybook_code_area(raw_line: str) -> str:
+    if len(raw_line) >= 7 and raw_line[6:7] in {"*", "/"}:
+        return ""
+    if len(raw_line) > 7 and raw_line[:6].strip().isdigit():
+        return raw_line[6:72].strip()
+    stripped = raw_line.strip()
+    if stripped.startswith(("*", "/")):
+        return ""
+    return stripped
+
+
+def _extract_copybook_picture(rest: str) -> str:
+    match = re.search(
+        r"\b(?:PIC|PICTURE)\s+(.+?)(?=\s+(?:VALUE|VALUES|OCCURS|REDEFINES|USAGE|COMP|COMP-3|SYNC|SIGN|JUSTIFIED)\b|\.|$)",
+        rest,
+        re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def _extract_copybook_value(rest: str) -> str:
+    match = re.search(r"\bVALUES?\s+(.+?)(?=\.|$)", rest, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
+
+def generate_external_program_calls(report_dir: Path, chunks_dir: Path,
+                                    program: str, verbose: bool) -> int:
+    """Generate external program call facts with parameters when available."""
+    deps_path = report_dir / "knowledge_base" / "03_Dependencies.yaml"
+    if not deps_path.exists():
+        return 0
+    deps = load_yaml(deps_path)
+    if not deps:
+        return 0
+
+    detail_lookup = _extract_cics_call_details(report_dir)
+    calls: list[dict] = []
+
+    for call in deps.get("calls", []) or []:
+        if not isinstance(call, dict):
+            continue
+        target = str(call.get("target", "")).strip().strip("'\"").upper()
+        if not _is_valid_program_target(target):
+            continue
+        calls.append({
+            "command": str(call.get("command") or call.get("type") or "CALL").upper(),
+            "target": target,
+            "target_kind": "PROGRAM",
+            "target_source": call.get("target_source") or call.get("source") or "unknown",
+            "using": call.get("using") or call.get("parameters") or [],
+        })
+
+    for op in deps.get("cics_operations", []) or []:
+        if not isinstance(op, dict):
+            continue
+        if str(op.get("target_kind", "")).upper() != "PROGRAM":
+            continue
+        target = str(op.get("target", "")).strip().strip("'\"").upper()
+        if not _is_valid_program_target(target):
+            continue
+        command = str(op.get("command") or "LINK/XCTL").upper()
+        details = detail_lookup.get((command, target), [])
+        if details:
+            calls.extend(details)
+        else:
+            calls.append({
+                "command": command,
+                "target": target,
+                "target_kind": "PROGRAM",
+                "target_source": op.get("target_source") or "unknown",
+            })
+
+    # Keep older cics_calls useful if structured operations are absent.
+    if not calls:
+        for call in deps.get("cics_calls", []) or []:
+            if not isinstance(call, dict):
+                continue
+            target = str(call.get("target", "")).strip().strip("'\"").upper()
+            if not _is_valid_program_target(target):
+                continue
+            command = str(call.get("command") or "LINK/XCTL").upper()
+            details = detail_lookup.get((command, target), [])
+            calls.extend(details or [{
+                "command": command,
+                "target": target,
+                "target_kind": "PROGRAM",
+                "target_source": call.get("target_source") or "unknown",
+            }])
+
+    calls = _dedupe_call_facts(calls)
+    if not calls:
+        return 0
+
+    lines = [f"External program calls for {program}:"]
+    for call in calls:
+        line = f"- {call.get('command', 'CALL')} {call['target']}"
+        if call.get("paragraph"):
+            line += f" in {call['paragraph']}"
+        details = []
+        if call.get("commarea"):
+            details.append(f"COMMAREA {call['commarea']}")
+        if call.get("length"):
+            details.append(f"LENGTH {call['length']}")
+        if call.get("using"):
+            using = call["using"]
+            if isinstance(using, list):
+                details.append("USING " + ", ".join(str(item) for item in using))
+            else:
+                details.append(f"USING {using}")
+        if call.get("target_source"):
+            details.append(f"target_source {call['target_source']}")
+        if details:
+            line += ": " + ", ".join(details)
+        lines.append(line + ".")
+
+    metadata = {
+        "chunk_type": "external_program_calls",
+        "chunk_id": f"{program}:external_program_calls",
+        "parent_program_chunk": f"{program}:program_summary",
+        "program": program,
+        "calls": calls,
+        "call_targets": sorted({call["target"] for call in calls}),
+        "call_count": len(calls),
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__external_program_calls.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        print(f"  external_program_calls: calls={len(calls)}")
+    return 1
+
+
+def generate_datasets_tables_resources(report_dir: Path, chunks_dir: Path,
+                                       program: str, verbose: bool) -> int:
+    """Generate one chunk separating DB2 tables, CICS datasets/files, and resources."""
+    deps_path = report_dir / "knowledge_base" / "03_Dependencies.yaml"
+    if not deps_path.exists():
+        return 0
+    deps = load_yaml(deps_path)
+    if not deps:
+        return 0
+
+    db = deps.get("database", {}) or {}
+    tables_read = db.get("tables_read", []) or []
+    tables_updated = db.get("tables_updated", []) or []
+    sql_stmts = db.get("sql_statements", []) or []
+    resources = _classify_cics_resources(deps.get("cics_operations", []) or [])
+    statement_resources = _extract_cics_resource_details(report_dir)
+    for group_name, values in statement_resources.items():
+        resources.setdefault(group_name, [])
+        resources[group_name] = _dedupe_resource_facts(resources[group_name] + values)
+
+    has_content = any([
+        tables_read,
+        tables_updated,
+        sql_stmts,
+        any(resources.values()),
+    ])
+    if not has_content:
+        return 0
+
+    lines = [f"Datasets, tables, and resources for {program}:"]
+    if tables_read:
+        lines.append(f"DB2 tables read: {', '.join(tables_read)}.")
+    if tables_updated:
+        lines.append(f"DB2 tables updated: {', '.join(tables_updated)}.")
+    if sql_stmts:
+        lines.append(f"SQL operations: {', '.join(sql_stmts)}.")
+    _append_resource_lines(lines, "CICS datasets/files read", resources.get("cics_files_read", []))
+    _append_resource_lines(lines, "CICS datasets/files written", resources.get("cics_files_written", []))
+    _append_resource_lines(lines, "CICS datasets/files browsed", resources.get("cics_files_browsed", []))
+    _append_resource_lines(lines, "CICS queues", resources.get("cics_queues", []))
+    _append_resource_lines(lines, "CICS maps", resources.get("cics_maps", []))
+    _append_resource_lines(lines, "CICS mapsets", resources.get("cics_mapsets", []))
+    _append_resource_lines(lines, "CICS transaction ids", resources.get("cics_transactions", []))
+
+    metadata = {
+        "chunk_type": "datasets_tables_resources",
+        "chunk_id": f"{program}:datasets_tables_resources",
+        "parent_program_chunk": f"{program}:program_summary",
+        "program": program,
+        "db2_tables_read": tables_read,
+        "db2_tables_updated": tables_updated,
+        "sql_statements": sql_stmts,
+        **resources,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__datasets_tables_resources.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        print(f"  datasets_tables_resources: db2_r={len(tables_read)}, "
+              f"resources={sum(len(v) for v in resources.values())}")
+    return 1
+
+
+def _extract_cics_call_details(report_dir: Path) -> dict[tuple[str, str], list[dict]]:
+    details: dict[tuple[str, str], list[dict]] = {}
+    for paragraph, statement in _iter_active_cics_statements(report_dir):
+        command_match = re.search(r"\bEXEC\s+CICS\s+(LINK|XCTL)\b", statement, re.IGNORECASE)
+        if not command_match:
+            continue
+        command = command_match.group(1).upper()
+        target = _extract_cics_arg(statement, "PROGRAM")
+        if not _is_valid_program_target(target):
+            continue
+        call = {
+            "command": command,
+            "target": str(target).strip().strip("'\"").upper(),
+            "target_kind": "PROGRAM",
+            "target_source": "literal" if _is_quoted_arg(target) else "identifier",
+        }
+        if paragraph:
+            call["paragraph"] = paragraph
+        commarea = _extract_cics_arg(statement, "COMMAREA")
+        if commarea:
+            call["commarea"] = _clean_cics_arg(commarea)
+        length = _extract_cics_arg(statement, "LENGTH")
+        if length:
+            call["length"] = _clean_cics_arg(length)
+        call["statement"] = statement
+        details.setdefault((command, call["target"]), []).append(call)
+    return {key: _dedupe_call_facts(value) for key, value in details.items()}
+
+
+def _extract_cics_resource_details(report_dir: Path) -> dict[str, list[dict]]:
+    resources: dict[str, list[dict]] = {}
+    for paragraph, statement in _iter_active_cics_statements(report_dir):
+        command_match = re.search(r"\bEXEC\s+CICS\s+([A-Z0-9-]+)\b", statement, re.IGNORECASE)
+        command = command_match.group(1).upper() if command_match else ""
+        for arg_name, group_name in [
+            ("DATASET", "cics_files_read"),
+            ("FILE", "cics_files_read"),
+            ("QUEUE", "cics_queues"),
+            ("QNAME", "cics_queues"),
+            ("MAP", "cics_maps"),
+            ("MAPSET", "cics_mapsets"),
+            ("TRANSID", "cics_transactions"),
+        ]:
+            value = _extract_cics_arg(statement, arg_name)
+            if not value:
+                continue
+            target = _clean_cics_arg(value)
+            if not target:
+                continue
+            resolved_group = group_name
+            if arg_name in {"DATASET", "FILE"}:
+                resolved_group = _file_group_for_command(command)
+            fact = {
+                "target": target,
+                "command": command,
+                "target_source": "literal" if _is_quoted_arg(value) else "identifier",
+            }
+            if paragraph:
+                fact["paragraph"] = paragraph
+            resources.setdefault(resolved_group, []).append(fact)
+    return {
+        group: _dedupe_resource_facts(values)
+        for group, values in resources.items()
+    }
+
+
+def _iter_active_cics_statements(report_dir: Path):
+    narrative = report_dir / "knowledge_base" / "01_Logic_Narrative.md"
+    if not narrative.exists():
+        return
+    paragraph = ""
+    for raw_line in narrative.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if line.startswith("## "):
+            paragraph = line[3:].strip()
+            continue
+        if "**CICS:**" not in line:
+            continue
+        match = re.search(r"`([^`]*EXEC\s+CICS[^`]*)`", line, re.IGNORECASE)
+        if match:
+            yield paragraph, " ".join(match.group(1).split())
+
+
+def _extract_cics_arg(statement: str, arg_name: str) -> str:
+    match = re.search(rf"\b{re.escape(arg_name)}\s*\(([^)]*)\)", statement, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
+
+def _clean_cics_arg(value: str) -> str:
+    return str(value or "").strip().strip("'\"")
+
+
+def _is_quoted_arg(value: str) -> bool:
+    value = str(value or "").strip()
+    return (value.startswith("'") and value.endswith("'")) or (
+        value.startswith('"') and value.endswith('"')
+    )
+
+
+def _dedupe_call_facts(calls: list[dict]) -> list[dict]:
+    result = []
+    seen = set()
+    for call in calls:
+        key = (
+            call.get("command"),
+            call.get("target"),
+            call.get("paragraph"),
+            call.get("commarea"),
+            call.get("length"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(call)
+    return result
+
+
+def _classify_cics_resources(cics_operations: list[dict]) -> dict[str, list[dict]]:
+    resources: dict[str, list[dict]] = {
+        "cics_files_read": [],
+        "cics_files_written": [],
+        "cics_files_browsed": [],
+        "cics_queues": [],
+        "cics_maps": [],
+        "cics_mapsets": [],
+        "cics_transactions": [],
+    }
+    for op in cics_operations:
+        if not isinstance(op, dict):
+            continue
+        target = str(op.get("target", "")).strip()
+        target_kind = str(op.get("target_kind", "")).strip().upper()
+        if not target or not target_kind:
+            continue
+        command = str(op.get("command", "")).upper()
+        op_type = str(op.get("type", "")).lower()
+        group = ""
+        if target_kind in {"FILE", "DATASET"}:
+            group = _file_group_for_command(command, op_type)
+        elif target_kind == "QUEUE":
+            group = "cics_queues"
+        elif target_kind == "MAP":
+            group = "cics_maps"
+        elif target_kind == "MAPSET":
+            group = "cics_mapsets"
+        elif target_kind == "TRANSID":
+            group = "cics_transactions"
+        if not group:
+            continue
+        fact = {
+            "target": target,
+            "command": command,
+        }
+        if op.get("target_source"):
+            fact["target_source"] = op["target_source"]
+        resources.setdefault(group, []).append(fact)
+    return {
+        group: _dedupe_resource_facts(values)
+        for group, values in resources.items()
+    }
+
+
+def _file_group_for_command(command: str, op_type: str = "") -> str:
+    command = str(command or "").upper()
+    op_type = str(op_type or "").lower()
+    if command in {"WRITE", "REWRITE", "DELETE"} or "write" in op_type or "delete" in op_type:
+        return "cics_files_written"
+    if command in {"STARTBR", "READNEXT", "READPREV", "ENDBR"} or "browse" in op_type:
+        return "cics_files_browsed"
+    return "cics_files_read"
+
+
+def _dedupe_resource_facts(resources: list[dict]) -> list[dict]:
+    result = []
+    seen = set()
+    for resource in resources:
+        key = (
+            resource.get("target"),
+            resource.get("command"),
+            resource.get("paragraph"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(resource)
+    return result
+
+
+def _append_resource_lines(lines: list[str], label: str, resources: list[dict]) -> None:
+    if not resources:
+        return
+    rendered = []
+    for resource in resources:
+        text = str(resource.get("target", ""))
+        details = []
+        if resource.get("command"):
+            details.append(str(resource["command"]))
+        if resource.get("paragraph"):
+            details.append(f"in {resource['paragraph']}")
+        if details:
+            text += f" ({', '.join(details)})"
+        rendered.append(text)
+    lines.append(f"{label}: {', '.join(rendered)}.")
+
+
 def generate_static_values(report_dir: Path, chunks_dir: Path,
                            program: str, verbose: bool) -> int:
     """Create one aggregate chunk for statically assigned COBOL values."""
@@ -732,18 +1389,38 @@ def generate_static_values(report_dir: Path, chunks_dir: Path,
     if not values:
         return 0
 
+    provenance = _extract_static_value_provenance(report_dir)
+    consumer_lookup = _extract_static_value_consumers(report_dir, set(values.keys()), provenance)
     entries = []
     for variable, assigned_values in sorted(values.items()):
         clean_values = [str(v) for v in assigned_values if str(v).strip()]
         if clean_values:
-            entries.append({"variable": variable, "values": clean_values})
+            entry = {"variable": variable, "values": clean_values}
+            if variable in provenance:
+                entry["paragraphs"] = provenance[variable]["paragraphs"]
+                entry["category"] = provenance[variable]["category"]
+            else:
+                entry["category"] = _classify_static_value(variable, [])
+            entry["consumers"] = consumer_lookup.get(variable) or [{
+                "role": "unknown",
+                "paragraph": None,
+                "evidence": "no explicit consumer found in available paragraph/CICS evidence",
+            }]
+            entries.append(entry)
     if not entries:
         return 0
 
     lines = [f"Static and forced values for program {program}:"]
     for entry in entries:
         rendered_values = ", ".join(entry["values"])
-        lines.append(f"- {entry['variable']}: {rendered_values}")
+        line = f"- {entry['variable']}: {rendered_values}"
+        if entry.get("category"):
+            line += f". Category: {entry['category']}"
+        if entry.get("paragraphs"):
+            line += f". Paragraphs: {', '.join(entry['paragraphs'])}"
+        if entry.get("consumers"):
+            line += ". Consumer: " + _render_static_consumers(entry["consumers"])
+        lines.append(line)
 
     metadata = {
         "chunk_type": "static_values",
@@ -764,6 +1441,196 @@ def generate_static_values(report_dir: Path, chunks_dir: Path,
     if verbose:
         print(f"  static_values: variables={len(entries)}")
     return 1
+
+
+def _extract_static_value_provenance(report_dir: Path) -> dict[str, dict]:
+    """Extract paragraph-level provenance from generated narrative Known values lines."""
+    narrative = report_dir / "knowledge_base" / "01_Logic_Narrative.md"
+    if not narrative.exists():
+        return {}
+    found: dict[str, set[str]] = {}
+    paragraph = ""
+    for raw_line in narrative.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if line.startswith("## "):
+            paragraph = line[3:].strip()
+            continue
+        match = re.search(r"\bKnown values:\s+([A-Z0-9_$#@-]+)\s*=", line)
+        if not match:
+            continue
+        variable = match.group(1)
+        if paragraph:
+            found.setdefault(variable, set()).add(paragraph)
+
+    result = {}
+    for variable, paragraphs in found.items():
+        ordered = sorted(paragraphs)
+        result[variable] = {
+            "paragraphs": ordered,
+            "category": _classify_static_value(variable, ordered),
+        }
+    return result
+
+
+def _extract_static_value_consumers(report_dir: Path, variables: set[str],
+                                   provenance: dict[str, dict]) -> dict[str, list[dict]]:
+    """Infer static-value consumers from same-paragraph CICS evidence.
+
+    This intentionally stays conservative: it only uses variables with paragraph
+    provenance and active CICS statements already present in the report narrative.
+    """
+    by_paragraph: dict[str, list[str]] = {}
+    for paragraph, statement in _iter_active_cics_statements(report_dir):
+        if paragraph:
+            by_paragraph.setdefault(paragraph, []).append(statement)
+
+    result: dict[str, list[dict]] = {}
+    for variable in sorted(variables):
+        paragraphs = provenance.get(variable, {}).get("paragraphs", [])
+        category = provenance.get(variable, {}).get("category", _classify_static_value(variable, paragraphs))
+        facts: list[dict] = []
+        for paragraph in paragraphs:
+            for statement in by_paragraph.get(paragraph, []):
+                fact = _static_consumer_from_cics_statement(variable, category, paragraph, statement)
+                if fact:
+                    facts.append(fact)
+        if facts:
+            result[variable] = _dedupe_static_consumers(facts)
+    return result
+
+
+def _static_consumer_from_cics_statement(variable: str, category: str,
+                                        paragraph: str, statement: str) -> dict | None:
+    command_match = re.search(r"\bEXEC\s+CICS\s+([A-Z0-9-]+)\b", statement, re.IGNORECASE)
+    command = command_match.group(1).upper() if command_match else ""
+    if not command:
+        return None
+
+    program_target = _clean_cics_arg(_extract_cics_arg(statement, "PROGRAM"))
+    for arg_name, role in [
+        ("COMMAREA", "external-call COMMAREA"),
+        ("LENGTH", "external-call length"),
+        ("TRANSID", "CICS transaction id"),
+        ("MAP", "screen/map field"),
+        ("MAPSET", "screen/map field"),
+        ("QUEUE", "CICS queue name"),
+        ("QNAME", "CICS queue name"),
+        ("FILE", "CICS file/dataset name"),
+        ("DATASET", "CICS file/dataset name"),
+    ]:
+        raw_value = _extract_cics_arg(statement, arg_name)
+        if not raw_value:
+            continue
+        value = _clean_cics_arg(raw_value)
+        if not _variable_matches_cics_arg(variable, value):
+            continue
+        fact = {
+            "role": role,
+            "paragraph": paragraph,
+            "command": command,
+            "argument": arg_name,
+            "argument_value": value,
+            "evidence": statement,
+        }
+        if program_target:
+            fact["target_program"] = program_target
+        return fact
+
+    category_l = str(category or "").lower()
+    if "screen/map" in category_l and command in {"SEND", "RECEIVE"}:
+        target = _clean_cics_arg(_extract_cics_arg(statement, "MAP")) or _clean_cics_arg(_extract_cics_arg(statement, "MAPSET"))
+        return {
+            "role": "screen/map field",
+            "paragraph": paragraph,
+            "command": command,
+            "argument": "MAP/MAPSET",
+            "argument_value": target,
+            "evidence": statement,
+        }
+    if "abend" in category_l and command in {"ABEND", "LINK", "XCTL"}:
+        return {
+            "role": "abend/error handling",
+            "paragraph": paragraph,
+            "command": command,
+            "argument": "CICS",
+            "argument_value": program_target,
+            "evidence": statement,
+        }
+    return None
+
+
+def _variable_matches_cics_arg(variable: str, arg_value: str) -> bool:
+    var_u = str(variable or "").upper()
+    arg_u = str(arg_value or "").upper()
+    if not var_u or not arg_u:
+        return False
+    if var_u == arg_u or var_u in arg_u or arg_u in var_u:
+        return True
+    root = var_u.split("-", 1)[0]
+    if len(root) >= 5 and root in arg_u:
+        return True
+    if arg_u.startswith("W") and len(root) >= 5 and root in arg_u[1:]:
+        return True
+    return False
+
+
+def _dedupe_static_consumers(consumers: list[dict]) -> list[dict]:
+    result = []
+    seen = set()
+    for consumer in consumers:
+        key = (
+            consumer.get("role"),
+            consumer.get("paragraph"),
+            consumer.get("command"),
+            consumer.get("argument"),
+            consumer.get("argument_value"),
+            consumer.get("target_program"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(consumer)
+    return result
+
+
+def _render_static_consumers(consumers: list[dict]) -> str:
+    rendered = []
+    for consumer in consumers[:3]:
+        role = consumer.get("role", "unknown")
+        if role == "unknown":
+            rendered.append("unknown")
+            continue
+        text = role
+        if consumer.get("target_program"):
+            text += f" for {consumer['command']} {consumer['target_program']}"
+        elif consumer.get("command"):
+            text += f" for {consumer['command']}"
+        if consumer.get("argument") and consumer.get("argument_value"):
+            text += f" via {consumer['argument']} {consumer['argument_value']}"
+        if consumer.get("paragraph"):
+            text += f" in {consumer['paragraph']}"
+        rendered.append(text)
+    if len(consumers) > 3:
+        rendered.append(f"{len(consumers) - 3} more")
+    return "; ".join(rendered)
+
+
+def _classify_static_value(variable: str, paragraphs: list[str]) -> str:
+    variable_u = str(variable or "").upper()
+    paragraph_text = " ".join(paragraphs).upper()
+    if "ABEND" in variable_u or "ABEND" in paragraph_text:
+        return "abend code"
+    if any(term in variable_u for term in ("FUNZIONE", "RETURN", "KOST", "NELEM", "CODICE")):
+        if "LINK" in paragraph_text:
+            return "external-call parameter"
+        return "parameter setup"
+    if any(term in variable_u for term in ("MAP", "RIGA", "MSG", "M1")):
+        return "screen/map field"
+    if "SEP" in variable_u or "SEPARA" in variable_u:
+        return "separator/literal formatting value"
+    if any(term in variable_u for term in ("FASE", "STATO", "BROWSE")):
+        return "CICS control value"
+    return "initialization or business constant"
 
 
 # =============================================================================
@@ -2186,11 +3053,20 @@ def apply_size_guard(chunks_dir: Path, program_or_job: str,
 
 
 def _split_parts_with_context(text: str, metadata: dict) -> list[str]:
+    chunk_type = metadata.get("chunk_type", "")
+    if chunk_type in {
+        "static_values",
+        "external_program_calls",
+        "datasets_tables_resources",
+        "copybook_mentions",
+        "copybook_fields",
+    }:
+        return _split_line_based_chunk(text, chunk_type)
+
     parts = split_bpe_text(text, MAX_CHUNK_TOKENS, OVERLAP_TOKENS)
     if len(parts) <= 1:
         return parts
 
-    chunk_type = metadata.get("chunk_type", "")
     section = metadata.get("section", "")
     if chunk_type == "section_summary" and section:
         section_label = section if str(section).upper().startswith("SECTION") else f"SECTION {section}"
@@ -2202,6 +3078,37 @@ def _split_parts_with_context(text: str, metadata: dict) -> list[str]:
             adjusted.extend(continued + subpart for subpart in subparts)
         return adjusted
     return parts
+
+
+def _split_line_based_chunk(text: str, chunk_type: str) -> list[str]:
+    """Split structured list chunks without cutting evidence lines in half."""
+    lines = text.splitlines()
+    if token_count(text) <= MAX_CHUNK_TOKENS or len(lines) <= 2:
+        return [text]
+
+    title = lines[0]
+    body = [line for line in lines[1:] if line.strip()]
+    continued = f"{title} (continued):"
+    parts: list[str] = []
+    current = [title]
+
+    for line in body:
+        candidate = current + [line]
+        if token_count("\n".join(candidate)) <= MAX_CHUNK_TOKENS:
+            current = candidate
+            continue
+        if len(current) > 1:
+            parts.append("\n".join(current))
+            current = [continued, line]
+        else:
+            # A single evidence line is too large; fall back for that line only.
+            parts.extend(split_bpe_text("\n".join(candidate), MAX_CHUNK_TOKENS, 0))
+            current = [continued]
+
+    if len(current) > 1:
+        parts.append("\n".join(current))
+
+    return parts or [text]
 
 
 def _split_if_needed(filepath: Path, chunks_dir: Path,
@@ -2430,6 +3337,10 @@ def generate_rag_bundle(report_dir: Path, chunks_dir: Path,
         if source.is_file():
             shutil.copy2(source, bundle_artifacts / name)
             artifact_count += 1
+    copybooks_dir = report_dir / "copybooks"
+    if copybooks_dir.is_dir():
+        shutil.copytree(copybooks_dir, bundle_artifacts / "copybooks")
+        artifact_count += len([path for path in copybooks_dir.iterdir() if path.is_file()])
 
     manifest = {
         "program": program,
@@ -3383,6 +4294,14 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         summary["program_summary"] = generate_program_summary(
             report_dir, chunks_dir, program, verbose)
         summary["dependencies"] = generate_dependencies(
+            report_dir, chunks_dir, program, verbose)
+        summary["copybook_mentions"] = generate_copybook_mentions(
+            report_dir, chunks_dir, program, verbose)
+        summary["copybook_fields"] = generate_copybook_fields(
+            report_dir, chunks_dir, program, verbose)
+        summary["external_program_calls"] = generate_external_program_calls(
+            report_dir, chunks_dir, program, verbose)
+        summary["datasets_tables_resources"] = generate_datasets_tables_resources(
             report_dir, chunks_dir, program, verbose)
         summary["cics_operations"] = generate_cics_operations(
             report_dir, chunks_dir, program, verbose)
