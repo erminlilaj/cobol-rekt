@@ -620,8 +620,21 @@ class ChunkPipelineTest(unittest.TestCase):
                                 "levelNumber": 5,
                                 "name": "JAVA-PARSED-FIELD",
                                 "rawText": "05 JAVA-PARSED-FIELD PIC X(10).",
+                                "pictureClause": "X(10)",
+                                "usage": "DISPLAY",
+                                "byteSize": 10,
+                                "byteOffset": 4,
+                                "sourceLine": 12,
                                 "sourceSection": "LINKAGE",
                                 "dataType": "STRING",
+                                "children": [],
+                            },
+                            {
+                                "levelNumber": 5,
+                                "name": "RAW-TEXT-ONLY",
+                                "rawText": "05 RAW-TEXT-ONLY PIC 9(4).",
+                                "sourceSection": "LINKAGE",
+                                "dataType": "NUMBER",
                                 "children": [],
                             }
                         ],
@@ -633,10 +646,16 @@ class ChunkPipelineTest(unittest.TestCase):
             data = chunk_pipeline.load_json(chunks_dir / "JAVAFIELDS.CBL__copybook_fields.json")
 
             self.assertEqual(1, count)
-            self.assertEqual("java_rawtext_regex", data["metadata"]["field_source"])
+            self.assertEqual("java_structured_fields", data["metadata"]["field_source"])
             self.assertFalse(data["metadata"]["copybook_origin_available"])
             self.assertEqual("incomplete", data["metadata"]["analysis_status"])
             self.assertIn("JAVA-PARSED-FIELD", data["text"])
+            self.assertIn("PIC X(10)", data["text"])
+            self.assertIn("USAGE DISPLAY", data["text"])
+            self.assertIn("byte_size 10", data["text"])
+            self.assertIn("source line 12", data["text"])
+            self.assertIn("RAW-TEXT-ONLY", data["text"])
+            self.assertNotIn("PIC 9(4)", data["text"])
             self.assertNotIn("RAW-FALLBACK-ONLY", data["text"])
             self.assertIn("field-to-copybook ownership is not available", data["text"])
 

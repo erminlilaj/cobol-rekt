@@ -457,12 +457,12 @@ These changes remove the Python heuristic layer for field and usage facts.
 
 Data-structure export should add, where available:
 
-- `pictureClause`
-- `usage`
-- `occursCount` and `dependingOn`
-- byte size and byte offset/memory region
-- source location
-- copybook/source origin for each field
+- Done: `pictureClause`
+- Done: `usage`
+- Done: `occursCount` and `occursDependingOn`
+- Done: byte size and byte offset when memory layout is available
+- Done: source line/source column/source name when parser token location is available
+- Still blocked: copybook/source origin for each field. The current Java data-structure model carries source section and parser token location, but not the originating copybook file for expanded copybook fields.
 
 CFG or dependency export should add, where available:
 
@@ -910,16 +910,17 @@ Critical review:
 - The current implementation reparses copybook text in Python with regex. This is weaker than the Java ANTLR/data-structure export and creates two parsing paths for the same COBOL facts.
 - Existing Java `data_structures/*-data.json` already contains recursive hierarchy, `rawText`, `dataType`, `sourceSection`, redefinition flags, and categories. This should become the primary source for field chunks.
 - Current `*-data.json` does not clearly preserve copybook origin for every field. If per-copybook ownership is required, extend the Java export first with `source_file`, `source_line`, and `copybook`/origin metadata.
-- Current Java `*-data.json` does not expose structured `pictureClause`, `occursCount`, `usage`, `byteSize`, or `offset`. Those facts are only recoverable from `rawText` today, so any Python extraction of them must be labeled as `rawText` regex-derived, not parser-structured.
+- Fixed after review: current Java `*-data.json` export now exposes structured `pictureClause`, `usage`, `occursCount`, `occursDependingOn`, `byteSize`, `byteOffset`, `sourceLine`, `sourceColumn`, and `sourceName` when available.
 - A flat Java data-structure field list is a program-level data namespace after copybook expansion. It must not be presented as the fields of each included copybook.
 - If `*-data.json` is a degraded/null fallback tree, raw copybook fallback must be treated as incomplete/unavailable and must not create authoritative-looking copybook-field facts.
-- Until redesigned, this step is acceptable for fixture-level proof only. Do not use it as the final basis for full corpus regeneration.
+- Python `copybook_fields` no longer parses Java `rawText` for `PIC` / `VALUE`; it renders only structured fields exported by Java. The raw copybook parser remains as an explicitly labeled fallback only when Java data structures are absent and not degraded.
+- Remaining blocker: exact field-to-copybook ownership still requires Java/source-map support for copybook origin.
 
 Redesign tasks:
 
 - Use Java data-structure output as the primary source for hierarchy, field names, levels, data type, source section, and redefines.
-- Add structured Java exports for `pictureClause`, `occursCount`, `usage`, byte size/offset when available, and field origin/copybook/source location.
-- Until Java exports structured PIC/OCCURS/usage, either omit those fields from `copybook_fields` or label them as `rawText_regex` derived.
+- Done: add structured Java exports for `pictureClause`, `occursCount`, `occursDependingOn`, `usage`, byte size/offset, and source token location when available.
+- Done: Python uses structured Java fields and labels the Java path as `field_source: java_structured_fields`.
 - Until Java exports field origin, emit program-level "fields after copybook expansion" with explicit uncertainty, not per-copybook field ownership.
 - Disable raw copybook fallback for degraded/null Java data-structure sentinel outputs, or emit only an incomplete/unavailable status.
 - Keep `_extract_copybook_fields()` only as a named fallback for diagnostics, not as the default answer path for RAG.
@@ -940,7 +941,8 @@ Acceptance checks:
 - Resolved fields must be separated from stubbed/missing copybook limitations without implying ownership that is not present in artifacts.
 - Partial for existing corpus: old reports do not contain report-local `copybooks/`, so they will need regeneration before this chunk contains real field lists.
 - Blocked for corpus gate: field extraction must be redesigned around Java `*-data.json` or Java-origin metadata before broad regeneration.
-- Safety-fixed for sample gate: the chunk now prefers Java `*-data.json`; exact per-copybook grouping remains blocked until Java exports field origin.
+- Done for structured field facts: Java exports structured field details and Python consumes them without regexing Java `rawText`.
+- Still blocked for exact per-copybook grouping: Java does not yet export field origin/copybook ownership.
 
 Verification - 2026-05-03:
 
@@ -949,6 +951,16 @@ Verification - 2026-05-03:
 - Command: `PYTHONPYCACHEPREFIX=/tmp/cobol-rekt-pycache python3 -m py_compile analyze.py chunk_pipeline.py validate_chunks.py audit_chunk_regeneration.py test_chunk_pipeline.py test_audit_chunk_regeneration.py`
 - Result: passed.
 - Scope: fixture/unit coverage only; real `out/report` was not regenerated.
+
+Additional verification - 2026-05-03:
+
+- Command: `mvn -pl smojol-toolkit test -Dtest=WriteDataStructuresTaskRegressionTest -Dsurefire.failIfNoSpecifiedTests=false`
+- Result: passed, 2 tests run.
+- Command: `python3 -m unittest test_chunk_pipeline test_audit_chunk_regeneration`
+- Result: passed, 46 tests run, 2 skipped.
+- Command: `PYTHONPYCACHEPREFIX=/tmp/cobol-rekt-pycache python3 -m py_compile chunk_pipeline.py validate_chunks.py test_chunk_pipeline.py`
+- Result: passed.
+- Generated test artifact confirmed `CUSTOMER-ID` includes `pictureClause: 9(5)`, `usage: COMP-3`, `byteSize`, `byteOffset`, and source location; `ITEM-TABLE` includes `occursCount: 3` and `occursDependingOn: ITEM-COUNT`.
 
 ### Step 4: Static Value Consumer Provenance
 

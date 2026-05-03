@@ -1356,7 +1356,7 @@ def _write_java_data_copybook_fields_chunk(
         "chunk_id": f"{program}:copybook_fields",
         "program": program,
         "analysis_status": status,
-        "field_source": "java_rawtext_regex",
+        "field_source": "java_structured_fields",
         "copybook_origin_available": False,
         "copybook_count": len(entries),
         "copybooks": entries,
@@ -1371,7 +1371,7 @@ def _write_java_data_copybook_fields_chunk(
     )
     if verbose:
         print(
-            f"  copybook_fields: source=java_rawtext_regex, "
+            f"  copybook_fields: source=java_structured_fields, "
             f"copybooks={len(entries)}, fields={len(java_fields)}"
         )
     return 1
@@ -1405,12 +1405,22 @@ def _load_java_data_structure_fields(report_dir: Path) -> list[dict] | None:
                 "data_type": node.get("dataType", "UNKNOWN"),
                 "parent": parent,
             }
-            picture = _extract_copybook_picture(raw_text)
-            value = _extract_copybook_value(raw_text)
-            if picture:
-                field["picture"] = picture
-            if value:
-                field["value"] = value
+            if node.get("pictureClause"):
+                field["picture"] = node["pictureClause"]
+            if node.get("usage"):
+                field["usage"] = node["usage"]
+            for source_key, target_key in [
+                ("occursCount", "occurs_count"),
+                ("occursDependingOn", "occurs_depending_on"),
+                ("byteSize", "byte_size"),
+                ("byteOffset", "byte_offset"),
+                ("sourceLine", "source_line"),
+                ("sourceColumn", "source_column"),
+            ]:
+                if node.get(source_key) is not None:
+                    field[target_key] = node[source_key]
+            if node.get("sourceName"):
+                field["source_name"] = node["sourceName"]
             if node.get("isRedefinition"):
                 field["redefines"] = node.get("redefines", "")
             categories = node.get("categories")
@@ -1433,10 +1443,21 @@ def _format_field_fact(field: dict) -> str:
     parts = [f"{field['name']} (level {field.get('level', '?')}"]
     if field.get("picture"):
         parts.append(f"PIC {field['picture']}")
-    if field.get("value"):
-        parts.append(f"VALUE {field['value']}")
+    if field.get("usage"):
+        parts.append(f"USAGE {field['usage']}")
+    if field.get("occurs_count"):
+        occurs = f"OCCURS {field['occurs_count']}"
+        if field.get("occurs_depending_on"):
+            occurs += f" DEPENDING ON {field['occurs_depending_on']}"
+        parts.append(occurs)
     if field.get("data_type"):
         parts.append(f"type {field['data_type']}")
+    if field.get("byte_size") is not None:
+        parts.append(f"byte_size {field['byte_size']}")
+    if field.get("byte_offset") is not None:
+        parts.append(f"byte_offset {field['byte_offset']}")
+    if field.get("source_line") is not None:
+        parts.append(f"source line {field['source_line']}")
     if field.get("source_section"):
         parts.append(f"section {field['source_section']}")
     if field.get("redefines"):
