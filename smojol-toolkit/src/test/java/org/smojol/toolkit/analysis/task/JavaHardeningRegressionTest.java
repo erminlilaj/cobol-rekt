@@ -140,6 +140,9 @@ class JavaHardeningRegressionTest {
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "FLAG"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "COUNTER"));
         assertEquals("java_flow_node_expressions", paragraph.get("variableUsageSource").getAsString());
+        assertTrue(paragraph.get("reachable").getAsBoolean());
+        assertEquals("java_cfg_graph_traversal", paragraph.get("reachabilitySource").getAsString());
+        assertFalse(paragraph.get("deadCodeCandidate").getAsBoolean());
 
         assertNotNull(move);
         assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesRead"), "IN-1"));

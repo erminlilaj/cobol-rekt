@@ -1012,6 +1012,45 @@ class ChunkPipelineTest(unittest.TestCase):
             )
             self.assertNotIn("WRONG-TARGET", usage["MAIN-PARA"][0])
 
+    def test_reachability_prefers_java_cfg_annotations(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "REACH.CBL.report"
+            cfg_dir = report_dir / "cfg"
+            cfg_dir.mkdir(parents=True)
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-REACH.CBL.json", {
+                "nodes": [
+                    {
+                        "id": "root",
+                        "name": "ROOT",
+                        "type": "PROCEDURE_DIVISION_BODY",
+                        "reachable": True,
+                        "reachabilitySource": "java_cfg_graph_traversal",
+                    },
+                    {
+                        "id": "live",
+                        "name": "LIVE-PARA",
+                        "type": "PARAGRAPH",
+                        "reachable": True,
+                        "reachabilitySource": "java_cfg_graph_traversal",
+                    },
+                    {
+                        "id": "dead",
+                        "name": "DEAD-PARA",
+                        "type": "PARAGRAPH",
+                        "reachable": False,
+                        "reachabilitySource": "java_cfg_graph_traversal",
+                    },
+                ],
+                "edges": [
+                    {"fromNodeID": "root", "toNodeID": "live", "edgeType": "STARTS_WITH"},
+                    {"fromNodeID": "root", "toNodeID": "dead", "edgeType": "FOLLOWED_BY"},
+                ],
+            })
+
+            reachable = chunk_pipeline._compute_reachable_paragraphs(report_dir)
+
+            self.assertEqual(({"LIVE-PARA"}, "java_cfg_graph_traversal"), reachable)
+
     def test_program_summary_includes_called_by_from_cross_program_calls(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             out_dir = Path(td) / "out"

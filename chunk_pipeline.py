@@ -3079,15 +3079,14 @@ def _build_paragraph_subgraphs(report_dir: Path) -> dict[str, dict]:
     return result
 
 
-def _compute_reachable_paragraphs(report_dir: Path) -> set[str] | None:
-    """BFS from CFG root via all edge types to find reachable paragraphs.
+def _compute_reachable_paragraphs(report_dir: Path) -> tuple[set[str], str] | None:
+    """Return Java-exported reachable paragraphs, with a legacy local fallback.
 
-    Returns a set of paragraph names reachable from the root, or None if
+    Returns reachable paragraph names plus provenance, or None if
     CFG data is unavailable (consumers must skip the reachable flag).
 
-    COBOL fall-through semantics: a paragraph with no JUMPS_TO can still be
-    reached via FOLLOWED_BY from the prior paragraph. BFS over all edge types
-    (FOLLOWED_BY + STARTS_WITH + JUMPS_TO) correctly handles this.
+    New CFG exports annotate reachability in Java while walking the real CFG
+    edges.  The local BFS fallback is retained only for old reports.
     """
     cfg_dir = report_dir / "cfg"
     if not cfg_dir.is_dir():
@@ -3103,6 +3102,22 @@ def _compute_reachable_paragraphs(report_dir: Path) -> set[str] | None:
     edges = data.get("edges", [])
     if not nodes:
         return set()
+
+    java_reachable = {
+        n.get("name", "")
+        for n in nodes
+        if n.get("type") == "PARAGRAPH"
+        and n.get("name", "")
+        and n.get("reachable") is True
+        and n.get("reachabilitySource") == "java_cfg_graph_traversal"
+    }
+    java_annotated = any(
+        n.get("type") == "PARAGRAPH"
+        and n.get("reachabilitySource") == "java_cfg_graph_traversal"
+        for n in nodes
+    )
+    if java_annotated:
+        return java_reachable, "java_cfg_graph_traversal"
 
     node_by_id = {n["id"]: n for n in nodes}
 
@@ -3136,7 +3151,7 @@ def _compute_reachable_paragraphs(report_dir: Path) -> set[str] | None:
         for nid in visited
         if node_by_id.get(nid, {}).get("type") == "PARAGRAPH"
         and node_by_id[nid].get("name", "")
-    }
+    }, "python_cfg_bfs_legacy"
 
 
 def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
@@ -3156,7 +3171,9 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
         _copybooks_used = list(dict.fromkeys(cs["copybook"] for cs in copy_stmts))
 
     # Enhancement 4 — dead code detection via CFG BFS
-    reachable_set = _compute_reachable_paragraphs(report_dir)
+    reachable_info = _compute_reachable_paragraphs(report_dir)
+    reachable_set = reachable_info[0] if reachable_info else None
+    reachability_source = reachable_info[1] if reachable_info else None
 
     enriched = 0
     for chunk_file in chunks_dir.glob(f"{program}__paragraph__*.json"):
@@ -3225,6 +3242,7 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
         # Enhancement 4 — dead code detection
         if reachable_set is not None:
             data["metadata"]["reachable"] = para_name in reachable_set
+            data["metadata"]["reachability_source"] = reachability_source
             changed = True
 
         # Enhancement 2b — copybooks used by this program

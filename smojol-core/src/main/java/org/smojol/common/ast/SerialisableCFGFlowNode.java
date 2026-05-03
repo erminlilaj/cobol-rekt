@@ -21,6 +21,9 @@ public class SerialisableCFGFlowNode {
     private final List<String> variablesModified;
     private final String variableUsageSource;
     private final String nodeType = "CODE_VERTEX";
+    private Boolean reachable;
+    private String reachabilitySource;
+    private Boolean deadCodeCandidate;
 
     protected SerialisableCFGFlowNode(String id, String label, String name, String originalText, FlowNodeType type,
                                       List<SemanticCategory> categories, Map<String, Object> metadata,
@@ -57,5 +60,13 @@ public class SerialisableCFGFlowNode {
 
     private static List<String> emptyToNull(List<String> values) {
         return values == null || values.isEmpty() ? null : values;
+    }
+
+    public void annotateReachability(boolean isReachable, String source) {
+        reachable = isReachable;
+        reachabilitySource = source;
+        if (type == FlowNodeType.PARAGRAPH) {
+            deadCodeCandidate = !isReachable;
+        }
     }
 }
