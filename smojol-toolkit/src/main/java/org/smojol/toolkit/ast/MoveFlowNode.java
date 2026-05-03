@@ -5,6 +5,7 @@ import com.mojo.algorithms.domain.FlowNodeType;
 import com.mojo.algorithms.domain.SemanticCategory;
 import lombok.Getter;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.eclipse.lsp.cobol.core.CobolParser;
 import org.smojol.common.ast.*;
 import org.smojol.common.pseudocode.SmojolSymbolTable;
@@ -17,7 +18,10 @@ import org.smojol.common.vm.stack.StackFrames;
 import org.smojol.common.vm.structure.CobolDataStructure;
 import com.mojo.algorithms.types.AbstractCobolType;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Getter
@@ -89,6 +93,48 @@ public class MoveFlowNode extends CobolFlowNode {
     @Override
     public List<String> variablesModified() {
         return VariableUsageCollector.variableNamesIn(toExpressions);
+    }
+
+    @Override
+    public Map<String, Object> metadata() {
+        if (fromSingle == null || fromSingle.literal() == null || tos == null || tos.isEmpty()) {
+            return Map.of();
+        }
+
+        String value = fromSingle.literal().getText();
+        List<Map<String, Object>> assignments = new ArrayList<>();
+        for (CobolParser.GeneralIdentifierContext target : tos) {
+            Map<String, Object> assignment = new LinkedHashMap<>();
+            assignment.put("target_variable", target.getText().toUpperCase());
+            assignment.put("source_value", value);
+            assignment.put("source_kind", "literal");
+            assignment.put("statement_type", "MOVE");
+            assignment.put("statement_text", originalText());
+            assignment.put("provenance_source", "java_move_literal");
+            String paragraph = enclosingName(FlowNodeType.PARAGRAPH);
+            if (paragraph != null) assignment.put("paragraph", paragraph);
+            String section = enclosingName(FlowNodeType.SECTION);
+            if (section != null) assignment.put("section", section);
+            Integer line = sourceLine();
+            if (line != null) assignment.put("source_line", line);
+            assignments.add(assignment);
+        }
+        return Map.of("assignment_facts", assignments);
+    }
+
+    private String enclosingName(FlowNodeType type) {
+        FlowNode current = scope;
+        while (current != null) {
+            if (current.type() == type) return current.name();
+            if (!(current instanceof CobolFlowNode cobolFlowNode)) return null;
+            current = cobolFlowNode.scope;
+        }
+        return null;
+    }
+
+    private Integer sourceLine() {
+        if (!(executionContext instanceof ParserRuleContext parserRuleContext)) return null;
+        return parserRuleContext.getStart() == null ? null : parserRuleContext.getStart().getLine();
     }
 
     private static List<CobolExpression> toExpressions(CobolParser.MoveStatementContext moveStatement, CobolExpressionBuilder builder) {

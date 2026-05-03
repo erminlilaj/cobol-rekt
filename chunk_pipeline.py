@@ -1959,6 +1959,8 @@ def generate_static_values(report_dir: Path, chunks_dir: Path,
             if variable in provenance:
                 entry["paragraphs"] = provenance[variable]["paragraphs"]
                 entry["category"] = provenance[variable]["category"]
+                if provenance[variable].get("assignments"):
+                    entry["assignments"] = provenance[variable]["assignments"]
             else:
                 entry["category"] = _classify_static_value(variable, [])
             entry["consumers"] = consumer_lookup.get(variable) or [{
@@ -1978,6 +1980,8 @@ def generate_static_values(report_dir: Path, chunks_dir: Path,
             line += f". Category: {entry['category']}"
         if entry.get("paragraphs"):
             line += f". Paragraphs: {', '.join(entry['paragraphs'])}"
+        if entry.get("assignments"):
+            line += ". Assignments: " + _render_static_assignments(entry["assignments"])
         if entry.get("consumers"):
             line += ". Consumer: " + _render_static_consumers(entry["consumers"])
         lines.append(line)
@@ -2004,6 +2008,62 @@ def generate_static_values(report_dir: Path, chunks_dir: Path,
 
 
 def _extract_static_value_provenance(report_dir: Path) -> dict[str, dict]:
+    cfg_provenance = _extract_static_value_provenance_from_cfg(report_dir)
+    if cfg_provenance:
+        return cfg_provenance
+    return _extract_static_value_provenance_from_narrative(report_dir)
+
+
+def _extract_static_value_provenance_from_cfg(report_dir: Path) -> dict[str, dict]:
+    """Extract static assignment provenance from Java CFG assignment_facts."""
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return {}
+    found: dict[str, dict] = {}
+    for cfg_file in sorted(cfg_dir.glob("cfg-*.json")):
+        data = load_json(cfg_file)
+        if not isinstance(data, dict):
+            continue
+        for node in data.get("nodes", []) or []:
+            if not isinstance(node, dict):
+                continue
+            metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+            for fact in metadata.get("assignment_facts", []) or []:
+                if not isinstance(fact, dict):
+                    continue
+                variable = str(fact.get("target_variable", "")).strip().upper()
+                if not variable:
+                    continue
+                entry = found.setdefault(variable, {
+                    "paragraphs": set(),
+                    "assignments": [],
+                })
+                paragraph = str(fact.get("paragraph", "")).strip()
+                if paragraph:
+                    entry["paragraphs"].add(paragraph)
+                assignment = {
+                    "statement_type": fact.get("statement_type", "UNKNOWN"),
+                    "source_value": fact.get("source_value"),
+                    "source_kind": fact.get("source_kind", "unknown"),
+                    "provenance_source": fact.get("provenance_source", "java_cfg_assignment"),
+                }
+                for key in ["paragraph", "section", "source_line", "statement_text"]:
+                    if fact.get(key) is not None:
+                        assignment[key] = fact[key]
+                entry["assignments"].append(assignment)
+
+    result = {}
+    for variable, info in found.items():
+        paragraphs = sorted(info["paragraphs"])
+        result[variable] = {
+            "paragraphs": paragraphs,
+            "category": _classify_static_value(variable, paragraphs),
+            "assignments": _dedupe_static_assignments(info["assignments"]),
+        }
+    return result
+
+
+def _extract_static_value_provenance_from_narrative(report_dir: Path) -> dict[str, dict]:
     """Extract paragraph-level provenance from generated narrative Known values lines."""
     narrative = report_dir / "knowledge_base" / "01_Logic_Narrative.md"
     if not narrative.exists():
@@ -2030,6 +2090,43 @@ def _extract_static_value_provenance(report_dir: Path) -> dict[str, dict]:
             "category": _classify_static_value(variable, ordered),
         }
     return result
+
+
+def _dedupe_static_assignments(assignments: list[dict]) -> list[dict]:
+    result = []
+    seen = set()
+    for assignment in assignments:
+        key = (
+            assignment.get("statement_type"),
+            assignment.get("source_value"),
+            assignment.get("paragraph"),
+            assignment.get("source_line"),
+            assignment.get("statement_text"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(assignment)
+    return result
+
+
+def _render_static_assignments(assignments: list[dict]) -> str:
+    rendered = []
+    for assignment in assignments[:3]:
+        text = str(assignment.get("statement_type", "assignment"))
+        if assignment.get("source_value") is not None:
+            text += f" {assignment['source_value']}"
+        details = []
+        if assignment.get("paragraph"):
+            details.append(f"in {assignment['paragraph']}")
+        if assignment.get("source_line") is not None:
+            details.append(f"line {assignment['source_line']}")
+        if details:
+            text += f" ({', '.join(details)})"
+        rendered.append(text)
+    if len(assignments) > 3:
+        rendered.append(f"{len(assignments) - 3} more")
+    return "; ".join(rendered)
 
 
 def _extract_static_value_consumers(report_dir: Path, variables: set[str],

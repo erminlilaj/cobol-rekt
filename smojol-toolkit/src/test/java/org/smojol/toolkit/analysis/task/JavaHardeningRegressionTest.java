@@ -137,12 +137,14 @@ class JavaHardeningRegressionTest {
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "OUT-2"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "RESULT"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "TOTAL"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "FLAG"));
         assertEquals("java_flow_node_expressions", paragraph.get("variableUsageSource").getAsString());
 
         assertNotNull(move);
         assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesRead"), "IN-1"));
         assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesModified"), "OUT-1"));
         assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesModified"), "OUT-2"));
+        assertTrue(hasAssignmentFact(nodes, "FLAG", "'Y'", "MAIN-PARA"));
     }
 
     @Test
@@ -269,6 +271,18 @@ class JavaHardeningRegressionTest {
                 .anyMatch(argument -> name.equals(argument.get("name").getAsString())
                         && value.equals(argument.get("value").getAsString())
                         && valueSource.equals(argument.get("value_source").getAsString()));
+    }
+
+    private boolean hasAssignmentFact(JsonArray nodes, String targetVariable, String sourceValue, String paragraph) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.get("metadata").getAsJsonObject())
+                .filter(metadata -> metadata.has("assignment_facts"))
+                .flatMap(metadata -> jsonObjects(metadata.getAsJsonArray("assignment_facts")).stream())
+                .anyMatch(assignment -> targetVariable.equals(assignment.get("target_variable").getAsString())
+                        && sourceValue.equals(assignment.get("source_value").getAsString())
+                        && paragraph.equals(assignment.get("paragraph").getAsString())
+                        && "java_move_literal".equals(assignment.get("provenance_source").getAsString()));
     }
 
     private JsonObject findNode(JsonArray nodes, String key, String value) {

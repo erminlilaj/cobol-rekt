@@ -18,5 +18,6 @@
            IF FLAG = 'Y'
                MOVE TOTAL TO OUT-1
            END-IF.
+           MOVE 'Y' TO FLAG.
            DISPLAY OUT-1.
            GOBACK.

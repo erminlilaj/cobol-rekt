@@ -1258,6 +1258,44 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertIn("Consumer: unknown", data["text"])
             self.assertEqual("unknown", entry["consumers"][0]["role"])
 
+    def test_static_values_use_java_cfg_assignment_facts(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "VALUES5.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            cfg_dir = report_dir / "cfg"
+            chunks_dir.mkdir(parents=True)
+            cfg_dir.mkdir()
+            chunk_pipeline._atomic_write_json(report_dir / "variable_values.json", [
+                ["BUSINESS-FLAG", ["'Y'"]],
+            ])
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-VALUES5.CBL.json", {
+                "nodes": [{
+                    "type": "MOVE",
+                    "metadata": {
+                        "assignment_facts": [{
+                            "target_variable": "BUSINESS-FLAG",
+                            "source_value": "'Y'",
+                            "source_kind": "literal",
+                            "statement_type": "MOVE",
+                            "paragraph": "MAIN-PARA",
+                            "source_line": 42,
+                            "statement_text": "MOVE 'Y' TO BUSINESS-FLAG.",
+                            "provenance_source": "java_move_literal",
+                        }]
+                    },
+                }]
+            })
+
+            count = generate_static_values(report_dir, chunks_dir, "VALUES5.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "VALUES5.CBL__static_values.json")
+            entry = data["metadata"]["static_values"][0]
+
+            self.assertEqual(1, count)
+            self.assertIn("Paragraphs: MAIN-PARA", data["text"])
+            self.assertIn("Assignments: MOVE 'Y' (in MAIN-PARA, line 42)", data["text"])
+            self.assertEqual("java_move_literal", entry["assignments"][0]["provenance_source"])
+            self.assertEqual(42, entry["assignments"][0]["source_line"])
+
     def test_variable_matches_cics_arg_no_false_positive_short_root(self) -> None:
         self.assertFalse(chunk_pipeline._variable_matches_cics_arg("WS-CODE", "TRAN-CODE"))
         self.assertFalse(chunk_pipeline._variable_matches_cics_arg("CODE", "TRAN-CODE"))
