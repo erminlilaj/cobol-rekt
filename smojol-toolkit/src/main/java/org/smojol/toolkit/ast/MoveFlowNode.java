@@ -81,6 +81,16 @@ public class MoveFlowNode extends CobolFlowNode {
         }
     }
 
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.variableNamesIn(fromExpressions);
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(toExpressions);
+    }
+
     private static List<CobolExpression> toExpressions(CobolParser.MoveStatementContext moveStatement, CobolExpressionBuilder builder) {
         if (moveStatement.moveToStatement() != null)
             return moveStatement.moveToStatement().generalIdentifier().stream().map(builder::identifier).toList();

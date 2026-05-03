@@ -61,6 +61,18 @@ public class ConditionalStatementFlowNode extends CobolFlowNode {
         actualStatement.resolve(symbolTable, dataStructures);
     }
 
+    @Override
+    public List<String> variablesRead() {
+        if (actualStatement instanceof VariableUsageProvider provider) return provider.variablesRead();
+        return List.of();
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        if (actualStatement instanceof VariableUsageProvider provider) return provider.variablesModified();
+        return List.of();
+    }
+
 //    @Override
 //    public List<FlowNode> astChildren() {
 //        return ImmutableList.of(actualStatement);

@@ -123,4 +123,16 @@ public class DivideFlowNode extends CobolFlowNode {
                 executionContext).get();
         return divideStatement.divideByGivingStatement() != null;
     }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.combine(
+                VariableUsageCollector.variableNamesIn(divisorExpression),
+                VariableUsageCollector.variableNamesIn(dividendExpressions));
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(destinationExpressions);
+    }
 }

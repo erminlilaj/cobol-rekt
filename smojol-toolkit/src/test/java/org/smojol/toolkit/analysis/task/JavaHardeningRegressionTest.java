@@ -112,6 +112,33 @@ class JavaHardeningRegressionTest {
     }
 
     @Test
+    void exportsParagraphVariableUsageFromResolvedFlowNodes() throws IOException {
+        new TestTaskRunner("variable-usage-features.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("variable-usage-features.cbl.report/cfg/cfg-variable-usage-features.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+        JsonObject paragraph = findNode(nodes, "type", "PARAGRAPH");
+        JsonObject move = findNodeByOriginalText(nodes, "MOVE IN-1 TO OUT-1 OUT-2");
+
+        assertNotNull(paragraph);
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "IN-1"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "IN-2"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "COUNTER"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "FLAG"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "OUT-1"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "OUT-2"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "RESULT"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "TOTAL"));
+        assertEquals("java_flow_node_expressions", paragraph.get("variableUsageSource").getAsString());
+
+        assertNotNull(move);
+        assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesRead"), "IN-1"));
+        assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesModified"), "OUT-1"));
+        assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesModified"), "OUT-2"));
+    }
+
+    @Test
     void abortsAfterBaseAnalysisFailureWithoutCascadeNoise() throws IOException {
         Map<String, List<AnalysisTaskResult>> results = runTasks(
                 TaskRunnerMode.PRODUCTION_MODE,
@@ -224,6 +251,20 @@ class JavaHardeningRegressionTest {
                 .filter(node -> node.has("metadata"))
                 .map(node -> node.get("metadata").getAsJsonObject())
                 .anyMatch(metadata -> metadata.has(key) && value.equals(metadata.get(key).getAsString()));
+    }
+
+    private JsonObject findNode(JsonArray nodes, String key, String value) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has(key) && value.equals(node.get(key).getAsString()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private JsonObject findNodeByOriginalText(JsonArray nodes, String text) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("originalText") && node.get("originalText").getAsString().contains(text))
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean jsonArrayContainsString(JsonArray array, String value) {

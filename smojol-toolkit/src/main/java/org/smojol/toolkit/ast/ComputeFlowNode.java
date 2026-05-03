@@ -64,4 +64,14 @@ public class ComputeFlowNode extends CobolFlowNode {
         rhsExpression = builder.arithmetic(rhs);
         destinationExpressions = destinations.stream().map(dest -> builder.identifier(dest.generalIdentifier())).toList();
     }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.variableNamesIn(rhsExpression);
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(destinationExpressions);
+    }
 }

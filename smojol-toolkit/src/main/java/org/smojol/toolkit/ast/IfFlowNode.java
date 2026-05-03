@@ -94,4 +94,16 @@ public class IfFlowNode extends CobolFlowNode {
         ifThenBlock.resolve(symbolTable, dataStructures);
         if (ifElseBlock != null) ifElseBlock.resolve(symbolTable, dataStructures);
     }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.combine(
+                VariableUsageCollector.variableNamesIn(conditionExpression),
+                VariableUsageCollector.merge(astChildren(), VariableUsageProvider::variablesRead));
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.merge(astChildren(), VariableUsageProvider::variablesModified);
+    }
 }

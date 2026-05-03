@@ -94,4 +94,14 @@ public class AddFlowNode extends CobolFlowNode {
             destinationExpressions.addAll(givingDestinationExpressions);
         }
     }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.variableNamesIn(sourceExpressions);
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(destinationExpressions);
+    }
 }

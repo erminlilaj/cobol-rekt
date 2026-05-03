@@ -17,10 +17,15 @@ public class SerialisableCFGFlowNode {
     private final FlowNodeType type;
     private final List<SemanticCategory> categories;
     private final Map<String, Object> metadata;
+    private final List<String> variablesRead;
+    private final List<String> variablesModified;
+    private final String variableUsageSource;
     private final String nodeType = "CODE_VERTEX";
 
     protected SerialisableCFGFlowNode(String id, String label, String name, String originalText, FlowNodeType type,
-                                      List<SemanticCategory> categories, Map<String, Object> metadata) {
+                                      List<SemanticCategory> categories, Map<String, Object> metadata,
+                                      List<String> variablesRead, List<String> variablesModified,
+                                      String variableUsageSource) {
         this.id = id;
         this.label = label;
         this.name = name;
@@ -28,10 +33,29 @@ public class SerialisableCFGFlowNode {
         this.type = type;
         this.categories = categories;
         this.metadata = metadata;
+        this.variablesRead = emptyToNull(variablesRead);
+        this.variablesModified = emptyToNull(variablesModified);
+        this.variableUsageSource = this.variablesRead != null || this.variablesModified != null
+                ? variableUsageSource : null;
     }
 
     public SerialisableCFGFlowNode(FlowNodeLike current) {
         this(current.id(), current.label(), current.name(), current.originalText(), current.type(),
-                current.categories(), current.metadata());
+                current.categories(), current.metadata(), variablesRead(current), variablesModified(current),
+                "java_flow_node_expressions");
+    }
+
+    private static List<String> variablesRead(FlowNodeLike current) {
+        if (current instanceof VariableUsageProvider provider) return provider.variablesRead();
+        return List.of();
+    }
+
+    private static List<String> variablesModified(FlowNodeLike current) {
+        if (current instanceof VariableUsageProvider provider) return provider.variablesModified();
+        return List.of();
+    }
+
+    private static List<String> emptyToNull(List<String> values) {
+        return values == null || values.isEmpty() ? null : values;
     }
 }

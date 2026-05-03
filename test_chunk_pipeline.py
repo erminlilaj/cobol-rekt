@@ -906,6 +906,45 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertEqual(["OMEN"], data["metadata"]["cics_transids"])
             self.assertEqual([], data["metadata"]["cics_queues"])
 
+    def test_variable_usage_prefers_java_cfg_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "VARUSE.CBL.report"
+            cfg_dir = report_dir / "cfg"
+            cfg_dir.mkdir(parents=True)
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-VARUSE.CBL.json", {
+                "nodes": [
+                    {
+                        "id": "p1",
+                        "name": "MAIN-PARA",
+                        "type": "PARAGRAPH",
+                        "originalText": "MAIN-PARA.",
+                        "variablesRead": ["IN-1", "IN-2"],
+                        "variablesModified": ["OUT-1", "OUT-2"],
+                    },
+                    {
+                        "id": "m1",
+                        "name": "MOVE IN-1 TO OUT-1 OUT-2",
+                        "type": "MOVE",
+                        "originalText": "MOVE SHOULD-NOT-BE-USED TO WRONG-TARGET.",
+                    },
+                ],
+                "edges": [],
+            })
+
+            usage = chunk_pipeline._build_variable_usage_from_cfg(report_dir, {
+                "IN-1": "ROOT",
+                "IN-2": "ROOT",
+                "OUT-1": "ROOT",
+                "OUT-2": "ROOT",
+                "WRONG-TARGET": "ROOT",
+            })
+
+            self.assertEqual(
+                (["OUT-1", "OUT-2"], ["IN-1", "IN-2"], "java_cfg_variables"),
+                usage["MAIN-PARA"],
+            )
+            self.assertNotIn("WRONG-TARGET", usage["MAIN-PARA"][0])
+
     def test_program_summary_includes_called_by_from_cross_program_calls(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             out_dir = Path(td) / "out"

@@ -97,4 +97,19 @@ public class MultiplyFlowNode extends CobolFlowNode {
         CobolParser.MultiplyStatementContext multiplyStatement = new SyntaxIdentity<CobolParser.MultiplyStatementContext>(executionContext).get();
         return multiplyStatement.multiplyGiving() != null;
     }
+
+    @Override
+    public List<String> variablesRead() {
+        List<String> reads = VariableUsageCollector.variableNamesIn(sourceExpressions);
+        if (givingDestinationExpressions.isEmpty()) {
+            reads = VariableUsageCollector.combine(reads,
+                    VariableUsageCollector.variableNamesIn(destinationExpressions));
+        }
+        return reads;
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(destinationExpressions);
+    }
 }

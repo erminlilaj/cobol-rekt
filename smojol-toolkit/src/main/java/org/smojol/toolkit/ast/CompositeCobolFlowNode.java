@@ -58,6 +58,16 @@ public class CompositeCobolFlowNode extends CobolFlowNode {
         astChildren.forEach(child -> child.resolve(symbolTable, dataStructures));
     }
 
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.merge(astChildren, VariableUsageProvider::variablesRead);
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.merge(astChildren, VariableUsageProvider::variablesModified);
+    }
+
     private boolean isNullDialectNode(FlowNode node) {
         ParseTree n = node.getExecutionContext();
         return n.getClass() == CobolParser.DialectNodeFillerContext.class

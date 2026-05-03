@@ -15,7 +15,7 @@ public class SerialisableASTFlowNode extends SerialisableCFGFlowNode {
 
     public SerialisableASTFlowNode() {
         super("ROOT", "ROOT", "ROOT", "ROOT", FlowNodeType.DUMMY,
-                ImmutableList.of(SemanticCategory.CODE_ROOT), Map.of());
+                ImmutableList.of(SemanticCategory.CODE_ROOT), Map.of(), List.of(), List.of(), null);
     }
 
     public SerialisableASTFlowNode(FlowNode current) {

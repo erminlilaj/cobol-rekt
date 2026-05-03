@@ -2934,16 +2934,18 @@ def enrich_paragraph_chunks(chunks_dir: Path, report_dir: Path,
             data["metadata"]["cics_commands"] = sg.get("cics_commands", [])
             changed = True
 
-        # R2.5 — variables_modified / variables_read from CFG text heuristic
+        # R2.5 — variables_modified / variables_read from Java CFG when available.
         usage = var_usage.get(para_name)
         if usage:
-            modified_list, read_list = usage
+            modified_list, read_list, usage_source = usage
             if modified_list:
                 data["metadata"]["variables_modified"] = modified_list
                 changed = True
             if read_list:
                 data["metadata"]["variables_read"] = read_list
                 changed = True
+            data["metadata"]["variable_usage_source"] = usage_source
+            changed = True
 
         # R8.1 — PERFORM VARYING loop bounds
         loops = loop_info_map.get(para_name.upper(), [])
@@ -3061,11 +3063,10 @@ _COBOL_READ_PATTERNS = [
 def _build_variable_usage_from_cfg(
     report_dir: Path,
     all_vars: dict[str, str],
-) -> dict[str, tuple[list[str], list[str]]]:
-    """Scan CFG node originalText within paragraph subgraphs to infer variable usage.
+) -> dict[str, tuple[list[str], list[str], str]]:
+    """Load paragraph variable usage from Java CFG, falling back to old text heuristics.
 
-    Returns {paragraph_name: (variables_modified, variables_read)}.
-    Uses simple regex heuristics on COBOL statement text.
+    Returns {paragraph_name: (variables_modified, variables_read, source)}.
     """
     cfg_dir = report_dir / "cfg"
     if not cfg_dir.is_dir() or not all_vars:
@@ -3078,6 +3079,10 @@ def _build_variable_usage_from_cfg(
         return {}
 
     nodes = data.get("nodes", [])
+    java_usage = _build_java_variable_usage_from_cfg_nodes(nodes, all_vars)
+    if java_usage:
+        return java_usage
+
     edges = data.get("edges", [])
     node_by_id = {n["id"]: n for n in nodes}
 
@@ -3094,7 +3099,7 @@ def _build_variable_usage_from_cfg(
     para_nodes = [n for n in nodes if n.get("type") == "PARAGRAPH"
                   and "/" not in n.get("name", "")]
 
-    result: dict[str, tuple[list[str], list[str]]] = {}
+    result: dict[str, tuple[list[str], list[str], str]] = {}
     for pn in para_nodes:
         pid = pn["id"]
         pname = pn.get("name", "")
@@ -3140,9 +3145,37 @@ def _build_variable_usage_from_cfg(
                     read.add(candidate)
 
         if modified or read:
-            result[pname] = (sorted(modified), sorted(read))
+            result[pname] = (sorted(modified), sorted(read), "cfg_text_heuristic")
 
     return result
+
+
+def _build_java_variable_usage_from_cfg_nodes(
+    nodes: list[dict],
+    all_vars: dict[str, str],
+) -> dict[str, tuple[list[str], list[str], str]]:
+    """Use Java-exported paragraph variable facts when the CFG schema provides them."""
+    result: dict[str, tuple[list[str], list[str], str]] = {}
+    for node in nodes:
+        if node.get("type") != "PARAGRAPH" or "/" in node.get("name", ""):
+            continue
+        modified = _filter_java_variable_names(node.get("variablesModified", []), all_vars)
+        read = _filter_java_variable_names(node.get("variablesRead", []), all_vars)
+        if modified or read:
+            result[node.get("name", "")] = (modified, read, "java_cfg_variables")
+    return result
+
+
+def _filter_java_variable_names(values: list, all_vars: dict[str, str]) -> list[str]:
+    filtered: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        name = str(value).strip().upper()
+        if not name or name in seen or name not in all_vars:
+            continue
+        seen.add(name)
+        filtered.append(name)
+    return filtered
 
 
 def _load_variable_values(report_dir: Path) -> dict[str, list[str]]:
