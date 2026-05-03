@@ -3,7 +3,7 @@
        DATA DIVISION.
        WORKING-STORAGE SECTION.
        01  CUSTOMER-REC.
-           05 CUSTOMER-ID        PIC 9(5) COMP-3.
+           05 CUSTOMER-ID        PIC 9(5) COMP-3 VALUE 12345.
            05 CUSTOMER-NAME      PIC X(20).
            05 ITEM-COUNT         PIC 9(2).
            05 ITEM-TABLE OCCURS 1 TO 3 DEPENDING ON ITEM-COUNT.

@@ -1296,6 +1296,45 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertEqual("java_move_literal", entry["assignments"][0]["provenance_source"])
             self.assertEqual(42, entry["assignments"][0]["source_line"])
 
+    def test_static_values_use_java_data_value_declaration_facts(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "VALUES6.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            ds_dir = report_dir / "data_structures"
+            chunks_dir.mkdir(parents=True)
+            ds_dir.mkdir()
+            chunk_pipeline._atomic_write_json(ds_dir / "VALUES6.CBL-data.json", {
+                "name": "ROOT",
+                "levelNumber": 0,
+                "children": [{
+                    "name": "CUSTOMER-REC",
+                    "levelNumber": 1,
+                    "children": [{
+                        "name": "CUSTOMER-ID",
+                        "levelNumber": 5,
+                        "declarationFacts": [{
+                            "target_variable": "CUSTOMER-ID",
+                            "source_value": "12345",
+                            "source_kind": "literal",
+                            "statement_type": "VALUE",
+                            "source_section": "WORKING_STORAGE",
+                            "source_line": 6,
+                            "statement_text": "05 CUSTOMER-ID PIC 9(5) VALUE 12345.",
+                            "provenance_source": "java_data_value_clause",
+                        }],
+                    }],
+                }],
+            })
+
+            count = generate_static_values(report_dir, chunks_dir, "VALUES6.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "VALUES6.CBL__static_values.json")
+            entry = data["metadata"]["static_values"][0]
+
+            self.assertEqual(1, count)
+            self.assertIn("- CUSTOMER-ID: 12345", data["text"])
+            self.assertIn("Assignments: VALUE 12345 (line 6)", data["text"])
+            self.assertEqual("java_data_value_clause", entry["assignments"][0]["provenance_source"])
+
     def test_variable_matches_cics_arg_no_false_positive_short_root(self) -> None:
         self.assertFalse(chunk_pipeline._variable_matches_cics_arg("WS-CODE", "TRAN-CODE"))
         self.assertFalse(chunk_pipeline._variable_matches_cics_arg("CODE", "TRAN-CODE"))

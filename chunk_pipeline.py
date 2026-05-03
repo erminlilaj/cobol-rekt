@@ -1946,6 +1946,16 @@ def generate_static_values(report_dir: Path, chunks_dir: Path,
                            program: str, verbose: bool) -> int:
     """Create one aggregate chunk for statically assigned COBOL values."""
     values = _load_variable_values(report_dir)
+    declaration_provenance = _extract_static_value_declarations_from_data_structures(report_dir)
+    for variable, info in declaration_provenance.items():
+        declared_values = [
+            str(assignment.get("source_value"))
+            for assignment in info.get("assignments", [])
+            if assignment.get("source_value") is not None
+        ]
+        if declared_values:
+            values.setdefault(variable, [])
+            values[variable] = list(dict.fromkeys(values[variable] + declared_values))
     if not values:
         return 0
 
@@ -2008,10 +2018,58 @@ def generate_static_values(report_dir: Path, chunks_dir: Path,
 
 
 def _extract_static_value_provenance(report_dir: Path) -> dict[str, dict]:
-    cfg_provenance = _extract_static_value_provenance_from_cfg(report_dir)
-    if cfg_provenance:
-        return cfg_provenance
+    structured = _merge_static_value_provenance(
+        _extract_static_value_declarations_from_data_structures(report_dir),
+        _extract_static_value_provenance_from_cfg(report_dir),
+    )
+    if structured:
+        return structured
     return _extract_static_value_provenance_from_narrative(report_dir)
+
+
+def _extract_static_value_declarations_from_data_structures(report_dir: Path) -> dict[str, dict]:
+    """Extract VALUE declaration facts from Java data_structures export."""
+    ds_dir = report_dir / "data_structures"
+    if not ds_dir.is_dir():
+        return {}
+    ds_files = sorted(ds_dir.glob("*-data.json"))
+    if not ds_files:
+        return {}
+    data = load_json(ds_files[0])
+    if not isinstance(data, dict):
+        return {}
+    if data.get("levelNumber") == -99 or str(data.get("name", "")).startswith("NULL["):
+        return {}
+
+    found: dict[str, dict] = {}
+
+    def _walk(node: dict) -> None:
+        for fact in node.get("declarationFacts", []) or []:
+            if not isinstance(fact, dict):
+                continue
+            variable = str(fact.get("target_variable", "")).strip().upper()
+            if not variable:
+                continue
+            entry = found.setdefault(variable, {
+                "paragraphs": set(),
+                "assignments": [],
+            })
+            assignment = {
+                "statement_type": fact.get("statement_type", "VALUE"),
+                "source_value": fact.get("source_value"),
+                "source_kind": fact.get("source_kind", "literal"),
+                "provenance_source": fact.get("provenance_source", "java_data_value_clause"),
+            }
+            for key in ["source_section", "source_line", "statement_text"]:
+                if fact.get(key) is not None:
+                    assignment[key] = fact[key]
+            entry["assignments"].append(assignment)
+        for child in node.get("children", []) or []:
+            if isinstance(child, dict):
+                _walk(child)
+
+    _walk(data)
+    return _finalize_static_value_provenance(found)
 
 
 def _extract_static_value_provenance_from_cfg(report_dir: Path) -> dict[str, dict]:
@@ -2052,15 +2110,7 @@ def _extract_static_value_provenance_from_cfg(report_dir: Path) -> dict[str, dic
                         assignment[key] = fact[key]
                 entry["assignments"].append(assignment)
 
-    result = {}
-    for variable, info in found.items():
-        paragraphs = sorted(info["paragraphs"])
-        result[variable] = {
-            "paragraphs": paragraphs,
-            "category": _classify_static_value(variable, paragraphs),
-            "assignments": _dedupe_static_assignments(info["assignments"]),
-        }
-    return result
+    return _finalize_static_value_provenance(found)
 
 
 def _extract_static_value_provenance_from_narrative(report_dir: Path) -> dict[str, dict]:
@@ -2088,6 +2138,37 @@ def _extract_static_value_provenance_from_narrative(report_dir: Path) -> dict[st
         result[variable] = {
             "paragraphs": ordered,
             "category": _classify_static_value(variable, ordered),
+        }
+    return result
+
+
+def _merge_static_value_provenance(*sources: dict[str, dict]) -> dict[str, dict]:
+    merged: dict[str, dict] = {}
+    for source in sources:
+        for variable, info in source.items():
+            entry = merged.setdefault(variable, {
+                "paragraphs": [],
+                "assignments": [],
+            })
+            entry["paragraphs"].extend(info.get("paragraphs", []) or [])
+            entry["assignments"].extend(info.get("assignments", []) or [])
+    return _finalize_static_value_provenance({
+        variable: {
+            "paragraphs": set(info.get("paragraphs", [])),
+            "assignments": info.get("assignments", []),
+        }
+        for variable, info in merged.items()
+    })
+
+
+def _finalize_static_value_provenance(found: dict[str, dict]) -> dict[str, dict]:
+    result = {}
+    for variable, info in found.items():
+        paragraphs = sorted(info.get("paragraphs", set()))
+        result[variable] = {
+            "paragraphs": paragraphs,
+            "category": _classify_static_value(variable, paragraphs),
+            "assignments": _dedupe_static_assignments(info.get("assignments", [])),
         }
     return result
 

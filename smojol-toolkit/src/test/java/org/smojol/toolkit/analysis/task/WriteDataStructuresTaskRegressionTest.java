@@ -42,6 +42,11 @@ class WriteDataStructuresTaskRegressionTest {
         assertEquals(5, customerId.get("byteSize").getAsInt());
         assertTrue(customerId.has("byteOffset"));
         assertTrue(customerId.has("sourceLine"));
+        assertEquals("12345", customerId.getAsJsonArray("valueLiterals").get(0).getAsString());
+        JsonObject declarationFact = customerId.getAsJsonArray("declarationFacts").get(0).getAsJsonObject();
+        assertEquals("CUSTOMER-ID", declarationFact.get("target_variable").getAsString());
+        assertEquals("12345", declarationFact.get("source_value").getAsString());
+        assertEquals("java_data_value_clause", declarationFact.get("provenance_source").getAsString());
 
         assertNotNull(itemTable);
         assertEquals(3, itemTable.get("occursCount").getAsInt());

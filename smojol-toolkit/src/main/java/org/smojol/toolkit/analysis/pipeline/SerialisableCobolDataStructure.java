@@ -9,7 +9,9 @@ import org.smojol.common.vm.structure.CobolDataStructure;
 import org.smojol.common.vm.structure.Format1DataStructure;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SerialisableCobolDataStructure {
     private String id;
@@ -33,6 +35,8 @@ public class SerialisableCobolDataStructure {
     private Integer sourceLine;
     private Integer sourceColumn;
     private String sourceName;
+    private List<String> valueLiterals;
+    private List<Map<String, Object>> declarationFacts;
 
     public SerialisableCobolDataStructure(CobolDataStructure data) {
         name = data.name();
@@ -53,6 +57,8 @@ public class SerialisableCobolDataStructure {
             sourceLine = sourceLine(format1);
             sourceColumn = sourceColumn(format1);
             sourceName = sourceName(format1);
+            valueLiterals = valueLiterals(format1);
+            declarationFacts = declarationFacts(format1, valueLiterals);
         } else {
             redefines = "";
         }
@@ -136,5 +142,36 @@ public class SerialisableCobolDataStructure {
 
     private static Token sourceToken(Format1DataStructure data) {
         return data.getDataDescription() == null ? null : data.getDataDescription().getStart();
+    }
+
+    private static List<String> valueLiterals(Format1DataStructure data) {
+        if (data.getDataDescription() == null || data.getDataDescription().dataValueClause().isEmpty()) return null;
+        List<String> values = new ArrayList<>();
+        data.getDataDescription().dataValueClause().forEach(valueClause ->
+                valueClause.dataValueClauseLiteral().dataValueInterval().stream()
+                        .filter(interval -> interval.dataValueIntervalTo() == null)
+                        .filter(interval -> interval.dataValueIntervalFrom().literal() != null)
+                        .map(interval -> interval.dataValueIntervalFrom().literal().getText())
+                        .forEach(values::add));
+        return values.isEmpty() ? null : values;
+    }
+
+    private static List<Map<String, Object>> declarationFacts(Format1DataStructure data, List<String> values) {
+        if (values == null || values.isEmpty() || data.getLevelNumber() == 88) return null;
+        List<Map<String, Object>> facts = new ArrayList<>();
+        values.forEach(value -> {
+            Map<String, Object> fact = new LinkedHashMap<>();
+            fact.put("target_variable", data.name());
+            fact.put("source_value", value);
+            fact.put("source_kind", "literal");
+            fact.put("statement_type", "VALUE");
+            fact.put("statement_text", data.getRawText());
+            fact.put("provenance_source", "java_data_value_clause");
+            if (data.getSourceSection() != null) fact.put("source_section", data.getSourceSection().name());
+            Integer line = sourceLine(data);
+            if (line != null) fact.put("source_line", line);
+            facts.add(fact);
+        });
+        return facts;
     }
 }
