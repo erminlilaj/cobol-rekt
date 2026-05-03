@@ -138,13 +138,16 @@ class JavaHardeningRegressionTest {
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "RESULT"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "TOTAL"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "FLAG"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "COUNTER"));
         assertEquals("java_flow_node_expressions", paragraph.get("variableUsageSource").getAsString());
 
         assertNotNull(move);
         assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesRead"), "IN-1"));
         assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesModified"), "OUT-1"));
         assertTrue(jsonArrayContainsString(move.getAsJsonArray("variablesModified"), "OUT-2"));
-        assertTrue(hasAssignmentFact(nodes, "FLAG", "'Y'", "MAIN-PARA"));
+        assertTrue(hasAssignmentFact(nodes, "FLAG", "'Y'", "MAIN-PARA", "java_move_literal"));
+        assertTrue(hasAssignmentFact(nodes, "OUT-2", "7", "MAIN-PARA", "java_compute_numeric_literal"));
+        assertTrue(hasAssignmentFact(nodes, "COUNTER", "3", "MAIN-PARA", "java_set_literal"));
     }
 
     @Test
@@ -273,7 +276,8 @@ class JavaHardeningRegressionTest {
                         && valueSource.equals(argument.get("value_source").getAsString()));
     }
 
-    private boolean hasAssignmentFact(JsonArray nodes, String targetVariable, String sourceValue, String paragraph) {
+    private boolean hasAssignmentFact(JsonArray nodes, String targetVariable, String sourceValue,
+                                      String paragraph, String provenanceSource) {
         return jsonObjects(nodes).stream()
                 .filter(node -> node.has("metadata"))
                 .map(node -> node.get("metadata").getAsJsonObject())
@@ -282,7 +286,7 @@ class JavaHardeningRegressionTest {
                 .anyMatch(assignment -> targetVariable.equals(assignment.get("target_variable").getAsString())
                         && sourceValue.equals(assignment.get("source_value").getAsString())
                         && paragraph.equals(assignment.get("paragraph").getAsString())
-                        && "java_move_literal".equals(assignment.get("provenance_source").getAsString()));
+                        && provenanceSource.equals(assignment.get("provenance_source").getAsString()));
     }
 
     private JsonObject findNode(JsonArray nodes, String key, String value) {

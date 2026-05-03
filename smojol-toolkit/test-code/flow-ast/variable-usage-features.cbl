@@ -14,7 +14,9 @@
        MAIN-PARA.
            MOVE IN-1 TO OUT-1 OUT-2.
            COMPUTE RESULT = IN-2 + COUNTER.
+           COMPUTE OUT-2 = 7.
            ADD IN-2 TO TOTAL.
+           SET COUNTER TO 3.
            IF FLAG = 'Y'
                MOVE TOTAL TO OUT-1
            END-IF.

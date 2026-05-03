@@ -43,7 +43,7 @@ public class CobolFlowNodeFactory {
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.MoveStatementContext.class))
             return new MoveFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.SetStatementContext.class))
-            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.SET);
+            return new SetFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.WriteStatementContext.class))
             return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.WRITE);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.OpenStatementContext.class))
@@ -178,7 +178,7 @@ public class CobolFlowNodeFactory {
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.MoveStatementContext.class))
             return new MoveFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.SetStatementContext.class))
-            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.SET);
+            return new SetFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.WriteStatementContext.class))
             return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.WRITE);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.OpenStatementContext.class))
