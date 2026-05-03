@@ -3,6 +3,471 @@ _Shared between Claude Code, Antigravity, and Codex. Read before starting. Appen
 
 ---
 
+agent: codex
+task: Pre-6A RAG chunk hardening + 20-report sample regeneration
+files_changed: chunk_pipeline.py, validate_chunks.py, test_chunk_pipeline.py, docs/proposals/rag_output_improvement_plan.md, docs/handoff.md, workDone.md
+why: User asked to verify Claude's findings, implement B1-B4 and I1/I2/I3/I5, then run a controlled non-destructive Step 6A sample regeneration.
+status: done — code implemented, tests passed, sample validation passed
+what_was_done: |
+  Performed the requested research checks before editing. Confirmed the bad
+  field_source label, fuzzy CICS argument substring matching, missing Java
+  null-sentinel guard, missing CICS literal resources in dependencies text,
+  missing structural facts in program_summary text, and validate_chunks.py
+  split-brain risk. Corrected one detail: BNK1DAC.cbl has no called_by entry
+  in cross_program_calls.json, although 77 other programs do and no existing
+  program_summary text mentioned Called by.
+
+  Implemented B1-B4:
+    - changed Java-backed copybook_fields field_source to java_rawtext_regex
+    - added null/degraded data-structure sentinel handling with analysis_status unavailable
+    - removed fuzzy substring matching from _variable_matches_cics_arg()
+    - kept validate_chunks.py comments/commented_out_code registration with the code changes
+
+  Implemented I3/I1/I2/I5:
+    - dependencies now extracts literal CICS MAP, MAPSET, TRANSID, DATASET, QUEUE, PROGRAM from CFG originalText
+    - program_summary now appends Called by when cross_program_calls.json has callers
+    - program_summary now appends paragraph/section/88-level/REDEFINES counts from cobol_structure.json
+    - workflow chunks append up to three CICS command names for each callee from existing paragraph chunk metadata
+    - fixed a sample-discovered line splitter bug where one huge static_values evidence line could produce an oversized part
+
+verification: |
+  python3 -m unittest test_chunk_pipeline test_audit_chunk_regeneration
+  Result: OK, 46 tests run, 2 skipped.
+
+  PYTHONPYCACHEPREFIX=/tmp/cobol-rekt-pycache python3 -m py_compile chunk_pipeline.py validate_chunks.py test_chunk_pipeline.py
+  Result: passed.
+
+  Step 6A temp sample root: /tmp/cobol-rekt-step6a
+  Reports regenerated: BNK1DAC, BANKDATA, BNK1CCS, COTRTLIC, CREACC, DBCRFUN,
+  DELACC, INQACC, COBTUPDT, CBACT04C, CBEXPORT, CBIMPORT, COACTVWC, COADM01C,
+  COBIL00C, COPAUS0C, ABCD, CBSTM03A, NC1074.2, NC2184.2.
+  Initial candidate BNK1DCS was rejected because it has no cfg/ or jcl_summary.json.
+
+  python3 validate_chunks.py --report-dir /tmp/cobol-rekt-step6a/out/report --corpus-index /tmp/cobol-rekt-step6a/out/corpus_index.json --max-tokens 512 --verbose
+  Result: PASS, 2804 chunks checked, 0 required-field errors, 0 hash mismatches,
+  0 over-token errors, 0 schema warnings, 0 dangling cross-references, 0 index errors.
+  Remaining warnings: 6 optional MISSING_SELF_EVAL health-field warnings.
+
+manual_checks: |
+  BNK1DAC.cbl: dependencies text contains MAP BNK1DA and TRANSID OMEN; summary has structural facts.
+  BANKDATA.cbl: comments chunk has comment_count 8; copybook_fields is unavailable for java_data_structures_null_sentinel.
+  NC1074.2.cbl: structural facts present; static_values split under 512 tokens after splitter fix.
+  ABCD.cbl: program_summary includes Called by: IF-TEST.
+next: |
+  Commit the code/test/docs changes if not already committed.
+  Next technical work should address the remaining non-deterministic/heuristic producers:
+  static-value provenance from generated markdown, CICS facts from generated markdown,
+  Java export of copybook origin/PIC/OCCURS/usage/byte-size, and Java-backed dead-code evidence.
+timestamp: 2026-05-03T00:00:00+02:00
+
+---
+
+agent: claude
+task: RAG capability audit + full implementation plan for Codex
+files_changed: docs/proposals/rag_output_improvement_plan.md, docs/handoff.md
+why: User asked for a thorough research of what questions the RAG output can and cannot answer, and a complete implementation plan for Codex to execute.
+status: done — plan updated, no code changed
+what_was_done: |
+  Inspected generated output for BNK1DAC.cbl (CICS, full parse), BNK1CCS.cbl (CICS, degraded),
+  BANKDATA.cbl (batch+DB2), NC1074.2.cbl (large Italian batch).
+  Read actual chunk JSON files, knowledge_base/ documents, cobol_structure.json,
+  variable_values.json, cross_program_calls.json, corpus_index.json.
+  Produced a structured question coverage map (technical + business + cross-program).
+  Identified 5 safe improvements (I1-I5) that require no new heuristics and no Java changes.
+  Added full "Capability Audit" section to rag_output_improvement_plan.md.
+  Added "Pre-6A Blocker Fixes" section with B1-B4 code fixes.
+key_findings: |
+  - program_summary text is purely technical — no functional/business purpose
+  - called_by data exists in cross_program_calls.json and metadata but NOT in chunk text (RAG blind)
+  - CICS MAP/MAPSET/TRANSID/DATASET/QUEUE literal args are in paragraph_logic raw text but not indexed
+  - variable_group has PIC/type/level but no copybook attribution
+  - schema 1.5 chunks implemented but corpus not regenerated — 99% of chunks still schema 1.3
+  - paragraph_logic for degraded/stubbed-copybook programs contains _DIALECT_ tokens and Unicode garbage
+  - cross_program_calls.json: 506 programs, 108 edges, 77 programs with called_by data
+next: |
+  Codex should implement in this order:
+  1. B1-B4 fixes (chunk_pipeline.py lines 1205, 1226-1235, 1936; validate_chunks.py; test_chunk_pipeline.py)
+  2. I3: extract CICS literal args (MAP/MAPSET/TRANSID/DATASET/QUEUE) from cfg-*.json into dependencies chunk
+  3. I1: add called_by to program_summary text
+  4. I2: add structural facts line to program_summary text (paragraphs, sections, 88-levels, redefines)
+  5. I5: enrich workflow chunk text with per-callee CICS commands
+  6. Step 6A: 20-program sample regeneration + validation
+  Full plan in docs/proposals/rag_output_improvement_plan.md
+timestamp: 2026-05-03T00:00:00+02:00
+
+---
+
+agent: claude
+task: Document Pre-6A blocker fixes in rag_output_improvement_plan.md before implementation
+files_changed: docs/proposals/rag_output_improvement_plan.md, docs/handoff.md
+why: User asked to update the plan so Codex can see exactly what is being implemented and can step in at any point. Four confirmed code correctness blockers from the 2026-05-03 critical review must be fixed before Step 6A sample regeneration can run.
+status: plan updated, implementation not yet started
+what_was_done: |
+  Added "Pre-6A Blocker Fixes" section to rag_output_improvement_plan.md between Step 5 and Step 6A.
+  Documents four specific fixes with exact file/line references:
+    B1 - rename field_source "java_data_structures" to "java_rawtext_regex" in chunk_pipeline.py line 1205 and verbose print line 1220.
+    B2 - add null/degraded sentinel check in _load_java_data_structure_fields() after line 1235; return None (not []) when levelNumber==-99 or name starts with "NULL["; caller emits analysis_status: "unavailable" instead of falling through to raw copybook regex.
+    B3 - remove var_u in arg_u / arg_u in var_u substring matching from _variable_matches_cics_arg() line 1936; keep only exact match and tightened root-prefix rule; add negative test for WS-CODE/TRAN-CODE false positive.
+    B4 - commit chunk_pipeline.py, validate_chunks.py (comments/commented_out_code types), and test_chunk_pipeline.py together in a single commit to avoid split-brain on chunk type validation.
+  Execution order, acceptance checks, and Codex checkpoint instructions are in the plan section.
+next: |
+  Implementation of B1-B4 in chunk_pipeline.py, validate_chunks.py, test_chunk_pipeline.py.
+  Run: python3 -m unittest test_chunk_pipeline test_audit_chunk_regeneration
+  Commit all three files together.
+  After commit: Step 6A sample regeneration can begin.
+timestamp: 2026-05-03T00:00:00+02:00
+
+---
+
+agent: codex
+task: RAG output improvement plan Step 4 - static value consumer provenance
+files_changed: chunk_pipeline.py, test_chunk_pipeline.py, docs/proposals/rag_output_improvement_plan.md, docs/handoff.md
+why: User asked to proceed safely after Step 3. This step improves "forced value, and for who?" answers by adding consumer roles to static_values when the producer has evidence.
+status: done
+what_was_done: |
+  Enhanced generate_static_values() in chunk_pipeline.py.
+    - Adds a consumers list to each static_values metadata entry.
+    - Renders "Consumer: ..." in static_values chunk text.
+    - Uses paragraph provenance from Known values lines in 01_Logic_Narrative.md.
+    - Uses same-paragraph active CICS statements as consumer evidence.
+    - Supports consumer roles for COMMAREA, LENGTH, TRANSID, MAP/MAPSET, QUEUE/QNAME,
+      FILE/DATASET, and abend/error handling.
+    - Uses exact variable matching plus conservative copybook-prefix matching, e.g.
+      PDRGCODA-FUNZIONE can match COMMAREA(WPDRGCODA).
+    - If no explicit consumer evidence exists, emits role "unknown" with an evidence note.
+
+  Tests added in test_chunk_pipeline.py:
+    - test_static_values_include_external_call_consumer_when_evidenced
+    - test_static_values_unknown_consumer_is_explicit
+limitations: |
+  Current artifacts still do not preserve exact static assignment source line or full
+  statement ordering. Step 4 therefore uses same-paragraph CICS evidence rather than
+  claiming "nearest following statement" with source-line precision.
+  Existing out/report chunks were not regenerated, so downstream RAG will not see this
+  richer text until a controlled regeneration is done.
+verification: |
+  python3 -m unittest test_chunk_pipeline test_audit_chunk_regeneration
+  Result: OK, 32 tests run, 2 skipped.
+
+  PYTHONPYCACHEPREFIX=/tmp/cobol-rekt-pycache python3 -m py_compile analyze.py chunk_pipeline.py validate_chunks.py audit_chunk_regeneration.py test_chunk_pipeline.py test_audit_chunk_regeneration.py
+  Result: passed.
+next: |
+  Step 5 is next: comments and commented_out_code chunks. Start with current comments.json
+  and commented_out_code.json artifacts. Emit explicit "not enough evidence/no comments"
+  chunks instead of letting RAG answer from generic paragraph summaries. Keep fixture-first,
+  no mass regeneration.
+timestamp: 2026-05-03T00:00:00+02:00
+
+---
+
+agent: codex
+task: RAG output improvement plan Step 3 - copybook_fields / copybook parameter chunks
+files_changed: analyze.py, chunk_pipeline.py, validate_chunks.py, test_chunk_pipeline.py, docs/proposals/rag_output_improvement_plan.md, docs/handoff.md
+why: User asked to proceed safely after Step 2. This step adds producer support for answering "what parameters/fields do you get from copybooks?"
+status: done
+what_was_done: |
+  Implemented generate_copybook_fields() in chunk_pipeline.py.
+    - Reads copybook_manifest.json and cobol_structure.json to decide which copybooks to report.
+    - Looks for report-local copybook files via manifest path/file, report/copybooks/,
+      report/artifacts/copybooks/, or knowledge-base_rag/artifacts/copybooks/.
+    - Emits chunk_type copybook_fields with chunk_id <program>:copybook_fields.
+    - Groups extracted fields by copybook in text and metadata.
+    - Conservative extractor supports level numbers 01-49, 66, 77, 88; field names;
+      PIC/PICTURE; VALUE/VALUES; REDEFINES; and line number inside the copybook.
+    - Stubbed copybooks and missing copybook files produce explicit limitations instead
+      of fake field lists.
+    - copybook_fields uses line-based splitting so evidence lines are not cut.
+
+  Updated analyze.py for future analyses:
+    - Copies sandboxed resolved/stubbed copybooks into report_subdir/copybooks/.
+    - Adds relative path values such as copybooks/FOO.cpy to copybook_manifest.json.
+
+  Updated generate_rag_bundle():
+    - Copies report/copybooks/ into knowledge-base_rag/artifacts/copybooks/ when present.
+
+  Updated validate_chunks.py:
+    - copybook_fields is now a valid COBOL chunk type.
+
+  Tests added in test_chunk_pipeline.py:
+    - test_copybook_fields_extracts_basic_fields_and_88_values
+    - test_copybook_fields_reports_stubbed_and_missing_copybooks
+    - test_line_based_split_preserves_copybook_field_lines
+limitations: |
+  Existing out/report corpus was not regenerated. Old reports generally do not contain
+  report-local copybooks/, so copybook_fields will only show real fields after reports are
+  regenerated with the updated analyze.py. This is intentional: no mass mutation was done.
+  The extractor is conservative and does not fully parse every COBOL data description clause.
+verification: |
+  python3 -m unittest test_chunk_pipeline test_audit_chunk_regeneration
+  Result: OK, 30 tests run, 2 skipped.
+
+  PYTHONPYCACHEPREFIX=/tmp/cobol-rekt-pycache python3 -m py_compile analyze.py chunk_pipeline.py validate_chunks.py audit_chunk_regeneration.py test_chunk_pipeline.py test_audit_chunk_regeneration.py
+  Result: passed.
+next: |
+  Step 4 is next: static value consumer provenance. Start with fixture paragraphs where a
+  MOVE/VALUE assignment is followed by EXEC CICS LINK/SEND/RETURN or map usage, and emit
+  consumer role as explicit evidence. Do not mass-regenerate out/report until a controlled
+  regeneration step is requested.
+timestamp: 2026-05-03T00:00:00+02:00
+
+---
+
+agent: codex
+task: RAG output improvement plan Step 2 - copybook_mentions chunk
+files_changed: chunk_pipeline.py, validate_chunks.py, test_chunk_pipeline.py, docs/proposals/rag_output_improvement_plan.md, docs/handoff.md
+why: User asked to proceed safely after Step 1. This step adds a small producer chunk that lets RAG answer "in which lines are copybooks mentioned?" without relying on paragraph retrieval.
+status: done
+what_was_done: |
+  Implemented generate_copybook_mentions() in chunk_pipeline.py.
+    - Reads cobol_structure.json copy_statements for copybook name, source line, division,
+      section, replacing clause, and impact.
+    - Reads copybook_manifest.json when present for resolved/stubbed status and file name.
+    - Emits chunk_type copybook_mentions with chunk_id <program>:copybook_mentions.
+    - Text lists COPY statement, source line, resolved/stubbed status, file name, division,
+      section, and impact where available.
+    - Metadata includes mention_count, copybooks, and structured mentions.
+    - Emits an explicit no-COPY-statements chunk when copy_statements is empty/missing.
+    - Reconstructs COPY statements when original source text is unavailable.
+
+  Wired the chunk into run_pipeline() after dependencies.
+  Added copybook_mentions to validate_chunks.py valid COBOL chunk types.
+  Added copybook_mentions to line-based splitting so long lists do not cut evidence lines.
+
+  Tests added in test_chunk_pipeline.py:
+    - test_copybook_mentions_include_lines_and_stub_status
+    - test_copybook_mentions_no_mentions_chunk_is_explicit
+
+limitations: |
+  Current generated reports do not preserve the original source path or copied source text.
+  The chunk therefore relies on cobol_structure.json line numbers and reconstructs the COPY
+  statement text. Same-name/different-path copybook provenance also remains limited because
+  copybook_manifest.json currently stores file names, not full resolution paths.
+verification: |
+  python3 -m unittest test_chunk_pipeline test_audit_chunk_regeneration
+  Result: OK, 27 tests run, 2 skipped.
+next: |
+  Step 3 is next: add copybook_fields / copybook parameters chunks. Start with a conservative
+  copybook field extractor and small fixture copybooks. Do not mass-regenerate out/report yet.
+  If exact COPY statement text or path fidelity becomes necessary, first update upstream report
+  generation to preserve source_path/source_text or copybook resolution paths.
+timestamp: 2026-05-03T00:00:00+02:00
+
+---
+
+agent: codex
+task: RAG output improvement plan Step 1 safety gate - rerun cleanup and read-only regeneration audit
+files_changed: audit_chunk_regeneration.py, test_audit_chunk_regeneration.py, test_chunk_pipeline.py, docs/proposals/rag_output_improvement_plan.md, baselines/rag_output_before_gap_closure.json, docs/handoff.md
+why: User asked to proceed safely on the broad cobol-rekt RAG-output plan and keep enough handoff detail that another agent can resume at any moment.
+status: done
+what_was_done: |
+  Step 0 baseline freeze was completed first:
+    - Ran corpus_baseline.py against out/report.
+    - Wrote baselines/rag_output_before_gap_closure.json.
+    - Baseline corpus: 487 report dirs, 434 with CFG, 475 with chunks.
+    - Existing validation state is dirty: 47,890 chunks checked, 8,082 over 512 tokens,
+      432 unknown chunk types, 372 schema warnings, 22 dangling cross-refs, 37 index errors.
+    - Documented this snapshot in docs/proposals/rag_output_improvement_plan.md.
+
+  Completed Step 1 regeneration safety gate:
+    - Confirmed run_pipeline() creates report_dir/chunks and calls clear_existing_chunks()
+      before writing current chunks.
+    - Added test_run_pipeline_removes_stale_chunks_before_regeneration.
+    - The test builds a temporary SAFE.CBL.report with stale schema 1.3 chunk JSON,
+      stale split part JSON, stale chunks_manifest.json, stale bm25_index.json, and a
+      non-JSON notes.txt file.
+    - It runs chunk_pipeline.run_pipeline() and asserts stale chunk/split files are gone,
+      notes.txt remains, the manifest schema is current, and all regenerated chunk JSON
+      uses CHUNK_SCHEMA_VERSION.
+    - Added audit_chunk_regeneration.py as a read-only report scanner. It checks missing
+      chunks dirs, missing chunks_manifest.json, stale manifest schema, stale chunk metadata
+      schema, unreadable chunk JSON, and manifest entries pointing to missing chunk files.
+    - Added test_audit_chunk_regeneration.py for stale-schema and current-schema reports.
+    - Ran the audit on out/report with --limit 10. It checked 487 reports and reported
+      486 needing regeneration: 474 stale manifest schema groups, 523 stale chunk-schema
+      groups, 12 missing chunks dirs, and 12 missing chunk manifests.
+verification: |
+  python3 -m unittest test_audit_chunk_regeneration test_chunk_pipeline
+  Result: OK, 25 tests run, 2 skipped.
+
+  python3 audit_chunk_regeneration.py --report-dir out/report --limit 10
+  Result: read-only audit completed; 487 reports checked, 486 need regeneration.
+next: |
+  Step 2 is now the next implementation step: add a copybook_mentions chunk with COPY
+  statement source lines, resolved/stubbed status, and paths/reasons where available.
+  Do this on small fixtures first. Do not mass-regenerate out/report yet; if regeneration
+  is needed, run audit_chunk_regeneration.py first and treat full regeneration as a
+  separate controlled operation.
+timestamp: 2026-05-03T00:00:00+02:00
+
+---
+
+agent: codex
+task: Implement PDB305 RAG producer fixes and knowledge-base_rag bundle
+files_changed: comment_extractor.py, chunk_pipeline.py, knowledge_base_builder.py, validate_chunks.py, test_comment_extractor.py, test_chunk_pipeline.py, test_knowledge_base_builder.py, out/report/PDB305.CBL.report/knowledge-base_rag/
+why: User requested cobol-rekt-side implementation of the PDB305 RAG fixes and a report-local folder with everything needed by the downstream RAG pipeline.
+status: done
+next: Use out/report/PDB305.CBL.report/knowledge-base_rag/chunks as the RAG inbox/index target. PDB305 validation passed on a one-report validation root: 49 chunks, 0 required-field/hash/token/type/xref errors. Existing docs/handoff.md and workDone.md changes were intentionally left uncommitted per user request.
+timestamp: 2026-05-02T20:21:00+02:00
+
+agent: codex
+task: Independent PDB305 cobol-rekt/RAG failure review
+files_changed: docs/discussions/0004-pdb305-corpus-gap-analysis.md, workDone.md, docs/handoff.md
+why: User asked for a fresh investigation of PDB305 artifacts and the downstream cobol-rag-pipeline instead of relying on the prior agent analysis.
+status: done
+next: Prioritize producer cleanup first: separate inactive/commented-out COBOL from paragraph chunks, then add a static_values aggregate chunk and make dependencies include structured CICS resources including WRITEQ TS queues. RAG-side follow-up: index curated chunks by default, flatten nested chunk metadata, and wire retrieval filters.
+timestamp: 2026-05-02T19:50:28+02:00
+
+agent: claude+codex
+task: Discussion 0004 — cobol-rekt and RAG pipeline gap analysis
+files_changed: docs/discussions/0004-pdb305-corpus-gap-analysis.md, workDone.md
+why: User asked for detailed gap analysis of both pipelines based on PDB305 evaluation, with Codex review.
+status: done
+what_was_done: |
+  Claude wrote docs/discussions/0004-pdb305-corpus-gap-analysis.md:
+    8 cobol-rekt issues (C1-C8), 7 RAG issues (R1-R7), priority matrix, 5 questions for Codex.
+  Codex reviewed and appended findings:
+    Q1: Option 1 (static stubs) + upgrade STUB_CONTENT baseline to minimal 01-group; analysis/standard_stubs/ doesn't exist yet.
+    Q2: Python side in comment_extractor.py first (Java never sees col-7 lines).
+    Q3: C4+C5 first (better chunk content), then BM25 — which is S-effort not M (bm25_index.json already pre-built).
+    Q4: called_by absent from PDB305 metadata; ChromaDB metadata not semantically searchable; must be in chunk text.
+    Q5: Phase ordering: Phase1=C2+R1+R7+R5 (no re-analysis); Phase2=C1+C4+C5+C3; Phase3=R3+C7; Phase4=R6+R2+C6.
+  New issues added by Codex:
+    C2 is silently masked: pipeline_report shows success/0.0s even though TypeError was caught; fix is remove backend= kwarg on analyze.py:894.
+    R4 (JCL context) is inapplicable to PDB305 — it's a CICS online transaction, not a batch job.
+    data_dictionary_coverage confidence sub-score is wrong (1.0 despite degraded=true); fix in chunk_pipeline.py.
+    dependencies chunk missing terminal map PDB3051 — cics_operations has it but dependencies text doesn't.
+next: |
+  Implement Phase 1 fixes (C2+R1+R7+R5) — no re-analysis needed, pure code changes:
+    C2: Remove backend="opus-mt" kwarg from analyze.py enrich_comments() call (line ~894).
+    R1: Remove comments.json from ~/workspace/sapienza/master-thesis/cobol-rag-pipeline/data/inbox/.
+    R7: Add chunk_type guard in cobol-rag-pipeline/src/cobol_rag/loaders/generic_json.py.
+    R5: Add "I don't know" instruction to cobol-rag-pipeline query.py _build_prompt().
+  Then re-ingest and re-evaluate RAG to measure improvement before doing Phase 2.
+timestamp: 2026-05-02T00:00:00+02:00
+
+---
+
+agent: claude
+task: PDB305.CBL full pipeline analysis + RAG accuracy assessment
+files_changed: out/report/PDB305.CBL.report/ (generated), workDone.md
+why: User requested analysis of PDB305 (CICS browse program for phone reimbursements) and accuracy check for specific RAG questions.
+status: done
+what_was_done: |
+  Ran analyze.py + chunk_pipeline.py on /home/eri/workspace/sapienza/test_codes/richiestadataseteinfo/PDB305.CBL.
+  Results: 50 chunks, parse coverage 99.88%, 56 paragraphs, complexity High(301).
+  Issues found:
+    1. data_structures_degraded=true — SQLCA+PDWSQLER stubs crash Java data structure builder; entire 02_Data_Dictionary.md is empty.
+    2. 6 copybooks stubbed: SQLCA, PDRTELR, DFHAID, DFHBMSCA, PDPSQLER, PDWSQLER. PDRTELR not in source directory.
+    3. Comment enrichment API mismatch: enrich_comments() got unexpected kwarg 'backend'.
+    4. ERRORE-SQL paragraph undefined (defined inside PDWSQLER stub).
+  What works: CICS LINKs (PD0GCODA/PD3SORT/PD0UTI01/PD1AC/PDPRED/TE0CDUMP), SQL DUAL, map PDB305M, static values, called_by relationships.
+next: |
+  Fix data_structures_degraded: provide real stubs for SQLCA, DFHAID, DFHBMSCA (standard IBM copybooks).
+  Fix comment enrichment: check enrich_comments() signature change.
+  For cross-program questions (Q4/Q5/Q6): need full corpus analysis + build_call_graph.py + JCL parsing.
+timestamp: 2026-05-01T14:40:00+02:00
+
+---
+
+agent: claude
+task: Update handoff after Codex committed Step 3
+files_changed: docs/handoff.md
+why: Step 3 approved and committed by Codex at d04c35e0. Handoff updated to reflect current state.
+status: done
+what_was_done: |
+  Codex ran round-2 sign-off checklist:
+    1. mvn compile -pl smojol-toolkit -am -q: passed
+    2. grep -r "target_source" baselines/cics_yaml_after/: all 4 YAMLs have entries
+    3. COACCT01.cbl.yaml: LIT-ACCTFILENAME has target_source: identifier
+    4. python3 -m pytest test_knowledge_base_builder.py test_chunk_pipeline.py -q: 39 passed, 2 skipped
+  Commit: d04c35e0 feat(cics): structured CICS metadata + target_source accuracy (Step 3)
+next: |
+  Per proposal 0005:
+  - Step 2 (IMS): NOT YET DONE. Implement ImsDliMetadataParser, add ims: to 03_Dependencies.yaml.
+  - Step 4 (DB2 gate): Codex runs DB2 review checklist; writes baselines/db2_decision_after_step3.md.
+  - Step 7 (final diff): Run after Steps 2 and 4 are decided.
+  Suggested prompt to Codex for Step 4 gate:
+    "Read docs/proposals/0005-integration-safe-plan.md section '6. DB2 Action Classification Improvement — Step 4'.
+     Run the Codex Review Checklist for Step 4 and write baselines/db2_decision_after_step3.md.
+     Then read section '4. EXEC DLI / IMS Extraction In Java — Step 2' and decide whether to
+     start Step 2 now or proceed directly to Step 7."
+timestamp: 2026-05-01T00:00:00+02:00
+
+---
+
+agent: claude
+task: Proposal 0005 Step 3 — Extended CICS extraction + fork setup for che-che4z submodule
+files_changed: |
+  smojol-toolkit/src/main/java/org/smojol/toolkit/ast/DialectMetadataParser.java,
+  knowledge_base_builder.py, chunk_pipeline.py, test_knowledge_base_builder.py,
+  baselines/cics_yaml_after/ (4 files), baselines/baseline_after_cics.json,
+  workDone.md, .gitmodules (fork update)
+why: Proposal 0005 Step 3. Structured CICS metadata extraction. Also resolved the submodule
+  issue — cherry-picks are now on erminlilaj/che-che4z-lsp-for-cobol-integration branch
+  cobol-rekt-integration. .gitmodules updated and committed (34bbe72c).
+status: done — AWAITING CODEX SIGN-OFF BEFORE COMMIT
+what_was_done: |
+  Java (DialectMetadataParser.parseCics):
+    - Added TRANSID_LITERAL pattern
+    - Added classifyOperationType(): LINK/XCTL/RETURN→program_transfer, START→transaction_start,
+      READ→file_read, STARTBR/READNEXT/READPREV/ENDBR/RESETBR→browse, WRITE/REWRITE→file_write,
+      DELETE→file_delete, default→other
+    - Added resolveTargetKindAndSource(): sets cics_target_kind (PROGRAM/FILE/DATASET/MAP/QUEUE/TRANSID/UNKNOWN),
+      cics_target (value), cics_target_source (literal/identifier/unknown)
+    - Added cics_file_keyword field (FILE or DATASET keyword used)
+    - Existing fields unchanged: cics_command, cics_target_program, cics_target_variable,
+      cics_file, cics_map, cics_queue
+
+  Python (knowledge_base_builder.py):
+    - Added cics_operations: [] to deps
+    - In CICS detection block: reads node.get('metadata', {}) for cics_operation_type;
+      builds structured op dict {command, type, target_kind?, target?}
+    - Deduplicates by (command, type, target_kind, target)
+    - Deletes key if empty; serializes before cics:/cics_calls:
+
+  Python (chunk_pipeline.py generate_cics_operations):
+    - Reads cics_ops = deps.get("cics_operations", [])
+    - If cics_ops present, emits structured lines instead of flat command list
+    - Falls back to existing cics: list when cics_ops empty
+
+  Test (test_knowledge_base_builder.py):
+    - Added test_cics_operations_from_metadata: injects metadata-enriched CFG nodes,
+      asserts cics_operations key present, checks STARTBR→browse/DATASET and XCTL→program_transfer/PROGRAM,
+      confirms backward-compat cics: list still present
+
+  Baseline results:
+    - All 4 programs analyzed successfully: COUSR00C, COUSR01C, COACCT01, COACTVWC
+    - Diff vs baseline_after_evaluate_backport: 0 regressions, only cics_operation_count increased
+    - baseline_after_cics.json written (486 programs, 0 regressions)
+
+  Python tests: 27/27 passed (0 failed). Chunk pipeline: 14/14 OK.
+next: |
+  Codex to run Step 3 review checklist:
+  1. grep -n "^cics:" baselines/cics_yaml_after/COUSR00C.cbl.yaml → must exist as string list
+  2. grep -n "^cics_operations:" baselines/cics_yaml_after/COUSR00C.cbl.yaml → must exist
+  3. grep -E "READNEXT|READPREV|STARTBR|XCTL" baselines/cics_yaml_after/COUSR00C.cbl.yaml → all 4 must appear
+  4. grep -E "WRITE|XCTL" baselines/cics_yaml_after/COUSR01C.cbl.yaml → both must appear
+  5. python3 test_knowledge_base_builder.py → 27/27 passed
+  6. python3 test_chunk_pipeline.py → all pass
+  7. python3 validate_chunks.py --report-dir out/report → no new errors for CICS chunks
+  8. python3 corpus_baseline.py --diff baselines/baseline_after_evaluate_backport.json baselines/baseline_after_cics.json
+     → must show 0 regressions, only cics_operation_count changes on 4 programs
+  9. If all pass: commit staged files. If any fail: git restore the 4 changed files.
+
+  Commit command (after sign-off):
+    git add smojol-toolkit/src/main/java/org/smojol/toolkit/ast/DialectMetadataParser.java \
+            knowledge_base_builder.py chunk_pipeline.py test_knowledge_base_builder.py \
+            baselines/cics_yaml_after/ baselines/baseline_after_cics.json workDone.md
+    git commit -m "feat(cics): Step 3 — structured CICS operation extraction (proposal 0005)"
+
+  Rollback command (if rejected):
+    git restore smojol-toolkit/src/main/java/org/smojol/toolkit/ast/DialectMetadataParser.java \
+               knowledge_base_builder.py chunk_pipeline.py test_knowledge_base_builder.py
+    rm -rf baselines/cics_yaml_after baselines/cics_yaml_before baselines/baseline_after_cics.json
+timestamp: 2026-04-30T23:40:00+02:00
+
+---
+
 agent: claude
 task: Implement proposal 0005 Step 1 — Che4z EVALUATE backport, pre/post tests, source resolution, rerun, baseline diff
 files_changed: |

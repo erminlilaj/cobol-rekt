@@ -408,6 +408,22 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
     if type_lines:
         chunk_text += "\nTop node types: " + ", ".join(type_lines) + "."
 
+    struct = _load_cobol_structure(report_dir)
+    structural_counts: dict[str, int] = {}
+    if struct:
+        structural_counts = {
+            "paragraph_count": len(struct.get("paragraph_profiles", {}) or {}),
+            "section_count": len(struct.get("sections", {}) or {}),
+            "condition_count": len(struct.get("conditions_88", {}) or {}),
+            "redefines_count": len(struct.get("redefines", []) or []),
+        }
+        chunk_text += (
+            f"\nParagraphs: {structural_counts['paragraph_count']} "
+            f"in {structural_counts['section_count']} sections. "
+            f"88-level conditions: {structural_counts['condition_count']}. "
+            f"REDEFINES: {structural_counts['redefines_count']}."
+        )
+
     # Append Program Overview from narrative if available
     overview_text = _extract_program_overview(report_dir)
     if overview_text:
@@ -430,7 +446,8 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
         "complexity_score": complexity_score,
         "confidence": confidence,
     }
-    struct = _load_cobol_structure(report_dir)
+    if structural_counts:
+        metadata.update(structural_counts)
     if struct:
         copy_stmts = struct.get("copy_statements", [])
         if copy_stmts:
@@ -441,6 +458,11 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
             metadata["known_system_copybooks"] = struct["known_system_copybooks"]
     if parse_coverage_pct is not None:
         metadata["parse_coverage_pct"] = parse_coverage_pct
+
+    called_by = _load_program_called_by(report_dir, program)
+    if called_by:
+        metadata["called_by"] = called_by
+        chunk_text += "\nCalled by: " + ", ".join(called_by) + "."
 
     # Append confidence label to text
     chunk_text += (
@@ -455,6 +477,46 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
               f"nodes={node_count}, vars={variable_count}, "
               f"confidence={confidence['label']} ({confidence['score']:.2f})")
     return 1
+
+
+def _load_program_called_by(report_dir: Path, program: str) -> list[str]:
+    cross_calls_path = report_dir.parent.parent / "cross_program_calls.json"
+    if not cross_calls_path.exists():
+        return []
+    try:
+        data = load_json(cross_calls_path)
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+
+    target = _normalise_program_lookup_name(program)
+    for entry in data.get("programs", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name") or entry.get("program")
+        if _normalise_program_lookup_name(str(name or "")) != target:
+            continue
+        callers = []
+        seen = set()
+        for caller in entry.get("called_by", []) or []:
+            if isinstance(caller, dict):
+                caller_name = str(caller.get("source") or caller.get("program") or "").strip()
+            else:
+                caller_name = str(caller or "").strip()
+            if caller_name and caller_name.upper() not in seen:
+                seen.add(caller_name.upper())
+                callers.append(caller_name)
+        return callers
+    return []
+
+
+def _normalise_program_lookup_name(program: str) -> str:
+    name = Path(str(program or "")).name.upper()
+    for suffix in (".CBL", ".COB", ".CPY"):
+        if name.endswith(suffix):
+            return name[:-len(suffix)]
+    return name
 
 
 def _extract_program_overview(report_dir: Path) -> str:
@@ -654,6 +716,7 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
     cics_calls = deps.get("cics_calls", []) or []
     cics_operations = deps.get("cics_operations", []) or []
     cics_resources = _summarize_cics_resources(cics_operations)
+    cfg_cics_literals = _extract_cics_literal_arguments_from_cfg(report_dir)
 
     # Build human-readable text
     lines = [f"External dependencies for program {program}:"]
@@ -676,7 +739,27 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
             for resource in cics_resources
         ]
         lines.append(f"CICS resources: {', '.join(rendered)}.")
-    if not any([tables_read, tables_updated, sql_stmts, calls, cics, cics_calls, cics_resources]):
+    cics_resource_parts = []
+    for label, key in [
+        ("MAP", "MAP"),
+        ("MAPSET", "MAPSET"),
+        ("TRANSID", "TRANSID"),
+        ("PROGRAM", "PROGRAM"),
+    ]:
+        cics_resource_parts.extend(
+            f"{label} {value}" for value in cfg_cics_literals.get(key, [])
+        )
+    if cics_resource_parts:
+        lines.append(f"CICS resources: {', '.join(cics_resource_parts)}.")
+    if cfg_cics_literals.get("DATASET"):
+        lines.append(f"CICS files/datasets: {', '.join(cfg_cics_literals['DATASET'])}.")
+    if cfg_cics_literals.get("QUEUE"):
+        lines.append(f"CICS queues: {', '.join(cfg_cics_literals['QUEUE'])}.")
+    if not any([
+        tables_read, tables_updated, sql_stmts, calls, cics, cics_calls,
+        cics_resources, cics_resource_parts, cfg_cics_literals.get("DATASET"),
+        cfg_cics_literals.get("QUEUE"),
+    ]):
         lines.append("No external dependencies detected.")
 
     metadata = {
@@ -691,6 +774,12 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         "cics_calls": [{"command": c.get("command"), "target": c.get("target")} for c in cics_calls],
         "cics_operations": cics_operations,
         "cics_resources": cics_resources,
+        "cics_maps": cfg_cics_literals.get("MAP", []),
+        "cics_mapsets": cfg_cics_literals.get("MAPSET", []),
+        "cics_transids": cfg_cics_literals.get("TRANSID", []),
+        "cics_datasets": cfg_cics_literals.get("DATASET", []),
+        "cics_queues": cfg_cics_literals.get("QUEUE", []),
+        "cics_programs": cfg_cics_literals.get("PROGRAM", []),
     }
     struct = _load_cobol_structure(report_dir)
     if struct:
@@ -733,6 +822,50 @@ def _summarize_cics_resources(cics_operations: list[dict]) -> list[dict]:
             entry["target_source"] = target_source
         resources.append(entry)
     return resources
+
+
+def _extract_cics_literal_arguments_from_cfg(report_dir: Path) -> dict[str, list[str]]:
+    """Extract single-quoted CICS arguments from Java CFG node originalText."""
+    result = {
+        "MAP": [],
+        "MAPSET": [],
+        "TRANSID": [],
+        "DATASET": [],
+        "QUEUE": [],
+        "PROGRAM": [],
+    }
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return result
+    cfg_files = sorted(cfg_dir.glob("cfg-*.json"))
+    if not cfg_files:
+        return result
+
+    patterns = {
+        key: re.compile(rf"\b{key}\s*\(\s*'([^']+)'\s*\)", re.IGNORECASE)
+        for key in result
+    }
+    seen = {key: set() for key in result}
+
+    for cfg_file in cfg_files:
+        data = load_json(cfg_file)
+        if not isinstance(data, dict):
+            continue
+        for node in data.get("nodes", []) or []:
+            if not isinstance(node, dict):
+                continue
+            original = str(node.get("originalText") or "")
+            node_type = str(node.get("type") or "").upper()
+            if "EXEC CICS" not in original.upper() and node_type not in {"DIALECT", "EXEC_CICS"}:
+                continue
+            for key, pattern in patterns.items():
+                for match in pattern.findall(original):
+                    value = str(match).strip()
+                    value_u = value.upper()
+                    if value_u and value_u not in seen[key]:
+                        seen[key].add(value_u)
+                        result[key].append(value)
+    return result
 
 
 def generate_copybook_mentions(report_dir: Path, chunks_dir: Path,
@@ -1037,7 +1170,7 @@ def _format_line_range(line_start, line_end) -> str:
 
 def generate_copybook_fields(report_dir: Path, chunks_dir: Path,
                              program: str, verbose: bool) -> int:
-    """Generate copybook field/parameter facts from report-local copybook files."""
+    """Generate copybook field/parameter facts, preferring Java parser output."""
     manifest = _load_copybook_manifest(report_dir)
     struct = _load_cobol_structure(report_dir)
     mentioned = []
@@ -1046,6 +1179,34 @@ def generate_copybook_fields(report_dir: Path, chunks_dir: Path,
             if isinstance(stmt, dict) and stmt.get("copybook"):
                 mentioned.append(str(stmt["copybook"]).upper())
     ordered_names = list(dict.fromkeys(mentioned + sorted(manifest.keys())))
+
+    java_fields = _load_java_data_structure_fields(report_dir)
+    if java_fields is None:
+        metadata = {
+            "chunk_type": "copybook_fields",
+            "chunk_id": f"{program}:copybook_fields",
+            "program": program,
+            "analysis_status": "unavailable",
+            "field_source": "none",
+            "degradation_reason": "java_data_structures_null_sentinel",
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__copybook_fields.json",
+            (
+                f"Copybook fields for {program}: Data structures unavailable "
+                "(lenient fallback or null sentinel). Field extraction cannot run."
+            ),
+            metadata,
+        )
+        if verbose:
+            print("  copybook_fields: unavailable, java_data_structures_null_sentinel")
+        return 1
+    if java_fields:
+        return _write_java_data_copybook_fields_chunk(
+            report_dir, chunks_dir, program, verbose,
+            ordered_names, manifest, java_fields,
+        )
 
     entries: list[dict] = []
     for name in ordered_names:
@@ -1075,6 +1236,10 @@ def generate_copybook_fields(report_dir: Path, chunks_dir: Path,
         })
 
     lines = [f"Copybook fields for {program}:"]
+    lines.append(
+        "Status: incomplete. Java data-structure export was unavailable; "
+        "fields were extracted with a raw copybook fallback."
+    )
     if entries:
         for entry in entries:
             prefix = f"- {entry['copybook']}"
@@ -1105,6 +1270,9 @@ def generate_copybook_fields(report_dir: Path, chunks_dir: Path,
         "chunk_type": "copybook_fields",
         "chunk_id": f"{program}:copybook_fields",
         "program": program,
+        "analysis_status": "incomplete",
+        "field_source": "raw_copybook_fallback",
+        "copybook_origin_available": True,
         "copybook_count": len(entries),
         "copybooks": entries,
     }
@@ -1118,6 +1286,164 @@ def generate_copybook_fields(report_dir: Path, chunks_dir: Path,
         extracted = sum(entry["field_count"] for entry in entries)
         print(f"  copybook_fields: copybooks={len(entries)}, fields={extracted}")
     return 1
+
+
+def _write_java_data_copybook_fields_chunk(
+    report_dir: Path,
+    chunks_dir: Path,
+    program: str,
+    verbose: bool,
+    ordered_names: list[str],
+    manifest: dict[str, dict],
+    java_fields: list[dict],
+) -> int:
+    entries = []
+    for name in ordered_names:
+        info = manifest.get(name, {})
+        limitations = []
+        if info.get("is_stub"):
+            limitations.append("copybook is stubbed; real copybook-owned fields are unavailable")
+        limitations.append(
+            "field-to-copybook ownership is unavailable in current Java data export"
+        )
+        entries.append({
+            "copybook": name,
+            "resolved": info.get("status") == "resolved",
+            "stubbed": bool(info.get("is_stub", False)),
+            "status": info.get("status", "unknown"),
+            "file": info.get("file"),
+            "path": info.get("path"),
+            "field_count": 0,
+            "fields": [],
+            "limitations": limitations,
+        })
+
+    rendered_fields = java_fields[:120]
+    omitted_count = max(0, len(java_fields) - len(rendered_fields))
+    status = "incomplete" if ordered_names else "produced"
+
+    lines = [f"Copybook fields for {program}:"]
+    if ordered_names:
+        lines.append(
+            "Status: incomplete. Java data-structure export was used for field facts, "
+            "but exact field-to-copybook ownership is not available in this report schema."
+        )
+        lines.append("Included copybooks: " + ", ".join(ordered_names) + ".")
+    else:
+        lines.append(
+            "Status: produced. No COPY statements were found; Java data-structure "
+            "fields are listed for program data context."
+        )
+
+    if rendered_fields:
+        lines.append("Java-parsed program data fields after copybook expansion:")
+        for field in rendered_fields:
+            lines.append("- " + _format_field_fact(field) + ".")
+        if omitted_count:
+            lines.append(
+                f"... {omitted_count} more Java-parsed fields omitted from this summary; "
+                "see variable_group chunks for full grouped field context."
+            )
+    else:
+        lines.append("No Java-parsed data fields were available.")
+
+    for entry in entries:
+        reason = "; ".join(entry["limitations"])
+        lines.append(f"- {entry['copybook']}: {reason}.")
+
+    metadata = {
+        "chunk_type": "copybook_fields",
+        "chunk_id": f"{program}:copybook_fields",
+        "program": program,
+        "analysis_status": status,
+        "field_source": "java_rawtext_regex",
+        "copybook_origin_available": False,
+        "copybook_count": len(entries),
+        "copybooks": entries,
+        "program_field_count": len(java_fields),
+        "program_fields_sample": java_fields[:50],
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__copybook_fields.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        print(
+            f"  copybook_fields: source=java_rawtext_regex, "
+            f"copybooks={len(entries)}, fields={len(java_fields)}"
+        )
+    return 1
+
+
+def _load_java_data_structure_fields(report_dir: Path) -> list[dict] | None:
+    ds_dir = report_dir / "data_structures"
+    if not ds_dir.is_dir():
+        return []
+    ds_files = sorted(ds_dir.glob("*-data.json"))
+    if not ds_files:
+        return []
+    data = load_json(ds_files[0])
+    if not isinstance(data, dict):
+        return []
+    if data.get("levelNumber") == -99 or str(data.get("name", "")).startswith("NULL["):
+        return None
+
+    fields: list[dict] = []
+
+    def _walk(node: dict, parent: str = "") -> None:
+        name = str(node.get("name", "")).strip()
+        level = node.get("levelNumber")
+        if name and name not in {"[ROOT]", "ROOT", "FILLER"} and level:
+            raw_text = str(node.get("rawText", "")).strip()
+            field = {
+                "name": name.upper(),
+                "level": str(level).zfill(2) if str(level).isdigit() and len(str(level)) == 1 else str(level),
+                "raw_text": raw_text,
+                "source_section": node.get("sourceSection", "UNKNOWN"),
+                "data_type": node.get("dataType", "UNKNOWN"),
+                "parent": parent,
+            }
+            picture = _extract_copybook_picture(raw_text)
+            value = _extract_copybook_value(raw_text)
+            if picture:
+                field["picture"] = picture
+            if value:
+                field["value"] = value
+            if node.get("isRedefinition"):
+                field["redefines"] = node.get("redefines", "")
+            categories = node.get("categories")
+            if isinstance(categories, list) and categories:
+                field["categories"] = [str(category) for category in categories]
+            fields.append(field)
+
+        next_parent = name.upper() if name and name not in {"[ROOT]", "ROOT"} else parent
+        for child in node.get("children", []) or []:
+            if isinstance(child, dict):
+                _walk(child, next_parent)
+
+    for child in data.get("children", []) or []:
+        if isinstance(child, dict):
+            _walk(child)
+    return fields
+
+
+def _format_field_fact(field: dict) -> str:
+    parts = [f"{field['name']} (level {field.get('level', '?')}"]
+    if field.get("picture"):
+        parts.append(f"PIC {field['picture']}")
+    if field.get("value"):
+        parts.append(f"VALUE {field['value']}")
+    if field.get("data_type"):
+        parts.append(f"type {field['data_type']}")
+    if field.get("source_section"):
+        parts.append(f"section {field['source_section']}")
+    if field.get("redefines"):
+        parts.append(f"REDEFINES {field['redefines']}")
+    if field.get("parent"):
+        parts.append(f"parent {field['parent']}")
+    return ", ".join(parts) + ")"
 
 
 def _resolve_report_copybook_path(report_dir: Path, name: str, info: dict) -> Path | None:
@@ -1763,12 +2089,12 @@ def _variable_matches_cics_arg(variable: str, arg_value: str) -> bool:
     arg_u = str(arg_value or "").upper()
     if not var_u or not arg_u:
         return False
-    if var_u == arg_u or var_u in arg_u or arg_u in var_u:
+    if var_u == arg_u:
         return True
     root = var_u.split("-", 1)[0]
-    if len(root) >= 5 and root in arg_u:
+    if len(root) >= 7 and root in arg_u:
         return True
-    if arg_u.startswith("W") and len(root) >= 5 and root in arg_u[1:]:
+    if arg_u.startswith("W") and len(root) >= 7 and root in arg_u[1:]:
         return True
     return False
 
@@ -3301,6 +3627,9 @@ def _split_line_based_chunk(text: str, chunk_type: str) -> list[str]:
         if len(current) > 1:
             parts.append("\n".join(current))
             current = [continued, line]
+            if token_count("\n".join(current)) > MAX_CHUNK_TOKENS:
+                parts.extend(split_bpe_text("\n".join(current), MAX_CHUNK_TOKENS, 0))
+                current = [continued]
         else:
             # A single evidence line is too large; fall back for that line only.
             parts.extend(split_bpe_text("\n".join(candidate), MAX_CHUNK_TOKENS, 0))
@@ -4418,10 +4747,11 @@ def generate_workflow_chunks(
             callee_english = callee_entry.get("english", "").strip()
             if callee_entry.get("translation_failed"):
                 callee_english = ""
+            cics_suffix = _workflow_callee_cics_suffix(chunks_dir, program, callee)
             if callee_english:
-                parts.append(f"  - {callee}: {callee_english}")
+                parts.append(f"  - {callee}{cics_suffix}: {callee_english}")
             else:
-                parts.append(f"  - {callee}")
+                parts.append(f"  - {callee}{cics_suffix}")
 
         chunk_text = "\n".join(parts)
 
@@ -4444,6 +4774,33 @@ def generate_workflow_chunks(
     if verbose:
         print(f"  workflow: {count} chunk(s)")
     return count
+
+
+def _workflow_callee_cics_suffix(chunks_dir: Path, program: str, callee: str) -> str:
+    safe_callee = re.sub(r"[^\w\-]", "_", callee)
+    chunk_path = chunks_dir / f"{program}__paragraph__{safe_callee}.json"
+    if not chunk_path.exists():
+        return ""
+    data = load_json(chunk_path)
+    if not isinstance(data, dict):
+        return ""
+    commands = data.get("metadata", {}).get("cics_commands", []) or []
+    rendered = []
+    seen = set()
+    for command in commands:
+        command_text = str(command).strip()
+        if not command_text:
+            continue
+        key = command_text.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        rendered.append(command_text.title())
+        if len(rendered) >= 3:
+            break
+    if not rendered:
+        return ""
+    return f" (CICS: {', '.join(rendered)})"
 
 
 # =============================================================================

@@ -4,6 +4,47 @@ Most recent entries first.
 
 ---
 
+## 2026-05-03 — Pre-6A RAG chunk hardening and sample validation
+
+**File(s):** `chunk_pipeline.py`, `validate_chunks.py`, `test_chunk_pipeline.py`, `docs/proposals/rag_output_improvement_plan.md`, `docs/handoff.md`, `workDone.md`
+**What changed:** Verified the reported RAG producer issues against the current code and artifacts, then implemented the Pre-6A blocker fixes and safe output improvements. `copybook_fields` now labels Java `rawText` regex-derived facts as `java_rawtext_regex`; null/degraded Java data structures emit unavailable copybook fields instead of falling through to raw copybook parsing; CICS consumer matching no longer uses substring matches; dependencies now surfaces literal CICS MAP/MAPSET/TRANSID/DATASET/QUEUE/PROGRAM values from CFG `originalText`; program summaries include `Called by` and structural counts; workflow chunks include per-callee CICS command suffixes; and the line-safe splitter now handles one oversized static-values evidence line. Added regression tests for each behavior and kept `comments` / `commented_out_code` validator registration with the producer changes.
+**Verification:** `python3 -m unittest test_chunk_pipeline test_audit_chunk_regeneration` passed with 46 tests and 2 skipped. `PYTHONPYCACHEPREFIX=/tmp/cobol-rekt-pycache python3 -m py_compile chunk_pipeline.py validate_chunks.py test_chunk_pipeline.py` passed. Regenerated a non-destructive 20-report sample under `/tmp/cobol-rekt-step6a`; `validate_chunks.py --report-dir /tmp/cobol-rekt-step6a/out/report --corpus-index /tmp/cobol-rekt-step6a/out/corpus_index.json --max-tokens 512 --verbose` passed over 2,804 chunks with 0 errors.
+**Why:** User requested critical verification before code changes, implementation of B1-B4 and I1/I2/I3/I5, and a controlled Step 6A sample gate before any full-corpus regeneration.
+
+---
+
+## 2026-05-02 — RAG producer hardening and PDB305 knowledge-base_rag bundle
+
+**File(s):** `comment_extractor.py`, `chunk_pipeline.py`, `knowledge_base_builder.py`, `validate_chunks.py`, `test_comment_extractor.py`, `test_chunk_pipeline.py`, `test_knowledge_base_builder.py`, `out/report/PDB305.CBL.report/knowledge-base_rag/`
+**What changed:** Implemented six focused commits: separated code-like commented COBOL into `commented_out_code.json`; added `static_values` aggregate chunks; included structured CICS resources in dependencies; generated report-local `knowledge-base_rag/` bundles; cleared stale chunk JSONs before regeneration; and made dependency extraction tolerate `EXEC  CICS` spacing so `WRITEQ TS QUEUE(TWCOB-TS-CODA)` is captured.
+**Why:** User requested implementing the PDB305 RAG fixes and creating a report folder containing everything needed for downstream RAG ingestion.
+
+---
+
+## 2026-05-02 — Independent PDB305 cobol-rekt/RAG gap review
+
+**File(s):** `docs/discussions/0004-pdb305-corpus-gap-analysis.md`
+**What changed:** Appended an independent Codex review of PDB305 source truth, generated KB/chunk evidence, producer-side chunk contamination, RAG ingestion/retrieval behavior, and prioritized fixes. Confirmed actual retrieval failures against the Chroma index: dataset queries retrieve inactive `PDKTELR` comment chunks, program-call queries retrieve `cics_operations`, dead-code queries lack a reliable source, and hardcoded-value queries lack an aggregate static-values chunk.
+**Why:** User requested a fresh review rather than accepting the prior analysis, with concrete evidence from both cobol-rekt outputs and the downstream RAG pipeline.
+
+---
+
+## 2026-05-02 — Discussion 0004: cobol-rekt and RAG pipeline gap analysis with Codex review
+
+**File(s):** `docs/discussions/0004-pdb305-corpus-gap-analysis.md`
+**What changed:** Wrote comprehensive gap analysis document covering 8 cobol-rekt pipeline issues (C1–C8) and 7 RAG pipeline issues (R1–R7), with priority matrix and 5 open questions. Codex reviewed and answered all questions, added 4 new issues (silent masking of C2, R4 inapplicable to CICS programs, data_dictionary_coverage scoring bug, dependencies chunk missing terminal map PDB3051), and corrected BM25 effort from M to S.
+**Why:** User requested detailed analysis of both pipelines informed by PDB305 end-to-end evaluation and corpus-wide evaluator data.
+
+---
+
+## 2026-05-01 — Full pipeline analysis of PDB305.CBL (BROWSE RIMBORSI TELEFONINI)
+
+**File(s):** `out/report/PDB305.CBL.report/` (generated)
+**What changed:** Ran full analyze.py + chunk_pipeline.py on PDB305.CBL. 50 RAG chunks generated. Identified: data_structures_degraded (SQLCA/PDWSQLER stubs crash Java data structure builder), PDRTELR missing from source directory, comment enrichment API mismatch. All CICS LINKs and SQL correctly extracted.
+**Why:** User requested accuracy assessment and RAG readiness evaluation for specific flow/code analysis questions.
+
+---
+
 ## 2026-04-30 — Fix `target_source` accuracy for unquoted CICS FILE/MAP/QUEUE/TRANSID targets
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/DialectMetadataParser.java`, `knowledge_base_builder.py`, `smojol-core/.../ClassConditionBuilder.java`, `baselines/cics_yaml_after/`
