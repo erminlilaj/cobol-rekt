@@ -27,6 +27,7 @@ from chunk_pipeline import (
     generate_program_summary,
     generate_rag_bundle,
     generate_static_values,
+    generate_unused_copybook_analysis,
     generate_variable_groups,
     generate_workflow_chunks,
     split_bpe_text,
@@ -764,6 +765,108 @@ class ChunkPipelineTest(unittest.TestCase):
             )
             self.assertIn("Data structures unavailable", data["text"])
             self.assertNotIn("RAW-FALLBACK-ONLY", data["text"])
+
+    def test_unused_copybooks_emits_candidate_only_from_java_facts(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "UNUSED.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            ds_dir = report_dir / "data_structures"
+            cfg_dir = report_dir / "cfg"
+            chunks_dir.mkdir(parents=True)
+            ds_dir.mkdir()
+            cfg_dir.mkdir()
+            chunk_pipeline._atomic_write_json(report_dir / "cobol_structure.json", {
+                "copy_statements": [
+                    {"copybook": "PARAMS-A", "line": 10},
+                    {"copybook": "PARAMS-B", "line": 11},
+                    {"copybook": "PARAMS-C", "line": 12},
+                ],
+            })
+            chunk_pipeline._atomic_write_json(ds_dir / "UNUSED.CBL-data.json", {
+                "children": [
+                    {
+                        "levelNumber": 1,
+                        "name": "A-GROUP",
+                        "copybookOrigin": "PARAMS-A",
+                        "children": [
+                            {"levelNumber": 5, "name": "A-FIELD", "copybookOrigin": "PARAMS-A"},
+                        ],
+                    },
+                    {
+                        "levelNumber": 1,
+                        "name": "B-GROUP",
+                        "copybookOrigin": "PARAMS-B",
+                        "children": [
+                            {"levelNumber": 5, "name": "B-FIELD", "copybookOrigin": "PARAMS-B"},
+                        ],
+                    },
+                ],
+            })
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-UNUSED.CBL.json", {
+                "nodes": [
+                    {
+                        "type": "PARAGRAPH",
+                        "name": "MAIN-PARA",
+                        "variablesRead": ["B-FIELD"],
+                        "variablesModified": [],
+                        "variableUsageSource": "java_flow_node_expressions",
+                    },
+                ],
+                "edges": [],
+            })
+
+            count = generate_unused_copybook_analysis(report_dir, chunks_dir, "UNUSED.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "UNUSED.CBL__unused_copybooks.json")
+
+            self.assertEqual(1, count)
+            self.assertEqual("candidate_only", data["metadata"]["analysis_status"])
+            self.assertTrue(data["metadata"]["candidate_only"])
+            self.assertEqual(["PARAMS-A"], [
+                item["copybook"] for item in data["metadata"]["candidates"]
+            ])
+            self.assertEqual(["PARAMS-B"], [
+                item["copybook"] for item in data["metadata"]["used_copybooks"]
+            ])
+            self.assertEqual(["PARAMS-C"], [
+                item["copybook"] for item in data["metadata"]["not_evaluated"]
+            ])
+            self.assertIn("Status: candidate-only", data["text"])
+            self.assertIn("PARAMS-A", data["text"])
+            self.assertIn("PARAMS-B", data["text"])
+            self.assertIn("PARAMS-C", data["text"])
+
+    def test_unused_copybooks_unavailable_without_java_variable_usage(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "NOUSAGE.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            ds_dir = report_dir / "data_structures"
+            cfg_dir = report_dir / "cfg"
+            chunks_dir.mkdir(parents=True)
+            ds_dir.mkdir()
+            cfg_dir.mkdir()
+            chunk_pipeline._atomic_write_json(report_dir / "cobol_structure.json", {
+                "copy_statements": [{"copybook": "PARAMS", "line": 10}],
+            })
+            chunk_pipeline._atomic_write_json(ds_dir / "NOUSAGE.CBL-data.json", {
+                "children": [
+                    {"levelNumber": 1, "name": "A-FIELD", "copybookOrigin": "PARAMS"},
+                ],
+            })
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-NOUSAGE.CBL.json", {
+                "nodes": [{"type": "PARAGRAPH", "name": "MAIN-PARA"}],
+                "edges": [],
+            })
+
+            count = generate_unused_copybook_analysis(report_dir, chunks_dir, "NOUSAGE.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "NOUSAGE.CBL__unused_copybooks.json")
+
+            self.assertEqual(1, count)
+            self.assertEqual("unavailable", data["metadata"]["analysis_status"])
+            self.assertEqual(
+                "java_cfg_variable_usage_unavailable",
+                data["metadata"]["degradation_reason"],
+            )
+            self.assertIn("No unused-copybook claims were produced", data["text"])
 
     def test_line_based_split_preserves_copybook_field_lines(self) -> None:
         text = "Copybook fields for BIG.CBL:\n" + "\n".join(

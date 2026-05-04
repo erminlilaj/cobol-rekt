@@ -49,6 +49,7 @@ ALWAYS_INDEXABLE_THIN_TYPES = frozenset({
     "datasets_tables_resources",
     "copybook_mentions",
     "copybook_fields",
+    "unused_copybooks",
     "comments",
     "commented_out_code",
 })
@@ -59,6 +60,7 @@ NEGATIVE_EVIDENCE_TYPES = frozenset({
     "jcl_analysis_health",
     "external_program_calls",
     "datasets_tables_resources",
+    "unused_copybooks",
     "comments",
     "commented_out_code",
 })
@@ -1528,6 +1530,234 @@ def _format_field_fact(field: dict) -> str:
     if field.get("parent"):
         parts.append(f"parent {field['parent']}")
     return ", ".join(parts) + ")"
+
+
+def generate_unused_copybook_analysis(report_dir: Path, chunks_dir: Path,
+                                      program: str, verbose: bool) -> int:
+    """Emit conservative unused-copybook candidates from Java-owned fields and CFG usage."""
+    mentioned = _ordered_copybook_names(report_dir)
+    if not mentioned:
+        metadata = {
+            "chunk_type": "unused_copybooks",
+            "chunk_id": f"{program}:unused_copybooks",
+            "program": program,
+            "analysis_status": "not_applicable",
+            "candidate_only": True,
+            "copybook_count": 0,
+            "candidate_count": 0,
+            "usage_source": "java_cfg_variables",
+            "field_source": "java_structured_fields",
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__unused_copybooks.json",
+            f"Unused copybook candidates for {program}: no COPY statements were found.",
+            metadata,
+        )
+        if verbose:
+            print("  unused_copybooks: not_applicable, no COPY statements")
+        return 1
+
+    java_fields = _load_java_data_structure_fields(report_dir)
+    if java_fields is None:
+        return _write_unused_copybooks_unavailable(
+            chunks_dir, program, "java_data_structures_null_sentinel", verbose,
+        )
+    if not java_fields:
+        return _write_unused_copybooks_unavailable(
+            chunks_dir, program, "java_data_structures_unavailable", verbose,
+        )
+
+    copybook_fields = _group_copybook_owned_fields(java_fields)
+    if not copybook_fields:
+        return _write_unused_copybooks_unavailable(
+            chunks_dir, program, "copybook_ownership_unavailable", verbose,
+        )
+
+    usage = _collect_java_cfg_used_variables(report_dir)
+    if usage is None:
+        return _write_unused_copybooks_unavailable(
+            chunks_dir, program, "java_cfg_variable_usage_unavailable", verbose,
+        )
+
+    used_variables = usage["used_variables"]
+    candidates: list[dict] = []
+    used_copybooks: list[dict] = []
+    incomplete: list[dict] = []
+    for copybook in mentioned:
+        fields = copybook_fields.get(copybook, [])
+        if not fields:
+            incomplete.append({
+                "copybook": copybook,
+                "reason": "no Java-owned fields were attributed to this copybook",
+            })
+            continue
+        field_names = [field["name"] for field in fields if field.get("name")]
+        matched = sorted({name for name in field_names if name in used_variables})
+        entry = {
+            "copybook": copybook,
+            "field_count": len(field_names),
+            "field_sample": field_names[:25],
+        }
+        if matched:
+            used_copybooks.append({
+                **entry,
+                "matched_fields": matched[:25],
+                "matched_field_count": len(matched),
+            })
+        else:
+            candidates.append({
+                **entry,
+                "reason": "no Java CFG variable reference found for owned fields",
+            })
+
+    lines = [
+        f"Unused copybook candidates for {program}:",
+        (
+            "Status: candidate-only. This uses Java copybook ownership and Java CFG "
+            "variable usage. It does not prove a copybook is unused."
+        ),
+    ]
+    if candidates:
+        lines.append("Candidates with no Java CFG field reference:")
+        for candidate in candidates:
+            sample = ", ".join(candidate["field_sample"][:10])
+            suffix = ""
+            if candidate["field_count"] > 10:
+                suffix = f" ... and {candidate['field_count'] - 10} more"
+            lines.append(
+                f"- {candidate['copybook']}: {candidate['reason']} "
+                f"({candidate['field_count']} owned fields: {sample}{suffix})."
+            )
+    else:
+        lines.append("No unused-copybook candidates were found from the available Java facts.")
+
+    if used_copybooks:
+        lines.append("Copybooks with observed Java CFG field references:")
+        for entry in used_copybooks:
+            matched = ", ".join(entry["matched_fields"][:10])
+            suffix = ""
+            if entry["matched_field_count"] > 10:
+                suffix = f" ... and {entry['matched_field_count'] - 10} more"
+            lines.append(f"- {entry['copybook']}: referenced fields {matched}{suffix}.")
+
+    if incomplete:
+        lines.append("Copybooks not evaluated:")
+        for entry in incomplete:
+            lines.append(f"- {entry['copybook']}: {entry['reason']}.")
+
+    metadata = {
+        "chunk_type": "unused_copybooks",
+        "chunk_id": f"{program}:unused_copybooks",
+        "program": program,
+        "analysis_status": "candidate_only",
+        "candidate_only": True,
+        "field_source": "java_structured_fields",
+        "usage_source": "java_cfg_variables",
+        "copybook_count": len(mentioned),
+        "candidate_count": len(candidates),
+        "used_copybook_count": len(used_copybooks),
+        "used_variable_count": len(used_variables),
+        "candidates": candidates,
+        "used_copybooks": used_copybooks,
+        "not_evaluated": incomplete,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__unused_copybooks.json",
+        "\n".join(lines),
+        metadata,
+    )
+    if verbose:
+        print(
+            f"  unused_copybooks: candidate_only, "
+            f"candidates={len(candidates)}, used={len(used_copybooks)}"
+        )
+    return 1
+
+
+def _write_unused_copybooks_unavailable(chunks_dir: Path, program: str,
+                                        reason: str, verbose: bool) -> int:
+    metadata = {
+        "chunk_type": "unused_copybooks",
+        "chunk_id": f"{program}:unused_copybooks",
+        "program": program,
+        "analysis_status": "unavailable",
+        "candidate_only": True,
+        "field_source": "java_structured_fields",
+        "usage_source": "java_cfg_variables",
+        "degradation_reason": reason,
+        "candidate_count": 0,
+    }
+    write_chunk(
+        chunks_dir,
+        f"{program}__unused_copybooks.json",
+        (
+            f"Unused copybook candidates for {program}: unavailable. "
+            f"Reason: {reason}. No unused-copybook claims were produced."
+        ),
+        metadata,
+    )
+    if verbose:
+        print(f"  unused_copybooks: unavailable, {reason}")
+    return 1
+
+
+def _ordered_copybook_names(report_dir: Path) -> list[str]:
+    manifest = _load_copybook_manifest(report_dir)
+    struct = _load_cobol_structure(report_dir)
+    mentioned = []
+    if struct:
+        for stmt in struct.get("copy_statements", []) or []:
+            if isinstance(stmt, dict) and stmt.get("copybook"):
+                mentioned.append(str(stmt["copybook"]).upper())
+    return list(dict.fromkeys(mentioned + sorted(manifest.keys())))
+
+
+def _group_copybook_owned_fields(fields: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for field in fields:
+        origin = str(field.get("copybook_origin", "")).strip().upper()
+        name = str(field.get("name", "")).strip().upper()
+        if not origin or not name:
+            continue
+        grouped.setdefault(origin, []).append(field)
+    return grouped
+
+
+def _collect_java_cfg_used_variables(report_dir: Path) -> dict | None:
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return None
+    cfg_files = sorted(cfg_dir.glob("cfg-*.json"))
+    if not cfg_files:
+        return None
+
+    used: set[str] = set()
+    saw_java_usage = False
+    for cfg_file in cfg_files:
+        data = load_json(cfg_file)
+        if not isinstance(data, dict):
+            continue
+        for node in data.get("nodes", []) or []:
+            if not isinstance(node, dict):
+                continue
+            source = str(node.get("variableUsageSource", ""))
+            reads = node.get("variablesRead", []) or []
+            writes = node.get("variablesModified", []) or []
+            if source == "java_flow_node_expressions" or reads or writes:
+                saw_java_usage = True
+            for value in list(reads) + list(writes):
+                name = str(value).strip().upper()
+                if name:
+                    used.add(name)
+
+    if not saw_java_usage:
+        return None
+    return {
+        "used_variables": used,
+        "usage_source": "java_cfg_variables",
+    }
 
 
 def _resolve_report_copybook_path(report_dir: Path, name: str, info: dict) -> Path | None:
@@ -3898,6 +4128,7 @@ def _split_parts_with_context(text: str, metadata: dict) -> list[str]:
         "datasets_tables_resources",
         "copybook_mentions",
         "copybook_fields",
+        "unused_copybooks",
         "comments",
         "commented_out_code",
     }:
@@ -5169,6 +5400,8 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         summary["copybook_mentions"] = generate_copybook_mentions(
             report_dir, chunks_dir, program, verbose)
         summary["copybook_fields"] = generate_copybook_fields(
+            report_dir, chunks_dir, program, verbose)
+        summary["unused_copybooks"] = generate_unused_copybook_analysis(
             report_dir, chunks_dir, program, verbose)
         summary["comments"] = generate_comments(
             report_dir, chunks_dir, program, verbose)

@@ -47,7 +47,7 @@ VALID_COBOL_CHUNK_TYPES = {
     "analysis_health", "cobol_analysis_health", "section_summary", "workflow",
     "business_rules", "sql_operation", "cics_operations", "static_values",
     "external_program_calls", "datasets_tables_resources", "copybook_mentions",
-    "copybook_fields", "comments", "commented_out_code",
+    "copybook_fields", "unused_copybooks", "comments", "commented_out_code",
 }
 VALID_JCL_CHUNK_TYPES = {
     "job_flow", "step_detail",
