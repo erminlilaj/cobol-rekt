@@ -133,6 +133,7 @@ class JavaHardeningRegressionTest {
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "IN-2"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "COUNTER"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "FLAG"));
+        assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesRead"), "INIT-SOURCE"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "OUT-1"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "OUT-2"));
         assertTrue(jsonArrayContainsString(paragraph.getAsJsonArray("variablesModified"), "RESULT"));
@@ -151,6 +152,8 @@ class JavaHardeningRegressionTest {
         assertTrue(hasAssignmentFact(nodes, "FLAG", "'Y'", "MAIN-PARA", "java_move_literal"));
         assertTrue(hasAssignmentFact(nodes, "OUT-2", "7", "MAIN-PARA", "java_compute_numeric_literal"));
         assertTrue(hasAssignmentFact(nodes, "COUNTER", "3", "MAIN-PARA", "java_set_literal"));
+        assertTrue(hasInitializeFact(nodes, "OUT-1", "NUMERIC", "0", "MAIN-PARA"));
+        assertTrue(hasInitializeReplacementSource(nodes, "OUT-1", "ALPHANUMERIC", "INIT-SOURCE"));
     }
 
     @Test
@@ -290,6 +293,38 @@ class JavaHardeningRegressionTest {
                         && sourceValue.equals(assignment.get("source_value").getAsString())
                         && paragraph.equals(assignment.get("paragraph").getAsString())
                         && provenanceSource.equals(assignment.get("provenance_source").getAsString()));
+    }
+
+    private boolean hasInitializeFact(JsonArray nodes, String targetVariable, String category,
+                                      String sourceValue, String paragraph) {
+        return initializeFacts(nodes).stream()
+                .filter(fact -> targetVariable.equals(fact.get("target_variable").getAsString())
+                        && paragraph.equals(fact.get("paragraph").getAsString()))
+                .filter(fact -> fact.has("replacements"))
+                .flatMap(fact -> jsonObjects(fact.getAsJsonArray("replacements")).stream())
+                .anyMatch(replacement -> category.equals(replacement.get("category").getAsString())
+                        && sourceValue.equals(replacement.get("source_value").getAsString())
+                        && "literal".equals(replacement.get("source_kind").getAsString()));
+    }
+
+    private boolean hasInitializeReplacementSource(JsonArray nodes, String targetVariable, String category,
+                                                   String sourceVariable) {
+        return initializeFacts(nodes).stream()
+                .filter(fact -> targetVariable.equals(fact.get("target_variable").getAsString()))
+                .filter(fact -> fact.has("replacements"))
+                .flatMap(fact -> jsonObjects(fact.getAsJsonArray("replacements")).stream())
+                .anyMatch(replacement -> category.equals(replacement.get("category").getAsString())
+                        && sourceVariable.equals(replacement.get("source_variable").getAsString())
+                        && "identifier".equals(replacement.get("source_kind").getAsString()));
+    }
+
+    private List<JsonObject> initializeFacts(JsonArray nodes) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.get("metadata").getAsJsonObject())
+                .filter(metadata -> metadata.has("initialize_facts"))
+                .flatMap(metadata -> jsonObjects(metadata.getAsJsonArray("initialize_facts")).stream())
+                .toList();
     }
 
     private JsonObject findNode(JsonArray nodes, String key, String value) {

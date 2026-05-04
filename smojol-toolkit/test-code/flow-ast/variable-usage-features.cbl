@@ -10,6 +10,7 @@
        01  RESULT           PIC 9(4).
        01  TOTAL            PIC 9(4).
        01  FLAG             PIC X.
+       01  INIT-SOURCE      PIC X VALUE 'A'.
        PROCEDURE DIVISION.
        MAIN-PARA.
            MOVE IN-1 TO OUT-1 OUT-2.
@@ -17,6 +18,8 @@
            COMPUTE OUT-2 = 7.
            ADD IN-2 TO TOTAL.
            SET COUNTER TO 3.
+           INITIALIZE OUT-1 REPLACING NUMERIC DATA BY 0
+                              ALPHANUMERIC DATA BY INIT-SOURCE.
            IF FLAG = 'Y'
                MOVE TOTAL TO OUT-1
            END-IF.

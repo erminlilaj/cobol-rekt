@@ -53,7 +53,7 @@ public class CobolFlowNodeFactory {
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ReadStatementContext.class))
             return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.READ);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.InitializeStatementContext.class))
-            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.INITIALIZE);
+            return new InitializeFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ContinueStatementContext.class))
             return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CONTINUE);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.InspectStatementContext.class))
@@ -188,7 +188,7 @@ public class CobolFlowNodeFactory {
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ReadStatementContext.class))
             return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.READ);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.InitializeStatementContext.class))
-            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.INITIALIZE);
+            return new InitializeFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ContinueStatementContext.class))
             return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CONTINUE);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.InspectStatementContext.class))
