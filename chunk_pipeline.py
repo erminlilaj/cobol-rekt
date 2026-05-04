@@ -413,18 +413,40 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
     struct = _load_cobol_structure(report_dir)
     structural_counts: dict[str, int] = {}
     if struct:
+        sections = struct.get("sections", {}) or {}
+        procedure_section_count = sum(
+            1 for section in sections.values()
+            if isinstance(section, dict)
+            and str(section.get("division", "")).upper() == "PROCEDURE"
+        )
         structural_counts = {
             "paragraph_count": len(struct.get("paragraph_profiles", {}) or {}),
-            "section_count": len(struct.get("sections", {}) or {}),
+            "section_count": procedure_section_count,
+            "non_procedure_section_count": len(sections) - procedure_section_count,
             "condition_count": len(struct.get("conditions_88", {}) or {}),
             "redefines_count": len(struct.get("redefines", []) or []),
         }
         chunk_text += (
             f"\nParagraphs: {structural_counts['paragraph_count']} "
-            f"in {structural_counts['section_count']} sections. "
+            f"in {structural_counts['section_count']} PROCEDURE sections. "
+            f"Non-procedure sections: {structural_counts['non_procedure_section_count']}. "
             f"88-level conditions: {structural_counts['condition_count']}. "
             f"REDEFINES: {structural_counts['redefines_count']}."
         )
+
+    reachability = _extract_cfg_reachability(report_dir)
+    if reachability:
+        if reachability["dead_paragraphs"]:
+            chunk_text += (
+                "\nUnreachable paragraph candidates: "
+                + ", ".join(reachability["dead_paragraphs"])
+                + f". Source: {reachability['reachability_source']}."
+            )
+        else:
+            chunk_text += (
+                f"\nJava CFG reachability: all {reachability['paragraph_count']} "
+                f"paragraphs are marked reachable. Source: {reachability['reachability_source']}."
+            )
 
     # Append Program Overview from narrative if available
     overview_text = _extract_program_overview(report_dir)
@@ -450,6 +472,12 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
     }
     if structural_counts:
         metadata.update(structural_counts)
+    if reachability:
+        metadata.update({
+            "dead_paragraphs": reachability["dead_paragraphs"],
+            "dead_paragraph_count": len(reachability["dead_paragraphs"]),
+            "reachability_source": reachability["reachability_source"],
+        })
     if struct:
         copy_stmts = struct.get("copy_statements", [])
         if copy_stmts:
@@ -511,6 +539,93 @@ def _load_program_called_by(report_dir: Path, program: str) -> list[str]:
                 callers.append(caller_name)
         return callers
     return []
+
+
+def _extract_cfg_reachability(report_dir: Path) -> dict | None:
+    """Return Java CFG paragraph reachability facts when exported."""
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return None
+    cfg_files = sorted(cfg_dir.glob("cfg-*.json"))
+    if not cfg_files:
+        return None
+
+    data = load_json(cfg_files[0])
+    if not isinstance(data, dict):
+        return None
+
+    paragraphs = [
+        node for node in data.get("nodes", []) or []
+        if isinstance(node, dict) and node.get("type") == "PARAGRAPH"
+    ]
+    if not paragraphs:
+        return None
+
+    annotated = [
+        node for node in paragraphs
+        if node.get("reachable") is not None or node.get("deadCodeCandidate") is not None
+    ]
+    if not annotated:
+        return None
+
+    dead = []
+    for node in paragraphs:
+        name = str(node.get("name") or "").strip()
+        if not name:
+            continue
+        if node.get("reachable") is False or node.get("deadCodeCandidate") is True:
+            dead.append(name)
+
+    source = "unknown"
+    for node in annotated:
+        value = str(node.get("reachabilitySource") or "").strip()
+        if value:
+            source = value
+            break
+
+    return {
+        "paragraph_count": len(paragraphs),
+        "dead_paragraphs": list(dict.fromkeys(dead)),
+        "reachability_source": source,
+    }
+
+
+def generate_dead_code_reachability(report_dir: Path, chunks_dir: Path,
+                                    program: str, verbose: bool) -> int:
+    """Expose Java CFG reachability as a dedicated dead_code chunk."""
+    reachability = _extract_cfg_reachability(report_dir)
+    if not reachability:
+        return 0
+
+    dead = reachability["dead_paragraphs"]
+    if dead:
+        text = (
+            f"Dead or unreachable code candidates for {program}: "
+            + ", ".join(dead)
+            + f". Source: {reachability['reachability_source']}."
+        )
+    else:
+        text = (
+            f"Dead or unreachable code candidates for {program}: none found. "
+            f"Java CFG reachability marks all {reachability['paragraph_count']} "
+            f"paragraphs reachable. Source: {reachability['reachability_source']}."
+        )
+
+    metadata = {
+        "chunk_type": "dead_code",
+        "chunk_id": f"{program}:dead_code",
+        "parent_program_chunk": f"{program}:program_summary",
+        "program": program,
+        "dead_paragraphs": dead,
+        "dead_paragraph_count": len(dead),
+        "paragraph_count": reachability["paragraph_count"],
+        "reachability_source": reachability["reachability_source"],
+        "candidate_only": True,
+    }
+    write_chunk(chunks_dir, f"{program}__dead_code.json", text, metadata)
+    if verbose:
+        print(f"  dead_code: candidates={len(dead)}")
+    return 1
 
 
 def _normalise_program_lookup_name(program: str) -> str:
@@ -1446,7 +1561,12 @@ def _load_java_data_structure_fields(report_dir: Path) -> list[dict] | None:
     def _walk(node: dict, parent: str = "") -> None:
         name = str(node.get("name", "")).strip()
         level = node.get("levelNumber")
-        if name and name not in {"[ROOT]", "ROOT", "FILLER"} and level:
+        if (
+            name
+            and name not in {"[ROOT]", "ROOT", "FILLER"}
+            and isinstance(level, int)
+            and level >= 1
+        ):
             raw_text = str(node.get("rawText", "")).strip()
             field = {
                 "name": name.upper(),
@@ -2493,13 +2613,14 @@ def _extract_static_value_consumers(report_dir: Path, variables: set[str],
                                    provenance: dict[str, dict]) -> dict[str, list[dict]]:
     """Infer static-value consumers from same-paragraph CICS evidence.
 
-    This intentionally stays conservative: it only uses variables with paragraph
-    provenance and active CICS statements already present in the report narrative.
+    This intentionally stays conservative: it prefers direct CICS argument
+    evidence and falls back to Java CFG variablesRead facts.
     """
     by_paragraph: dict[str, list[str]] = {}
     for paragraph, statement in _iter_active_cics_statements(report_dir):
         if paragraph:
             by_paragraph.setdefault(paragraph, []).append(statement)
+    cfg_readers = _load_cfg_variable_readers(report_dir, variables)
 
     result: dict[str, list[dict]] = {}
     for variable in sorted(variables):
@@ -2511,9 +2632,50 @@ def _extract_static_value_consumers(report_dir: Path, variables: set[str],
                 fact = _static_consumer_from_cics_statement(variable, category, paragraph, statement)
                 if fact:
                     facts.append(fact)
+        if not facts:
+            for reader in cfg_readers.get(variable.upper(), [])[:10]:
+                facts.append({
+                    "role": "read by CFG variable usage",
+                    "paragraph": reader,
+                    "evidence": "Java CFG variablesRead",
+                })
         if facts:
             result[variable] = _dedupe_static_consumers(facts)
     return result
+
+
+def _load_cfg_variable_readers(report_dir: Path, variables: set[str]) -> dict[str, list[str]]:
+    """Build variable -> paragraph readers from Java CFG variablesRead facts."""
+    wanted = {str(variable).upper() for variable in variables if str(variable).strip()}
+    if not wanted:
+        return {}
+
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return {}
+
+    readers: dict[str, list[str]] = {}
+    seen: dict[str, set[str]] = {}
+    for cfg_file in sorted(cfg_dir.glob("cfg-*.json")):
+        data = load_json(cfg_file)
+        if not isinstance(data, dict):
+            continue
+        for node in data.get("nodes", []) or []:
+            if not isinstance(node, dict) or node.get("type") != "PARAGRAPH":
+                continue
+            paragraph = str(node.get("name") or "").strip()
+            if not paragraph:
+                continue
+            for raw_name in node.get("variablesRead", []) or []:
+                name = str(raw_name).strip().upper()
+                if name not in wanted:
+                    continue
+                seen.setdefault(name, set())
+                if paragraph in seen[name]:
+                    continue
+                seen[name].add(paragraph)
+                readers.setdefault(name, []).append(paragraph)
+    return readers
 
 
 def _static_consumer_from_cics_statement(variable: str, category: str,
@@ -2616,6 +2778,12 @@ def _render_static_consumers(consumers: list[dict]) -> str:
         role = consumer.get("role", "unknown")
         if role == "unknown":
             rendered.append("unknown")
+            continue
+        if role == "read by CFG variable usage":
+            paragraph = consumer.get("paragraph")
+            rendered.append(
+                f"read by {paragraph}" if paragraph else "read by Java CFG variable usage"
+            )
             continue
         text = role
         if consumer.get("target_program"):
@@ -5394,6 +5562,8 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         if verbose:
             print("\n[COBOL chunks]")
         summary["program_summary"] = generate_program_summary(
+            report_dir, chunks_dir, program, verbose)
+        summary["dead_code"] = generate_dead_code_reachability(
             report_dir, chunks_dir, program, verbose)
         summary["dependencies"] = generate_dependencies(
             report_dir, chunks_dir, program, verbose)

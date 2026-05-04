@@ -81,6 +81,20 @@ class PipelineReport:
                 break
             if s["status"] == "warning":
                 overall = "completed_with_warnings"
+        analysis_health = None
+        health_path = path.parent / "analysis_health.json"
+        if health_path.is_file():
+            try:
+                analysis_health = json.loads(health_path.read_text(encoding="utf-8"))
+                if analysis_health.get("base_analysis_succeeded") is False:
+                    overall = "completed_with_failures"
+                elif (
+                    analysis_health.get("failed_tasks")
+                    or analysis_health.get("data_structures_degraded") is True
+                ) and overall == "success":
+                    overall = "completed_with_warnings"
+            except (json.JSONDecodeError, OSError):
+                analysis_health = None
         data = {
             "program": self.program,
             "timestamp": self.timestamp,
@@ -88,6 +102,13 @@ class PipelineReport:
             "pre_flight": self.pre_flight,
             "steps": self.steps,
         }
+        if analysis_health is not None:
+            data["analysis_health"] = {
+                "base_analysis_succeeded": analysis_health.get("base_analysis_succeeded"),
+                "data_structures_degraded": analysis_health.get("data_structures_degraded"),
+                "failed_tasks": analysis_health.get("failed_tasks", []),
+                "primary_failure": analysis_health.get("primary_failure"),
+            }
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -667,6 +688,25 @@ class AnalysisPipeline:
         """
         diag_path = self.report_subdir / "parse_diagnostics.json"
         if diag_path.is_file():
+            health_path = self.report_subdir / "analysis_health.json"
+            if health_path.is_file():
+                try:
+                    health = json.loads(health_path.read_text(encoding="utf-8"))
+                    if health.get("base_analysis_succeeded") is False:
+                        failure = health.get("primary_failure") or {}
+                        diagnostic_code = failure.get("diagnostic_code", "UNKNOWN")
+                        Colors.print_msg(
+                            f"  Base analysis failed ({diagnostic_code}). "
+                            "Cannot continue with this report.",
+                            Colors.RED,
+                        )
+                        self._log_parse_diagnostics()
+                        return False
+                except (json.JSONDecodeError, OSError) as e:
+                    Colors.print_msg(
+                        f"  Warning: Could not read analysis health: {e}",
+                        Colors.YELLOW,
+                    )
             # Parse succeeded, downstream task failed — partial success
             Colors.print_msg(
                 "  Lenient parse succeeded (some downstream tasks may have failed). "
@@ -899,7 +939,6 @@ class AnalysisPipeline:
                 model=comment_enricher.DEFAULT_MODEL,
                 port=comment_enricher.DEFAULT_PORT,
                 verbose=self.verbose,
-                backend="opus-mt",   # local model — no Ollama server needed
             )
             Colors.print_msg(f"  Output: {out}", Colors.GREEN)
         except Exception as e:
@@ -935,6 +974,7 @@ class AnalysisPipeline:
 
         # Write pipeline report before anything else
         self.report.write(self.report_subdir / "pipeline_report.json")
+        self._clear_stale_parse_diagnostics()
 
         # Convert additional JSON graphs
         run_command(f'"{sys.executable}" convert_json_graphs.py "{self.report_subdir}"')
@@ -948,6 +988,25 @@ class AnalysisPipeline:
         Colors.print_msg("Analysis complete. Results at:", Colors.GREEN)
         Colors.print_msg(f"  {self.report_subdir}")
         Colors.print_msg("=" * 60, Colors.BLUE)
+
+    def _clear_stale_parse_diagnostics(self):
+        """Remove old lenient parse diagnostics after a clean base analysis."""
+        health_path = self.report_subdir / "analysis_health.json"
+        diag_path = self.report_subdir / "parse_diagnostics.json"
+        if not health_path.is_file() or not diag_path.is_file():
+            return
+        try:
+            health = json.loads(health_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return
+        if (
+            health.get("base_analysis_succeeded") is True
+            and int(health.get("parse_error_count") or 0) == 0
+        ):
+            try:
+                diag_path.unlink()
+            except OSError:
+                pass
     
     def _print_progress(self, step_name: str, width: int = 36):
         """Print a progress bar showing overall pipeline progress."""
