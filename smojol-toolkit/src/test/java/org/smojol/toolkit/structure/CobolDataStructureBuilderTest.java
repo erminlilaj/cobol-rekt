@@ -18,6 +18,32 @@ import static org.smojol.toolkit.structure.DataStructureMatcher.*;
 
 public class CobolDataStructureBuilderTest {
     @Test
+    public void canBuildNonMonotonicLevelNumbers() throws IOException {
+        AnalysisTaskResult taskResult = new TestTaskRunner("non-monotonic-levels.cbl", "test-code/structure")
+                .runTask2(CommandLineAnalysisTask.DO_NOTHING, new DefaultFormat1DataStructureBuilder());
+        BaseAnalysisModel model = switch (taskResult) {
+            case AnalysisTaskResultError e -> fail(e.getException());
+            case AnalysisTaskResultOK o -> o.getDetail();
+        };
+        CobolDataStructure dsRoot = model.dataStructures();
+        root(
+                group("ROOT-REC",
+                        group("PART-A",
+                                group("GROUP-A",
+                                        string("FIELD-A"),
+                                        string("FIELD-B")
+                                ),
+                                group("PART-B",
+                                        string("FIELD-C")
+                                )
+                        )
+                ),
+                group("EMPTY-GROUP"),
+                static_("WHEN-COMPILED", CobolDataType.STRING)
+        ).match(dsRoot).verify();
+    }
+
+    @Test
     public void canBuildDataStructures() throws IOException {
         AnalysisTaskResult taskResult = new TestTaskRunner("data-structures.cbl", "test-code/structure")
                 .runTask2(CommandLineAnalysisTask.DO_NOTHING, new DefaultFormat1DataStructureBuilder());

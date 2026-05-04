@@ -40,18 +40,26 @@ public class NodeSpecBuilder {
     }
 
     public NodeSpec newDataNode(CobolDataStructure structure) {
-        return new NodeSpec(ImmutableList.of(DATA_STRUCTURE, structure.getDataType().abstractType().name()),
+        String dataTypeName = abstractDataTypeName(structure);
+        return new NodeSpec(ImmutableList.of(DATA_STRUCTURE, dataTypeName),
                 Map.of(ID, idProvider.next(),
                         INTERNAL_ID, structure.getId(),
                         NAME, structure.name(),
                         TEXT, structure.content(),
-                        TYPE, structure.getDataType().abstractType().name(),
+                        TYPE, dataTypeName,
                         ENTITY_TYPE, DATA_STRUCTURE,
                         ENTITY_CATEGORIES, ImmutableList.of(structure.dataCategory().name()),
                         LEVEL, structure.getLevelNumber(),
                         SECTION_SOURCE, structure.getSourceSection().name(),
                         NAMESPACE, namespaceQualifier.getNamespace()
                 ));
+    }
+
+    private String abstractDataTypeName(CobolDataStructure structure) {
+        if (structure.getDataType() == null || structure.getDataType().abstractType() == null) {
+            return "UNKNOWN";
+        }
+        return structure.getDataType().abstractType().name();
     }
 
     public NodeSpec newASTNode(FlowNodeLike node) {

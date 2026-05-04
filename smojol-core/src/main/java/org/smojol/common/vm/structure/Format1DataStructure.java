@@ -206,6 +206,8 @@ public class Format1DataStructure extends CobolDataStructure {
     private Pair<DataTypeSpec, Integer> typeSpecForSingle() {
         if (dataType == CobolDataType.POINTER)
             return ImmutablePair.of(new ZonedDecimalDataTypeSpec(8, 0), 8);
+        else if (dataType == CobolDataType.GROUP && structures.isEmpty())
+            return ImmutablePair.of(new GroupDataTypeSpec(0), 0);
         else if (!isComposite) {
             LOGGER.info("Calculating type spec for single data structure: " + dataDescription.getText());
             return spec(dataDescription);

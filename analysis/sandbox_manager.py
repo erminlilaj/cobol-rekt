@@ -15,6 +15,31 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+BMS_SOURCE_MARKERS = (b"DFHMSD", b"DFHMDI", b"DFHMDF", b"TIOAPFX")
+
+
+def copy_text_normalized(source: Path, target: Path) -> None:
+    """Copy a text source into the sandbox with stable Unix line endings."""
+    content = source.read_bytes()
+    if b"\r\n" in content:
+        content = content.replace(b"\r\n", b"\n")
+    content = b"\n".join(line.rstrip(b" \t") for line in content.split(b"\n"))
+    target.write_bytes(content)
+    try:
+        shutil.copystat(source, target)
+    except OSError:
+        pass
+
+
+def is_bms_source(path: Path) -> bool:
+    """Return True when a .cpy file looks like BMS macro source, not COBOL."""
+    try:
+        content = path.read_bytes().upper()
+    except OSError:
+        return False
+    return any(marker in content for marker in BMS_SOURCE_MARKERS)
+
+
 # ANSI colors for terminal output
 class Colors:
     GREEN = '\033[0;32m'
@@ -211,6 +236,20 @@ class AutoStubGenerator:
         
         self._stubs_created.extend(stubs_created)
         return stubs_created
+
+    def write_incompatible_stub(self, name: str, target_file: Path, reason: str) -> str:
+        """Write a stub for a resolved copybook that is not valid COBOL source."""
+        content = (
+            self.STUB_CONTENT
+            + f"      * Reason: {reason}\n"
+            + f"      * Original copybook name: {name}\n"
+        )
+        target_file.write_text(content, encoding="utf-8")
+        if name not in self._stubs_created:
+            self._stubs_created.append(name)
+        if self._verbose:
+            Colors.print_msg(f"    [STUB] Replaced incompatible {target_file.name}: {reason}", Colors.YELLOW)
+        return name
     
     @property
     def stubs_created(self) -> list[str]:
@@ -469,8 +508,9 @@ class SandboxEnvironment:
         """Copy the source file to sandbox (copy, not symlink, to allow preprocessing)."""
         self._sandbox_source_file = self._sandbox_source_dir / self._source_file.name
         
-        # Always copy (not symlink) so we can preprocess the file
-        shutil.copy2(self._source_file, self._sandbox_source_file)
+        # Always copy (not symlink) so we can preprocess the file.
+        # Normalize CRLF so fixed-format column checks do not count '\r'.
+        copy_text_normalized(self._source_file, self._sandbox_source_file)
         if self._verbose:
             Colors.print_msg(f"  Copied source: {self._source_file.name}", Colors.GREEN)
     
@@ -498,7 +538,16 @@ class SandboxEnvironment:
                     target = self._sandbox_copybooks_dir / f"{path.stem}.cpy"
                     if not target.exists():
                         try:
-                            shutil.copy2(path, target)
+                            if is_bms_source(path):
+                                stub_gen = AutoStubGenerator(verbose=self._verbose)
+                                stub_gen.write_incompatible_stub(
+                                    path.stem,
+                                    target,
+                                    "BMS macro source detected",
+                                )
+                                self._stubs_created.append(path.stem)
+                            else:
+                                copy_text_normalized(path, target)
                             copied += 1
                         except Exception as e:
                             if self._verbose:
@@ -519,7 +568,14 @@ class SandboxEnvironment:
             if resolved:
                 target = self._sandbox_copybooks_dir / f"{name}.cpy"
                 try:
-                    shutil.copy2(resolved, target)
+                    if is_bms_source(resolved):
+                        stub_gen.write_incompatible_stub(
+                            name,
+                            target,
+                            "BMS macro source detected",
+                        )
+                    else:
+                        copy_text_normalized(resolved, target)
                     copied += 1
                     nested = stub_gen.scan_for_copy_statements(resolved) - seen
                     seen.update(nested)
@@ -600,11 +656,12 @@ class SandboxEnvironment:
         sandbox_resolver = CaseInsensitiveResolver([self._sandbox_copybooks_dir], verbose=False)
         
         # Generate stubs for missing ones
-        self._stubs_created = self._stub_generator.generate_stubs(
+        missing_stubs = self._stub_generator.generate_stubs(
             all_copies, 
             self._sandbox_copybooks_dir,
             sandbox_resolver
         )
+        self._stubs_created = list(dict.fromkeys(self._stubs_created + missing_stubs))
     
     @property
     def sandbox_source(self) -> Path:

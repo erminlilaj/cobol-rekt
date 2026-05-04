@@ -54,7 +54,7 @@ public class SerialisableCobolDataStructure {
     public SerialisableCobolDataStructure(CobolDataStructure data, ExtendedDocument extendedDocument,
                                           CopybooksRepository copybooksRepository) {
         name = data.name();
-        dataType = data.getDataType().abstractType().name();
+        dataType = abstractDataTypeName(data);
         content = data.content();
         id = data.getId();
         levelNumber = data.getLevelNumber();
@@ -89,6 +89,13 @@ public class SerialisableCobolDataStructure {
         }
         byteSize = byteSize(data);
         byteOffset = byteOffset(data);
+    }
+
+    private static String abstractDataTypeName(CobolDataStructure data) {
+        if (data.getDataType() == null || data.getDataType().abstractType() == null) {
+            return "UNKNOWN";
+        }
+        return data.getDataType().abstractType().name();
     }
 
     public SerialisableCobolDataStructure() {

@@ -30,7 +30,14 @@ public class DataSummaryVisitor extends TreeMapperVisitor<CobolDataStructure, Su
         return ImmutableMap.of(
                 "id", node.getId(),
                 "text", node.name(),
-                "type", node.getDataType().abstractType().name());
+                "type", abstractDataTypeName(node));
+    }
+
+    private String abstractDataTypeName(CobolDataStructure node) {
+        if (node.getDataType() == null || node.getDataType().abstractType() == null) {
+            return "UNKNOWN";
+        }
+        return node.getDataType().abstractType().name();
     }
 
     @Override
