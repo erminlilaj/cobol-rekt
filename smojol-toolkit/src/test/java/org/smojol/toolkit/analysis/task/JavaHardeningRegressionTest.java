@@ -87,6 +87,14 @@ class JavaHardeningRegressionTest {
         assertTrue(hasCicsArgument(nodes, "MAP", "PAYMAP", "literal"));
         assertTrue(hasCicsArgument(nodes, "MAPSET", "PAYMAPS", "literal"));
         assertTrue(hasCicsArgument(nodes, "TRANSID", "PAYT", "literal"));
+        assertTrue(hasCicsArgument(nodes, "PROGRAM", "WS-PROGRAM", "identifier"));
+        assertTrue(hasCicsArgument(nodes, "COMMAREA", "WS-MSG", "identifier"));
+        assertTrue(hasCicsArgument(nodes, "LENGTH", "20", "literal"));
+        assertTrue(hasCicsArgument(nodes, "RESP", "WS-RESP", "identifier"));
+        assertTrue(hasResolvedCicsTarget(nodes, "WS-PROGRAM", "DYNCICS",
+                "inferred_literal_assignment", "medium"));
+        assertTrue(hasCicsOperation(nodes, "LINK", "PROGRAM", "DYNCICS"));
+        assertTrue(hasCicsOperation(nodes, "SEND", "MAP", "PAYMAP"));
     }
 
     @Test
@@ -96,11 +104,14 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("metadata-features.cbl.report/cfg/cfg-metadata-features.cbl.json");
         JsonArray nodes = cfg.getAsJsonArray("nodes");
+        JsonArray edges = cfg.getAsJsonArray("edges");
 
         assertTrue(hasMetadataValue(nodes, "call_target", "SUBPROG"));
         assertTrue(hasMetadataValue(nodes, "program_reference_type", "STATIC"));
+        assertTrue(hasResolvedCall(nodes, "SUBPROG", "SUBPROG", "literal", "high"));
         assertTrue(hasMetadataValue(nodes, "call_target", "CALL-NAME"));
         assertTrue(hasMetadataValue(nodes, "program_reference_type", "DYNAMIC"));
+        assertTrue(hasResolvedCall(nodes, "CALL-NAME", "DYNPROG", "inferred_literal_assignment", "medium"));
         assertTrue(hasMetadataValue(nodes, "depending_on", "SWITCH-FLAG"));
         assertTrue(hasMetadataValue(nodes, "perform_start", "LOOP-PARA"));
         assertTrue(hasNodeType(nodes, "SET"));
@@ -113,6 +124,8 @@ class JavaHardeningRegressionTest {
         assertTrue(hasNodeType(nodes, "CLOSE"));
         assertTrue(hasNodeType(nodes, "CONTINUE"));
         assertTrue(hasNodeType(nodes, "CANCEL"));
+        assertTrue(hasNodeSourceLocation(nodes));
+        assertTrue(hasEdgeSourceContract(edges));
 
         JsonObject selfEvaluation = readJson("metadata-features.cbl.report/analysis_self_evaluation.json");
         assertTrue(selfEvaluation.getAsJsonObject("cfg_metrics").get("node_count").getAsInt() > 0);
@@ -125,6 +138,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("variable-usage-features.cbl.report/cfg/cfg-variable-usage-features.cbl.json");
         JsonArray nodes = cfg.getAsJsonArray("nodes");
+        JsonArray edges = cfg.getAsJsonArray("edges");
         JsonObject paragraph = findNode(nodes, "type", "PARAGRAPH");
         JsonObject move = findNodeByOriginalText(nodes, "MOVE IN-1 TO OUT-1 OUT-2");
 
@@ -154,6 +168,7 @@ class JavaHardeningRegressionTest {
         assertTrue(hasAssignmentFact(nodes, "COUNTER", "3", "MAIN-PARA", "java_set_literal"));
         assertTrue(hasInitializeFact(nodes, "OUT-1", "NUMERIC", "0", "MAIN-PARA"));
         assertTrue(hasInitializeReplacementSource(nodes, "OUT-1", "ALPHANUMERIC", "INIT-SOURCE"));
+        assertTrue(hasConditionedEdge(edges, "FLAG = 'Y'"));
     }
 
     @Test
@@ -280,6 +295,78 @@ class JavaHardeningRegressionTest {
                 .anyMatch(argument -> name.equals(argument.get("name").getAsString())
                         && value.equals(argument.get("value").getAsString())
                         && valueSource.equals(argument.get("value_source").getAsString()));
+    }
+
+    private boolean hasResolvedCicsTarget(JsonArray nodes, String targetIdentifier, String resolvedTarget,
+                                          String targetSource, String confidence) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.get("metadata").getAsJsonObject())
+                .anyMatch(metadata -> metadata.has("cics_target_identifier")
+                        && targetIdentifier.equals(metadata.get("cics_target_identifier").getAsString())
+                        && metadata.has("resolved_cics_target")
+                        && resolvedTarget.equals(metadata.get("resolved_cics_target").getAsString())
+                        && metadata.has("cics_target_source")
+                        && targetSource.equals(metadata.get("cics_target_source").getAsString())
+                        && metadata.has("cics_dynamic_resolution_confidence")
+                        && confidence.equals(metadata.get("cics_dynamic_resolution_confidence").getAsString()));
+    }
+
+    private boolean hasCicsOperation(JsonArray nodes, String command, String targetKind, String target) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.get("metadata").getAsJsonObject())
+                .filter(metadata -> metadata.has("cics_operation"))
+                .map(metadata -> metadata.get("cics_operation").getAsJsonObject())
+                .anyMatch(operation -> command.equals(operation.get("command").getAsString())
+                        && targetKind.equals(operation.get("target_kind").getAsString())
+                        && target.equals(operation.get("target").getAsString()));
+    }
+
+    private boolean hasResolvedCall(JsonArray nodes, String callTarget, String resolvedTarget,
+                                    String targetSource, String confidence) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.get("metadata").getAsJsonObject())
+                .anyMatch(metadata -> metadata.has("call_target")
+                        && callTarget.equals(metadata.get("call_target").getAsString())
+                        && metadata.has("resolved_call_target")
+                        && resolvedTarget.equals(metadata.get("resolved_call_target").getAsString())
+                        && metadata.has("call_target_source")
+                        && targetSource.equals(metadata.get("call_target_source").getAsString())
+                        && metadata.has("dynamic_call_resolution_confidence")
+                        && confidence.equals(metadata.get("dynamic_call_resolution_confidence").getAsString()));
+    }
+
+    private boolean hasNodeSourceLocation(JsonArray nodes) {
+        return jsonObjects(nodes).stream()
+                .anyMatch(node -> node.has("sourceLine")
+                        && node.has("sourceColumn")
+                        && node.has("sourceEndLine")
+                        && node.has("sourceEndColumn")
+                        && node.has("lineOrigin")
+                        && "parser_source".equals(node.get("lineOrigin").getAsString())
+                        && node.has("sourceLocationSource")
+                        && "java_parser_token".equals(node.get("sourceLocationSource").getAsString()));
+    }
+
+    private boolean hasEdgeSourceContract(JsonArray edges) {
+        return jsonObjects(edges).stream()
+                .anyMatch(edge -> edge.has("fromLabel")
+                        && edge.has("toLabel")
+                        && edge.has("evidence")
+                        && edge.has("sourceLine")
+                        && edge.has("sourceColumn")
+                        && edge.has("lineOrigin")
+                        && "parser_source".equals(edge.get("lineOrigin").getAsString()));
+    }
+
+    private boolean hasConditionedEdge(JsonArray edges, String condition) {
+        return jsonObjects(edges).stream()
+                .anyMatch(edge -> edge.has("condition")
+                        && condition.equals(edge.get("condition").getAsString())
+                        && edge.has("fromLabel")
+                        && edge.has("toLabel"));
     }
 
     private boolean hasAssignmentFact(JsonArray nodes, String targetVariable, String sourceValue,

@@ -3,6 +3,8 @@
        DATA DIVISION.
        WORKING-STORAGE SECTION.
            01  WS-MSG PIC X(20) VALUE "HELLO".
+           01  WS-PROGRAM PIC X(08).
+           01  WS-RESP PIC S9(8) COMP.
        PROCEDURE DIVISION.
        MAIN-PARA.
            EXEC CICS HANDLE CONDITION
@@ -17,6 +19,12 @@
            END-EXEC
            EXEC CICS LINK PROGRAM('PAYPGM')
                 COMMAREA(WS-MSG)
+           END-EXEC
+           MOVE 'DYNCICS' TO WS-PROGRAM
+           EXEC CICS LINK PROGRAM(WS-PROGRAM)
+                COMMAREA(WS-MSG)
+                LENGTH(20)
+                RESP(WS-RESP)
            END-EXEC
            EXEC CICS SEND MAP('PAYMAP')
                 MAPSET('PAYMAPS')

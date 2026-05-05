@@ -22,6 +22,7 @@ public class DialectMetadataParser {
     private static final Pattern FILE_UNQUOTED = Pattern.compile("\\b(FILE|DATASET)\\s*\\(\\s*(?!['\"])([A-Z][A-Z0-9-]*)\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern TRANSID_QUOTED = Pattern.compile("\\bTRANSID\\s*\\(\\s*['\"]([A-Z0-9-]+)['\"]\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern TRANSID_UNQUOTED = Pattern.compile("\\bTRANSID\\s*\\(\\s*(?!['\"])([A-Z][A-Z0-9-]*)\\s*\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CICS_ARGUMENT = Pattern.compile("\\b([A-Z][A-Z0-9-]*)\\s*\\(\\s*([^)]*?)\\s*\\)", Pattern.CASE_INSENSITIVE);
     private static final Pattern SQL_OPERATION = Pattern.compile("\\b(SELECT|INSERT|UPDATE|DELETE|DECLARE|OPEN|FETCH|CLOSE|PREPARE|EXECUTE|CALL|MERGE|CREATE|DROP|ALTER)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SQL_TABLE = Pattern.compile("\\b(?:FROM|JOIN|INTO|UPDATE|TABLE)\\s+([A-Z][A-Z0-9_.$-]*)", Pattern.CASE_INSENSITIVE);
     private static final Pattern SQL_CURSOR = Pattern.compile("\\bCURSOR\\s+([A-Z][A-Z0-9_-]*)|\\b(?:OPEN|FETCH|CLOSE)\\s+([A-Z][A-Z0-9_-]*)", Pattern.CASE_INSENSITIVE);
@@ -42,6 +43,7 @@ public class DialectMetadataParser {
 
     private static void parseCics(String text, Map<String, Object> metadata) {
         metadata.put("dialect_family", "CICS");
+        metadata.put("cics_statement_text", text);
         Matcher commandMatcher = CICS_COMMAND.matcher(text);
         String command = null;
         if (commandMatcher.find()) {
@@ -68,6 +70,7 @@ public class DialectMetadataParser {
         if (command != null) metadata.put("cics_operation_type", classifyOperationType(command));
         resolveTargetKindAndSource(metadata);
         addCicsArguments(metadata);
+        addCicsOperation(metadata);
         metadata.put("dialect_semantics_status", "metadata_only");
     }
 
@@ -120,15 +123,28 @@ public class DialectMetadataParser {
 
     private static void addCicsArguments(Map<String, Object> metadata) {
         List<Map<String, Object>> arguments = new ArrayList<>();
-        addArgument(arguments, "PROGRAM", metadata.get("cics_target_program"), "literal");
-        addArgument(arguments, "PROGRAM", metadata.get("cics_target_variable"), "identifier");
-        addArgument(arguments, "MAP", metadata.get("cics_map"), metadata.get("cics_map_source"));
-        addArgument(arguments, "MAPSET", metadata.get("cics_mapset"), metadata.get("cics_mapset_source"));
-        addArgument(arguments, "QUEUE", metadata.get("cics_queue"), metadata.get("cics_queue_source"));
-        addArgument(arguments, "TRANSID", metadata.get("cics_transid"), metadata.get("cics_transid_source"));
-        if (metadata.containsKey("cics_file")) {
-            addArgument(arguments, String.valueOf(metadata.getOrDefault("cics_file_keyword", "FILE")),
-                    metadata.get("cics_file"), metadata.get("cics_file_source"));
+        Matcher matcher = CICS_ARGUMENT.matcher(String.valueOf(metadata.getOrDefault("cics_statement_text", "")));
+        if (!matcher.find()) {
+            // cics_statement_text is added below by parseCics callers in old reports only; keep
+            // the historical targeted arguments as a fallback.
+            addArgument(arguments, "PROGRAM", metadata.get("cics_target_program"), "literal");
+            addArgument(arguments, "PROGRAM", metadata.get("cics_target_variable"), "identifier");
+            addArgument(arguments, "MAP", metadata.get("cics_map"), metadata.get("cics_map_source"));
+            addArgument(arguments, "MAPSET", metadata.get("cics_mapset"), metadata.get("cics_mapset_source"));
+            addArgument(arguments, "QUEUE", metadata.get("cics_queue"), metadata.get("cics_queue_source"));
+            addArgument(arguments, "TRANSID", metadata.get("cics_transid"), metadata.get("cics_transid_source"));
+            if (metadata.containsKey("cics_file")) {
+                addArgument(arguments, String.valueOf(metadata.getOrDefault("cics_file_keyword", "FILE")),
+                        metadata.get("cics_file"), metadata.get("cics_file_source"));
+            }
+        } else {
+            matcher.reset();
+            while (matcher.find()) {
+                String name = matcher.group(1).toUpperCase(Locale.ROOT);
+                String rawValue = matcher.group(2).trim();
+                if (name.equals("CICS")) continue;
+                addArgument(arguments, name, cleanArgument(rawValue), argumentSource(rawValue));
+            }
         }
         if (!arguments.isEmpty()) metadata.put("cics_arguments", arguments);
     }
@@ -140,6 +156,18 @@ public class DialectMetadataParser {
         argument.put("value", String.valueOf(value).toUpperCase(Locale.ROOT));
         argument.put("value_source", source == null ? "unknown" : String.valueOf(source));
         arguments.add(argument);
+    }
+
+    private static void addCicsOperation(Map<String, Object> metadata) {
+        if (!metadata.containsKey("cics_command")) return;
+        Map<String, Object> operation = new LinkedHashMap<>();
+        operation.put("command", metadata.get("cics_command"));
+        operation.put("type", metadata.getOrDefault("cics_operation_type", "other"));
+        operation.put("target_kind", metadata.getOrDefault("cics_target_kind", "UNKNOWN"));
+        if (metadata.containsKey("cics_target")) operation.put("target", metadata.get("cics_target"));
+        operation.put("target_source", metadata.getOrDefault("cics_target_source", "unknown"));
+        if (metadata.containsKey("cics_arguments")) operation.put("arguments", metadata.get("cics_arguments"));
+        metadata.put("cics_operation", operation);
     }
 
     private static void parseSql(String text, Map<String, Object> metadata) {
@@ -201,5 +229,24 @@ public class DialectMetadataParser {
 
     private static String normalize(String text) {
         return text == null ? "" : text.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static String cleanArgument(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if ((trimmed.startsWith("'") && trimmed.endsWith("'"))
+                || (trimmed.startsWith("\"") && trimmed.endsWith("\""))) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed.toUpperCase(Locale.ROOT);
+    }
+
+    private static String argumentSource(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if ((trimmed.startsWith("'") && trimmed.endsWith("'"))
+                || (trimmed.startsWith("\"") && trimmed.endsWith("\""))) {
+            return "literal";
+        }
+        if (trimmed.matches("[0-9]+")) return "literal";
+        return "identifier";
     }
 }
