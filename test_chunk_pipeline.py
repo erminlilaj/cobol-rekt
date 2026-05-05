@@ -15,18 +15,28 @@ from chunk_pipeline import (
     clear_existing_chunks,
     generate_bm25_index,
     generate_cics_operations,
+    generate_cics_operation_chunks,
+    generate_cics_program_transfer_chunks,
+    generate_cics_resource_chunks,
+    generate_cics_error_handler_chunks,
     generate_commented_out_code,
     generate_comments,
+    generate_controlflow_cfg,
     generate_cobol_analysis_health,
     generate_copybook_fields,
     generate_copybook_mentions,
+    generate_business_rule_chunks,
+    generate_call_contract_chunks,
+    generate_dataflow_variable_chunks,
     generate_datasets_tables_resources,
     generate_dependencies,
     generate_external_program_calls,
+    generate_error_path_chunks,
     generate_manifest,
     generate_program_summary,
     generate_rag_bundle,
     generate_static_values,
+    generate_screen_interaction_chunks,
     generate_unused_copybook_analysis,
     generate_variable_groups,
     generate_workflow_chunks,
@@ -173,6 +183,163 @@ class ChunkPipelineTest(unittest.TestCase):
 
             self.assertEqual(2, removed)
             self.assertEqual(["notes.txt"], sorted(p.name for p in chunks_dir.iterdir()))
+
+    def test_controlflow_cfg_chunk_includes_java_edge_conditions(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cfg_fixture(Path(td))
+
+            count = generate_controlflow_cfg(report_dir, chunks_dir, "RULES.CBL", False)
+
+            self.assertEqual(1, count)
+            chunk = chunk_pipeline.load_json(chunks_dir / "RULES.CBL__controlflow_cfg.json")
+            self.assertEqual("controlflow.cfg", chunk["metadata"]["chunk_type"])
+            self.assertEqual(2, chunk["metadata"]["conditioned_edge_count"])
+            self.assertIn("ACCOUNT-STATUS = 'A'", chunk["text"])
+            self.assertIn("sourceLine/sourceColumn are parser token coordinates", chunk["text"])
+
+    def test_dataflow_variable_chunks_include_read_write_sites(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cfg_fixture(Path(td))
+
+            count = generate_dataflow_variable_chunks(report_dir, chunks_dir, "RULES.CBL", False)
+
+            self.assertGreaterEqual(count, 3)
+            status = chunk_pipeline.load_json(
+                chunks_dir / "RULES.CBL__dataflow_variable__ACCOUNT-STATUS.json"
+            )
+            total = chunk_pipeline.load_json(
+                chunks_dir / "RULES.CBL__dataflow_variable__TOTAL.json"
+            )
+            self.assertEqual("dataflow.variable", status["metadata"]["chunk_type"])
+            self.assertTrue(status["metadata"]["controls_flow"])
+            self.assertEqual(1, status["metadata"]["read_count"])
+            self.assertEqual(1, total["metadata"]["write_count"])
+            self.assertIn("Write sites", total["text"])
+
+    def test_business_rule_chunks_from_cfg_conditions(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cfg_fixture(Path(td))
+
+            count = generate_business_rule_chunks(report_dir, chunks_dir, "RULES.CBL", False)
+
+            self.assertEqual(2, count)
+            first = chunk_pipeline.load_json(chunks_dir / "RULES.CBL__business_rule__1.json")
+            self.assertEqual("business_rule", first["metadata"]["chunk_type"])
+            self.assertEqual("ACCOUNT-STATUS = 'A'", first["metadata"]["condition"])
+            self.assertEqual("java_cfg_conditioned_edge", first["metadata"]["business_rule_source"])
+            self.assertIn("When ACCOUNT-STATUS = 'A'", first["text"])
+
+    def test_external_program_calls_prefers_java_dynamic_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cfg_fixture(Path(td))
+
+            count = generate_external_program_calls(report_dir, chunks_dir, "RULES.CBL", False)
+
+            self.assertEqual(1, count)
+            chunk = chunk_pipeline.load_json(chunks_dir / "RULES.CBL__external_program_calls.json")
+            calls = chunk["metadata"]["calls"]
+            dynamic = next(call for call in calls if call["target"] == "DYNPROG")
+            self.assertEqual("inferred_literal_assignment", dynamic["target_source"])
+            self.assertEqual("CALL-NAME", dynamic["call_target_identifier"])
+            self.assertEqual("medium", dynamic["resolution_confidence"])
+            self.assertIn("CALL DYNPROG", chunk["text"])
+
+    def _write_cfg_fixture(self, root: Path) -> tuple[Path, Path]:
+        report_dir = root / "RULES.CBL.report"
+        cfg_dir = report_dir / "cfg"
+        chunks_dir = report_dir / "chunks"
+        cfg_dir.mkdir(parents=True)
+        chunks_dir.mkdir()
+        chunk_pipeline._atomic_write_json(cfg_dir / "cfg-RULES.CBL.json", {
+            "nodes": [
+                {
+                    "id": "p-main",
+                    "type": "PARAGRAPH",
+                    "name": "MAIN",
+                    "label": "MAIN",
+                    "originalText": "MAIN.",
+                    "sourceLine": 10,
+                    "lineOrigin": "parser_source",
+                },
+                {
+                    "id": "if-1",
+                    "type": "IF_BRANCH",
+                    "label": "IF ACCOUNT-STATUS = 'A'",
+                    "originalText": "IF ACCOUNT-STATUS = 'A'",
+                    "variablesRead": ["ACCOUNT-STATUS"],
+                    "metadata": {"condition_text": "ACCOUNT-STATUS = 'A'", "paragraph": "MAIN"},
+                    "sourceLine": 12,
+                    "lineOrigin": "parser_source",
+                },
+                {
+                    "id": "move-1",
+                    "type": "MOVE",
+                    "label": "MOVE AMOUNT TO TOTAL",
+                    "originalText": "MOVE AMOUNT TO TOTAL",
+                    "variablesRead": ["AMOUNT"],
+                    "variablesModified": ["TOTAL"],
+                    "metadata": {"paragraph": "MAIN"},
+                    "sourceLine": 13,
+                    "lineOrigin": "parser_source",
+                },
+                {
+                    "id": "call-1",
+                    "type": "CALL",
+                    "label": "CALL CALL-NAME",
+                    "originalText": "CALL CALL-NAME USING COMMAREA",
+                    "metadata": {
+                        "paragraph": "MAIN",
+                        "program_reference_type": "DYNAMIC",
+                        "call_target": "CALL-NAME",
+                        "call_target_identifier": "CALL-NAME",
+                        "resolved_call_target": "DYNPROG",
+                        "call_target_source": "inferred_literal_assignment",
+                        "dynamic_call_resolution_confidence": "medium",
+                        "using_parameters": ["COMMAREA"],
+                    },
+                    "sourceLine": 20,
+                    "lineOrigin": "parser_source",
+                },
+            ],
+            "edges": [
+                {
+                    "id": "e1",
+                    "fromNodeID": "p-main",
+                    "toNodeID": "if-1",
+                    "edgeType": "STARTS_WITH",
+                    "fromLabel": "MAIN",
+                    "toLabel": "IF ACCOUNT-STATUS = 'A'",
+                    "evidence": "MAIN.",
+                    "sourceLine": 10,
+                    "lineOrigin": "parser_source",
+                },
+                {
+                    "id": "e2",
+                    "fromNodeID": "if-1",
+                    "toNodeID": "move-1",
+                    "edgeType": "STARTS_WITH",
+                    "fromLabel": "IF ACCOUNT-STATUS = 'A'",
+                    "toLabel": "MOVE AMOUNT TO TOTAL",
+                    "condition": "ACCOUNT-STATUS = 'A'",
+                    "evidence": "IF ACCOUNT-STATUS = 'A'",
+                    "sourceLine": 12,
+                    "lineOrigin": "parser_source",
+                },
+                {
+                    "id": "e3",
+                    "fromNodeID": "if-1",
+                    "toNodeID": "call-1",
+                    "edgeType": "STARTS_WITH",
+                    "fromLabel": "IF ACCOUNT-STATUS = 'A'",
+                    "toLabel": "CALL CALL-NAME",
+                    "condition": "NOT (ACCOUNT-STATUS = 'A')",
+                    "evidence": "IF ACCOUNT-STATUS = 'A'",
+                    "sourceLine": 12,
+                    "lineOrigin": "parser_source",
+                },
+            ],
+        })
+        return report_dir, chunks_dir
 
     def test_run_pipeline_removes_stale_chunks_before_regeneration(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -971,6 +1138,232 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertEqual(0, count)
             self.assertEqual([], list(chunks_dir.glob("*cics_operations*.json")))
 
+    def test_cics_operation_chunks_from_java_cfg_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cics_cfg_fixture(Path(td))
+
+            count = generate_cics_operation_chunks(report_dir, chunks_dir, "CICS.CBL", False)
+
+            self.assertEqual(4, count)
+            link = chunk_pipeline.load_json(chunks_dir / "CICS.CBL__cics_operation__1.json")
+            self.assertEqual("cics.operation", link["metadata"]["chunk_type"])
+            self.assertEqual("LINK", link["metadata"]["command"])
+            self.assertEqual("DYNCICS", link["metadata"]["target"])
+            self.assertEqual("inferred_literal_assignment", link["metadata"]["target_source"])
+            self.assertIn("COMMAREA=DFHCOMMAREA", link["text"])
+
+    def test_cics_program_transfer_chunks_capture_dynamic_target_and_commarea(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cics_cfg_fixture(Path(td))
+
+            count = generate_cics_program_transfer_chunks(report_dir, chunks_dir, "CICS.CBL", False)
+
+            self.assertEqual(1, count)
+            data = chunk_pipeline.load_json(chunks_dir / "CICS.CBL__cics_program_transfer__1.json")
+            self.assertEqual("cics.program_transfer", data["metadata"]["chunk_type"])
+            self.assertEqual("DYNCICS", data["metadata"]["target"])
+            self.assertEqual("WS-PROGRAM", data["metadata"]["target_identifier"])
+            self.assertEqual("DFHCOMMAREA", data["metadata"]["commarea"])
+            self.assertEqual("medium", data["metadata"]["resolution_confidence"])
+
+    def test_cics_resource_chunks_separate_maps_files_queues_and_transids(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cics_cfg_fixture(Path(td))
+
+            count = generate_cics_resource_chunks(report_dir, chunks_dir, "CICS.CBL", False)
+
+            self.assertEqual(4, count)
+            resources = [
+                chunk_pipeline.load_json(path)["metadata"]
+                for path in sorted(chunks_dir.glob("CICS.CBL__cics_resource__*.json"))
+            ]
+            self.assertIn(("MAP", "PAYMAP"), {(r["kind"], r["target"]) for r in resources})
+            self.assertIn(("MAPSET", "PAYMAPS"), {(r["kind"], r["target"]) for r in resources})
+            self.assertIn(("FILE", "CUSTFILE"), {(r["kind"], r["target"]) for r in resources})
+            self.assertIn(("TRANSID", "PAYT"), {(r["kind"], r["target"]) for r in resources})
+
+    def test_cics_error_handler_chunks_include_handle_and_resp(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir, chunks_dir = self._write_cics_cfg_fixture(Path(td))
+
+            count = generate_cics_error_handler_chunks(report_dir, chunks_dir, "CICS.CBL", False)
+
+            self.assertEqual(3, count)
+            handlers = [
+                chunk_pipeline.load_json(path)["metadata"]
+                for path in sorted(chunks_dir.glob("CICS.CBL__cics_error_handler__*.json"))
+            ]
+            self.assertIn(("CONDITION", "ERROR", "ERR-PARA"), {
+                (h["handler_kind"], h["handled_key"], h.get("target")) for h in handlers
+            })
+            self.assertIn(("RESPONSE_CAPTURE", "RESP", "WS-RESP"), {
+                (h["handler_kind"], h["handled_key"], h.get("target")) for h in handlers
+            })
+
+    def test_cics_error_handler_chunks_include_inactive_handle_condition(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "PDB305.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            chunks_dir.mkdir(parents=True)
+            chunk_pipeline._atomic_write_json(report_dir / "commented_out_code.json", {
+                "LEGGI-PDRAL01": [
+                    {
+                        "line_start": 604,
+                        "line_end": 684,
+                        "reason": "code_like_comment_block",
+                        "active": False,
+                        "lines": [
+                            "EXEC  CICS  HANDLE CONDITION NOTFND(BROWSE-PDKTELR-100)",
+                            "ENDFILE(BROWSE-PDKTELR-END) END-EXEC.",
+                            "EXEC CICS READ DATASET('PDKTELR') RESP(WS-RESP) END-EXEC.",
+                        ],
+                    }
+                ],
+            })
+
+            count = generate_cics_error_handler_chunks(report_dir, chunks_dir, "PDB305.CBL", False)
+
+            self.assertEqual(3, count)
+            handlers = [
+                chunk_pipeline.load_json(path)["metadata"]
+                for path in sorted(chunks_dir.glob("PDB305.CBL__cics_error_handler__*.json"))
+            ]
+            self.assertIn(("HANDLE CONDITION", "NOTFND", "BROWSE-PDKTELR-100", False), {
+                (h["handler_kind"], h["handled_key"], h.get("target"), h.get("active")) for h in handlers
+            })
+            self.assertIn(("HANDLE CONDITION", "ENDFILE", "BROWSE-PDKTELR-END", False), {
+                (h["handler_kind"], h["handled_key"], h.get("target"), h.get("active")) for h in handlers
+            })
+            self.assertIn(("RESPONSE_CAPTURE", "RESP", "WS-RESP", False), {
+                (h["handler_kind"], h["handled_key"], h.get("target"), h.get("active")) for h in handlers
+            })
+            self.assertTrue(all(h["provenance_source"] == "commented_out_code" for h in handlers))
+
+    def _write_cics_cfg_fixture(self, root: Path) -> tuple[Path, Path]:
+        report_dir = root / "CICS.CBL.report"
+        cfg_dir = report_dir / "cfg"
+        chunks_dir = report_dir / "chunks"
+        cfg_dir.mkdir(parents=True)
+        chunks_dir.mkdir()
+        chunk_pipeline._atomic_write_json(cfg_dir / "cfg-CICS.CBL.json", {
+            "nodes": [
+                {
+                    "id": "link-1",
+                    "type": "DIALECT",
+                    "originalText": "EXEC CICS LINK PROGRAM(WS-PROGRAM) COMMAREA(DFHCOMMAREA) LENGTH(WS-LEN) RESP(WS-RESP) END-EXEC",
+                    "sourceLine": 40,
+                    "lineOrigin": "parser_source",
+                    "metadata": {
+                        "paragraph": "MAIN",
+                        "dialect_family": "CICS",
+                        "cics_command": "LINK",
+                        "cics_operation_type": "program_transfer",
+                        "cics_target_kind": "PROGRAM",
+                        "cics_target": "DYNCICS",
+                        "cics_target_identifier": "WS-PROGRAM",
+                        "resolved_cics_target": "DYNCICS",
+                        "cics_target_source": "inferred_literal_assignment",
+                        "cics_dynamic_resolution_confidence": "medium",
+                        "cics_arguments": [
+                            {
+                                "name": "PROGRAM",
+                                "value": "WS-PROGRAM",
+                                "value_source": "identifier",
+                                "resolved_value": "DYNCICS",
+                                "resolved_value_source": "inferred_literal_assignment",
+                            },
+                            {"name": "COMMAREA", "value": "DFHCOMMAREA", "value_source": "identifier"},
+                            {"name": "LENGTH", "value": "WS-LEN", "value_source": "identifier"},
+                            {"name": "RESP", "value": "WS-RESP", "value_source": "identifier"},
+                        ],
+                        "cics_operation": {
+                            "command": "LINK",
+                            "type": "program_transfer",
+                            "target_kind": "PROGRAM",
+                            "target": "DYNCICS",
+                            "target_source": "inferred_literal_assignment",
+                            "resolution_confidence": "medium",
+                        },
+                    },
+                },
+                {
+                    "id": "send-1",
+                    "type": "DIALECT",
+                    "originalText": "EXEC CICS SEND MAP('PAYMAP') MAPSET('PAYMAPS') END-EXEC",
+                    "sourceLine": 45,
+                    "lineOrigin": "parser_source",
+                    "metadata": {
+                        "paragraph": "SEND-MAP",
+                        "dialect_family": "CICS",
+                        "cics_command": "SEND",
+                        "cics_operation_type": "other",
+                        "cics_target_kind": "MAP",
+                        "cics_target": "PAYMAP",
+                        "cics_target_source": "literal",
+                        "cics_arguments": [
+                            {"name": "MAP", "value": "PAYMAP", "value_source": "literal"},
+                            {"name": "MAPSET", "value": "PAYMAPS", "value_source": "literal"},
+                        ],
+                    },
+                },
+                {
+                    "id": "read-1",
+                    "type": "DIALECT",
+                    "originalText": "EXEC CICS READ FILE('CUSTFILE') INTO(CUST-REC) END-EXEC",
+                    "sourceLine": 50,
+                    "lineOrigin": "parser_source",
+                    "metadata": {
+                        "paragraph": "READ-FILE",
+                        "dialect_family": "CICS",
+                        "cics_command": "READ",
+                        "cics_operation_type": "file_read",
+                        "cics_target_kind": "FILE",
+                        "cics_target": "CUSTFILE",
+                        "cics_target_source": "literal",
+                        "cics_arguments": [
+                            {"name": "FILE", "value": "CUSTFILE", "value_source": "literal"},
+                            {"name": "INTO", "value": "CUST-REC", "value_source": "identifier"},
+                        ],
+                    },
+                },
+                {
+                    "id": "return-1",
+                    "type": "DIALECT",
+                    "originalText": "EXEC CICS RETURN TRANSID('PAYT') END-EXEC",
+                    "sourceLine": 55,
+                    "lineOrigin": "parser_source",
+                    "metadata": {
+                        "paragraph": "RETURN-PARA",
+                        "dialect_family": "CICS",
+                        "cics_command": "RETURN",
+                        "cics_operation_type": "program_transfer",
+                        "cics_target_kind": "TRANSID",
+                        "cics_target": "PAYT",
+                        "cics_target_source": "literal",
+                        "cics_arguments": [
+                            {"name": "TRANSID", "value": "PAYT", "value_source": "literal"},
+                        ],
+                    },
+                },
+                {
+                    "id": "handle-1",
+                    "type": "DIALECT",
+                    "originalText": "EXEC CICS HANDLE CONDITION ERROR(ERR-PARA) MAPFAIL(MAP-PARA) END-EXEC",
+                    "sourceLine": 20,
+                    "lineOrigin": "parser_source",
+                    "metadata": {
+                        "paragraph": "MAIN",
+                        "dialect_family": "CICS",
+                        "handler_bindings": [
+                            {"handler_kind": "CONDITION", "handled_key": "ERROR", "target": "ERR-PARA", "action": "set"},
+                            {"handler_kind": "CONDITION", "handled_key": "MAPFAIL", "target": "MAP-PARA", "action": "set"},
+                        ],
+                    },
+                },
+            ],
+        })
+        return report_dir, chunks_dir
+
     def test_dependencies_chunk_includes_structured_cics_resources(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             report_dir = Path(td) / "RES.CBL.report"
@@ -1285,6 +1678,117 @@ class ChunkPipelineTest(unittest.TestCase):
             pd0gcoda = next(call for call in data["metadata"]["calls"] if call["target"] == "PD0GCODA")
             self.assertEqual("WPDRGCODA", pd0gcoda["commarea"])
             self.assertEqual("PDRGCODA-LUNGH", pd0gcoda["length"])
+
+    def test_call_contract_chunks_include_invocation_and_nearby_parameter_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "CALLCON.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            cfg_dir = report_dir / "cfg"
+            chunks_dir.mkdir(parents=True)
+            cfg_dir.mkdir()
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-CALLCON.CBL.json", {
+                "nodes": [
+                    {
+                        "id": "n1",
+                        "type": "SENTENCE",
+                        "originalText": "MOVE '02' TO PD1VOCI-FUNZIONE. MOVE WPD1VOCI TO SAVE-AREA.",
+                        "metadata": {"paragraph": "INIZ-PARAM"},
+                    },
+                    {
+                        "id": "n2",
+                        "type": "CALL",
+                        "originalText": "EXEC CICS LINK PROGRAM('PD1VOCI') COMMAREA(WPD1VOCI) LENGTH(32000) END-EXEC.",
+                        "sourceLine": 42,
+                        "metadata": {
+                            "paragraph": "LINK-PD1VOCI",
+                            "cics_command": "LINK",
+                            "cics_operation": {
+                                "type": "program_transfer",
+                                "target_kind": "PROGRAM",
+                                "target": "PD1VOCI",
+                                "target_source": "literal",
+                                "arguments": [
+                                    {"name": "PROGRAM", "resolved_value": "PD1VOCI"},
+                                    {"name": "COMMAREA", "resolved_value": "WPD1VOCI"},
+                                    {"name": "LENGTH", "resolved_value": "32000"},
+                                ],
+                            },
+                        },
+                    },
+                ],
+                "edges": [],
+            })
+
+            count = generate_call_contract_chunks(report_dir, chunks_dir, "CALLCON.CBL", False)
+            data = chunk_pipeline.load_json(chunks_dir / "CALLCON.CBL__call_contract__PD1VOCI__1.json")
+
+            self.assertEqual(1, count)
+            self.assertEqual("call_contract", data["metadata"]["chunk_type"])
+            self.assertEqual("PD1VOCI", data["metadata"]["target"])
+            self.assertEqual("WPD1VOCI", data["metadata"]["commarea"])
+            self.assertIn("COMMAREA: WPD1VOCI.", data["text"])
+            self.assertIn("INIZ-PARAM", data["text"])
+
+    def test_error_path_chunks_extract_abend_and_user_message_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "ERRORS.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            cfg_dir = report_dir / "cfg"
+            chunks_dir.mkdir(parents=True)
+            cfg_dir.mkdir()
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-ERRORS.CBL.json", {
+                "nodes": [
+                    {
+                        "id": "n1",
+                        "type": "PARAGRAPH",
+                        "name": "BROWSE-FASE1",
+                        "originalText": (
+                            "IF PXCSEMAF-STATUS = 1 THEN MOVE 'INSERIMENTO NON PERMESSO' "
+                            "TO TWCOB-AREA-MSG GO TO XCTL-LIV4."
+                        ),
+                    },
+                    {
+                        "id": "n2",
+                        "type": "PARAGRAPH",
+                        "name": "LINK-PD1VOCI",
+                        "originalText": "IF PD1VOCI-RETURN EQUAL 'E' THEN MOVE 'LE10' TO WABEND-CODE GO TO ABEND00.",
+                    },
+                ],
+                "edges": [],
+            })
+
+            count = generate_error_path_chunks(report_dir, chunks_dir, "ERRORS.CBL", False)
+            texts = "\n".join(path.read_text(encoding="utf-8") for path in chunks_dir.glob("*error_path*.json"))
+
+            self.assertEqual(2, count)
+            self.assertIn("semaphore_restriction", texts)
+            self.assertIn("WABEND-CODE = 'LE10'", texts)
+            self.assertIn("Target: ABEND00", texts)
+
+    def test_screen_interaction_chunks_split_pagination_selection_row_and_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            report_dir = Path(td) / "SCREEN.CBL.report"
+            chunks_dir = report_dir / "chunks"
+            cfg_dir = report_dir / "cfg"
+            chunks_dir.mkdir(parents=True)
+            cfg_dir.mkdir()
+            chunk_pipeline._atomic_write_json(cfg_dir / "cfg-SCREEN.CBL.json", {
+                "nodes": [
+                    {"id": "n1", "type": "PARAGRAPH", "name": "CALCOLA-NPAG", "originalText": "DIVIDE MAX-RIGHE INTO PD1VOCI-TABVOX-NUMERO GIVING NPAGT REMAINDER RESTO. MOVE WCTPAG TO TWCOB-VARCONT-NPAGINA."},
+                    {"id": "n2", "type": "PARAGRAPH", "name": "BROWSE-FASE2-SEL-10", "originalText": "IF SCELTAI = WPROGR THEN MOVE WPROGREC TO TWCOB-VARCONT-PROGVOCE GO TO XCTL-LIV5."},
+                    {"id": "n3", "type": "PARAGRAPH", "name": "PREP-RIGA", "originalText": "MOVE SPACES TO RIGA-MAPPA. MOVE PD1VOCI-TABVOX-DESCRIZ TO WDESCVO. MOVE PDRUTI01-F05-IMPOX11 TO IMPORTO-RATA. MOVE RIGA-MAPPA TO MRIGAO(WCTRIG)."},
+                    {"id": "n4", "type": "PARAGRAPH", "name": "BROWSE-FASE2", "originalText": "IF EIBAID = DFHPF1 THEN GO TO XCTL-LIV1. IF EIBAID = DFHPF9 THEN GO TO XCTL-LIV0."},
+                ],
+                "edges": [],
+            })
+
+            count = generate_screen_interaction_chunks(report_dir, chunks_dir, "SCREEN.CBL", False)
+
+            self.assertEqual(4, count)
+            self.assertTrue((chunks_dir / "SCREEN.CBL__screen_pagination.json").exists())
+            self.assertTrue((chunks_dir / "SCREEN.CBL__screen_selection.json").exists())
+            self.assertTrue((chunks_dir / "SCREEN.CBL__screen_row_build.json").exists())
+            self.assertTrue((chunks_dir / "SCREEN.CBL__screen_key_dispatch.json").exists())
 
     def test_datasets_tables_resources_chunk_separates_resource_kinds(self) -> None:
         with tempfile.TemporaryDirectory() as td:

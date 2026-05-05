@@ -46,6 +46,19 @@ ALWAYS_INDEXABLE_THIN_TYPES = frozenset({
     "jcl_analysis_health",
     "static_values",
     "external_program_calls",
+    "controlflow.cfg",
+    "dataflow.variable",
+    "business_rule",
+    "call_contract",
+    "error_path",
+    "screen.pagination",
+    "screen.selection",
+    "screen.row_build",
+    "screen.key_dispatch",
+    "cics.operation",
+    "cics.program_transfer",
+    "cics.resource",
+    "cics.error_handler",
     "datasets_tables_resources",
     "copybook_mentions",
     "copybook_fields",
@@ -245,6 +258,44 @@ def load_yaml(path: Path) -> dict | None:
         return None
 
 
+def _load_first_cfg(report_dir: Path) -> dict:
+    cfg_dir = report_dir / "cfg"
+    if not cfg_dir.is_dir():
+        return {}
+    for cfg_file in sorted(cfg_dir.glob("cfg-*.json")):
+        data = load_json(cfg_file)
+        if isinstance(data, dict):
+            return data
+    return {}
+
+
+def _cfg_nodes_edges(report_dir: Path) -> tuple[list[dict], list[dict]]:
+    data = _load_first_cfg(report_dir)
+    nodes = data.get("nodes", []) if isinstance(data, dict) else []
+    edges = data.get("edges", []) if isinstance(data, dict) else []
+    return (
+        [node for node in nodes if isinstance(node, dict)],
+        [edge for edge in edges if isinstance(edge, dict)],
+    )
+
+
+def _safe_name(value: str) -> str:
+    return re.sub(r"[^\w\-\.]", "_", str(value or "unknown"))
+
+
+def _upper_nonempty(value) -> str:
+    text = str(value or "").strip().strip("'\"").upper()
+    return text
+
+
+def _metadata_paragraph(metadata: dict) -> str:
+    for key in ("paragraph", "paragraph_name", "enclosing_paragraph"):
+        value = str(metadata.get(key, "")).strip()
+        if value:
+            return value.upper()
+    return ""
+
+
 
 def _load_cobol_structure(report_dir: Path) -> dict:
     path = report_dir / "cobol_structure.json"
@@ -417,22 +468,31 @@ def generate_program_summary(report_dir: Path, chunks_dir: Path,
         procedure_section_count = sum(
             1 for section in sections.values()
             if isinstance(section, dict)
-            and str(section.get("division", "")).upper() == "PROCEDURE"
+            and str(section.get("division", "PROCEDURE")).upper() == "PROCEDURE"
         )
+        non_procedure_section_count = len(sections) - procedure_section_count
         structural_counts = {
             "paragraph_count": len(struct.get("paragraph_profiles", {}) or {}),
             "section_count": procedure_section_count,
-            "non_procedure_section_count": len(sections) - procedure_section_count,
+            "non_procedure_section_count": non_procedure_section_count,
             "condition_count": len(struct.get("conditions_88", {}) or {}),
             "redefines_count": len(struct.get("redefines", []) or []),
         }
-        chunk_text += (
-            f"\nParagraphs: {structural_counts['paragraph_count']} "
-            f"in {structural_counts['section_count']} PROCEDURE sections. "
-            f"Non-procedure sections: {structural_counts['non_procedure_section_count']}. "
-            f"88-level conditions: {structural_counts['condition_count']}. "
-            f"REDEFINES: {structural_counts['redefines_count']}."
-        )
+        if non_procedure_section_count:
+            chunk_text += (
+                f"\nParagraphs: {structural_counts['paragraph_count']} "
+                f"in {structural_counts['section_count']} PROCEDURE sections. "
+                f"Non-procedure sections: {structural_counts['non_procedure_section_count']}. "
+                f"88-level conditions: {structural_counts['condition_count']}. "
+                f"REDEFINES: {structural_counts['redefines_count']}."
+            )
+        else:
+            chunk_text += (
+                f"\nParagraphs: {structural_counts['paragraph_count']} "
+                f"in {structural_counts['section_count']} sections. "
+                f"88-level conditions: {structural_counts['condition_count']}. "
+                f"REDEFINES: {structural_counts['redefines_count']}."
+            )
 
     reachability = _extract_cfg_reachability(report_dir)
     if reachability:
@@ -1964,14 +2024,11 @@ def generate_external_program_calls(report_dir: Path, chunks_dir: Path,
                                     program: str, verbose: bool) -> int:
     """Generate external program call facts with parameters when available."""
     deps_path = report_dir / "knowledge_base" / "03_Dependencies.yaml"
-    if not deps_path.exists():
-        return 0
-    deps = load_yaml(deps_path)
-    if not deps:
-        return 0
+    deps = load_yaml(deps_path) if deps_path.exists() else {}
+    deps = deps or {}
 
     detail_lookup = _extract_cics_call_details(report_dir)
-    calls: list[dict] = []
+    calls: list[dict] = _java_call_facts_from_cfg(report_dir) + _java_cics_program_transfer_facts_from_cfg(report_dir)
 
     for call in deps.get("calls", []) or []:
         if not isinstance(call, dict):
@@ -2068,6 +2125,219 @@ def generate_external_program_calls(report_dir: Path, chunks_dir: Path,
     if verbose:
         print(f"  external_program_calls: calls={len(calls)}")
     return 1
+
+
+def generate_call_contract_chunks(report_dir: Path, chunks_dir: Path,
+                                  program: str, verbose: bool) -> int:
+    """Generate one call_contract chunk per external CALL/LINK/XCTL target."""
+    calls = _dedupe_call_facts(
+        _java_call_facts_from_cfg(report_dir)
+        + _java_cics_program_transfer_facts_from_cfg(report_dir)
+    )
+
+    deps_path = report_dir / "knowledge_base" / "03_Dependencies.yaml"
+    deps = load_yaml(deps_path) if deps_path.exists() else {}
+    deps = deps or {}
+    for call in deps.get("calls", []) or []:
+        if not isinstance(call, dict):
+            continue
+        target = _upper_nonempty(call.get("target"))
+        if not _is_valid_program_target(target):
+            continue
+        calls.append({
+            "command": str(call.get("command") or call.get("type") or "CALL").upper(),
+            "target": target,
+            "target_kind": "PROGRAM",
+            "target_source": call.get("target_source") or call.get("source") or "unknown",
+            "using": call.get("using") or call.get("parameters") or [],
+        })
+
+    calls = _dedupe_call_facts(calls)
+    if not calls:
+        return 0
+
+    paragraph_texts = _paragraph_texts_from_cfg(report_dir)
+    count = 0
+    for call in calls:
+        target = _upper_nonempty(call.get("target"))
+        if not _is_valid_program_target(target):
+            continue
+        index = count + 1
+        paragraph = str(call.get("paragraph") or "").upper()
+        area = call.get("commarea") or _first_using_parameter(call)
+        prep_evidence = _call_preparation_evidence(paragraph_texts, target, area)
+
+        lines = [
+            f"Call contract in {program}: {call.get('command', 'CALL')} {target}.",
+            f"Target source: {call.get('target_source', 'unknown')}.",
+        ]
+        if paragraph:
+            lines.append(f"Invocation paragraph: {paragraph}.")
+        if call.get("commarea"):
+            lines.append(f"COMMAREA: {call['commarea']}.")
+        if call.get("length"):
+            lines.append(f"LENGTH: {call['length']}.")
+        if call.get("using"):
+            lines.append(f"USING parameters: {_render_using(call['using'])}.")
+        if prep_evidence:
+            lines.append("Nearby parameter/return evidence:")
+            lines.extend(f"- {item}" for item in prep_evidence[:8])
+        if call.get("source_line") is not None:
+            lines.append(f"Source line: {call['source_line']}.")
+
+        metadata = {
+            "chunk_type": "call_contract",
+            "chunk_id": f"{program}:call_contract:{target}:{index}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            "target": target,
+            "command": call.get("command", "CALL"),
+            "paragraph": paragraph,
+            "commarea": call.get("commarea"),
+            "length": call.get("length"),
+            "using": call.get("using"),
+            "target_source": call.get("target_source"),
+            "source_line": call.get("source_line"),
+            "preparation_evidence": prep_evidence,
+            "call_contract_source": "java_cfg_and_paragraph_context",
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__call_contract__{_safe_name(target)}__{index}.json",
+            "\n".join(lines),
+            metadata,
+        )
+        count += 1
+
+    if verbose:
+        print(f"  call_contract: {count} chunk(s)")
+    return count
+
+
+def _first_using_parameter(call: dict) -> str:
+    using = call.get("using") or []
+    if isinstance(using, list) and using:
+        first = using[0]
+        if isinstance(first, dict):
+            return str(first.get("name") or "").upper()
+        return str(first).upper()
+    if isinstance(using, str):
+        return using.upper()
+    return ""
+
+
+def _render_using(using) -> str:
+    if isinstance(using, list):
+        rendered = []
+        for item in using:
+            if isinstance(item, dict):
+                name = item.get("name") or item.get("value") or item
+                mode = item.get("mode")
+                rendered.append(f"{name} ({mode})" if mode else str(name))
+            else:
+                rendered.append(str(item))
+        return ", ".join(rendered)
+    return str(using)
+
+
+def _call_preparation_evidence(paragraph_texts: dict[str, str],
+                               target: str, area: str | None) -> list[str]:
+    needles = {target}
+    if area:
+        needles.add(str(area).upper())
+    evidence: list[str] = []
+    for paragraph, text in paragraph_texts.items():
+        upper = text.upper()
+        if not any(needle and needle in upper for needle in needles):
+            continue
+        for sentence in _sentences_from_text(text):
+            sentence_upper = sentence.upper()
+            if any(needle and needle in sentence_upper for needle in needles):
+                evidence.append(f"{paragraph}: {_compact_text(sentence, 220)}")
+    return _unique_preserving_order(evidence)
+
+
+def _java_call_facts_from_cfg(report_dir: Path) -> list[dict]:
+    """Extract static and dynamic CALL facts directly from the Java CFG export."""
+    nodes, _ = _cfg_nodes_edges(report_dir)
+    calls: list[dict] = []
+    for node in nodes:
+        metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+        raw_reference_type = metadata.get("program_reference_type")
+        call_target = metadata.get("call_target") or metadata.get("resolved_call_target")
+        if not raw_reference_type and str(node.get("type", "")).upper() != "CALL":
+            continue
+        reference_type = str(raw_reference_type or "UNKNOWN").upper()
+        resolved = _upper_nonempty(metadata.get("resolved_call_target"))
+        target_source = str(metadata.get("call_target_source") or metadata.get("target_source") or "").strip()
+        target = resolved if resolved else _upper_nonempty(call_target)
+        if not _is_valid_program_target(target):
+            if reference_type == "DYNAMIC" and _upper_nonempty(metadata.get("call_target_identifier")):
+                target = _upper_nonempty(metadata.get("call_target_identifier"))
+            else:
+                continue
+        call: dict = {
+            "command": "CALL",
+            "target": target,
+            "target_kind": "PROGRAM",
+            "target_source": target_source or (
+                "literal" if reference_type == "STATIC" else "unresolved_identifier"
+            ),
+            "program_reference_type": reference_type,
+            "provenance_source": "java_cfg_call_metadata",
+        }
+        if metadata.get("call_target_identifier"):
+            call["call_target_identifier"] = _upper_nonempty(metadata["call_target_identifier"])
+        if metadata.get("dynamic_call_resolution_confidence"):
+            call["resolution_confidence"] = metadata["dynamic_call_resolution_confidence"]
+        if metadata.get("dynamic_call_resolution_note"):
+            call["resolution_note"] = metadata["dynamic_call_resolution_note"]
+        using = metadata.get("using_parameters") or metadata.get("parameters") or []
+        if using:
+            call["using"] = using
+        paragraph = _metadata_paragraph(metadata)
+        if paragraph:
+            call["paragraph"] = paragraph
+        if node.get("sourceLine") is not None:
+            call["source_line"] = node.get("sourceLine")
+        if node.get("lineOrigin"):
+            call["line_origin"] = node.get("lineOrigin")
+        calls.append(call)
+    return _dedupe_call_facts(calls)
+
+
+def _java_cics_program_transfer_facts_from_cfg(report_dir: Path) -> list[dict]:
+    calls: list[dict] = []
+    for op in _cics_operation_facts(report_dir):
+        command = str(op.get("command", "")).upper()
+        if command not in {"LINK", "XCTL"}:
+            continue
+        if str(op.get("target_kind", "")).upper() != "PROGRAM":
+            continue
+        target = _upper_nonempty(op.get("target"))
+        if not _is_valid_program_target(target):
+            continue
+        call = {
+            "command": command,
+            "target": target,
+            "target_kind": "PROGRAM",
+            "target_source": op.get("target_source") or "unknown",
+            "provenance_source": "java_cfg_cics_metadata",
+        }
+        if op.get("target_identifier"):
+            call["call_target_identifier"] = _upper_nonempty(op["target_identifier"])
+        if op.get("resolution_confidence"):
+            call["resolution_confidence"] = op["resolution_confidence"]
+        if op.get("paragraph"):
+            call["paragraph"] = op["paragraph"]
+        if op.get("commarea"):
+            call["commarea"] = op["commarea"]
+        if op.get("length"):
+            call["length"] = op["length"]
+        if op.get("source_line") is not None:
+            call["source_line"] = op["source_line"]
+        calls.append(call)
+    return _dedupe_call_facts(calls)
 
 
 def generate_datasets_tables_resources(report_dir: Path, chunks_dir: Path,
@@ -2239,6 +2509,8 @@ def _dedupe_call_facts(calls: list[dict]) -> list[dict]:
     result = []
     seen = set()
     for call in calls:
+        if _upper_nonempty(call.get("target")) == "UNKNOWN":
+            continue
         key = (
             call.get("command"),
             call.get("target"),
@@ -4293,6 +4565,19 @@ def _split_parts_with_context(text: str, metadata: dict) -> list[str]:
     if chunk_type in {
         "static_values",
         "external_program_calls",
+        "controlflow.cfg",
+        "dataflow.variable",
+        "business_rule",
+        "call_contract",
+        "error_path",
+        "screen.pagination",
+        "screen.selection",
+        "screen.row_build",
+        "screen.key_dispatch",
+        "cics.operation",
+        "cics.program_transfer",
+        "cics.resource",
+        "cics.error_handler",
         "datasets_tables_resources",
         "copybook_mentions",
         "copybook_fields",
@@ -5028,6 +5313,547 @@ def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
 # Group G — section_summary chunks
 # =============================================================================
 
+def generate_controlflow_cfg(report_dir: Path, chunks_dir: Path,
+                             program: str, verbose: bool) -> int:
+    """Generate a controlflow.cfg chunk from Java CFG edges and edge conditions."""
+    nodes, edges = _cfg_nodes_edges(report_dir)
+    if not nodes or not edges:
+        return 0
+
+    node_by_id = {node.get("id"): node for node in nodes if node.get("id")}
+    edge_summaries: list[dict] = []
+    conditioned = 0
+    for index, edge in enumerate(edges, start=1):
+        source = node_by_id.get(edge.get(EDGE_SOURCE), {})
+        target = node_by_id.get(edge.get(EDGE_TARGET), {})
+        condition = str(edge.get("condition") or "").strip()
+        if condition:
+            conditioned += 1
+        edge_summaries.append({
+            "from": edge.get("fromLabel") or _node_label(source),
+            "to": edge.get("toLabel") or _node_label(target),
+            "edge_type": edge.get(EDGE_TYPE),
+            "condition": condition,
+            "source_line": edge.get("sourceLine"),
+            "line_origin": edge.get("lineOrigin"),
+            "evidence": _compact_text(edge.get("evidence") or source.get("originalText")),
+        })
+
+    lines = [
+        f"Control-flow graph for {program}:",
+        (
+            f"Java CFG export contains {len(nodes)} nodes and {len(edges)} edges; "
+            f"{conditioned} edge(s) carry explicit branch conditions."
+        ),
+        "Source-location contract: sourceLine/sourceColumn are parser token coordinates; lineOrigin marks parser_source when Java provided the location.",
+    ]
+    for edge in edge_summaries:
+        line = f"- {edge['from']} -> {edge['to']} [{edge['edge_type']}]"
+        details = []
+        if edge.get("condition"):
+            details.append(f"condition {edge['condition']}")
+        if edge.get("source_line") is not None:
+            details.append(f"source line {edge['source_line']}")
+        if edge.get("evidence"):
+            details.append(f"evidence {edge['evidence']}")
+        if details:
+            line += ": " + "; ".join(details)
+        lines.append(line + ".")
+
+    metadata = {
+        "chunk_type": "controlflow.cfg",
+        "chunk_id": f"{program}:controlflow.cfg",
+        "parent_program_chunk": f"{program}:program_summary",
+        "program": program,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "conditioned_edge_count": conditioned,
+        "source_location_contract": {
+            "sourceLine": "1-based parser token line when present",
+            "sourceColumn": "0-based parser token column when present",
+            "lineOrigin": "parser_source for Java parser-derived locations",
+        },
+        "edges": edge_summaries,
+    }
+    write_chunk(chunks_dir, f"{program}__controlflow_cfg.json", "\n".join(lines), metadata)
+    if verbose:
+        print(f"  controlflow.cfg: nodes={len(nodes)}, edges={len(edges)}, conditioned={conditioned}")
+    return 1
+
+
+def generate_dataflow_variable_chunks(report_dir: Path, chunks_dir: Path,
+                                      program: str, verbose: bool) -> int:
+    """Generate one dataflow.variable chunk per Java CFG variable read/write fact."""
+    nodes, edges = _cfg_nodes_edges(report_dir)
+    if not nodes:
+        return 0
+
+    paragraph_by_id = _paragraph_context_by_node_id(nodes, edges)
+    all_vars = _load_all_variable_names(report_dir)
+    variables: dict[str, dict] = {}
+    for node in nodes:
+        for mode, field in [("read", "variablesRead"), ("write", "variablesModified")]:
+            for raw_name in node.get(field, []) or []:
+                name = _upper_nonempty(raw_name)
+                if not name:
+                    continue
+                entry = variables.setdefault(name, {
+                    "variable": name,
+                    "origin_group": all_vars.get(name),
+                    "read_sites": [],
+                    "write_sites": [],
+                    "controls_flow": False,
+                })
+                site = _dataflow_site(node, paragraph_by_id)
+                if mode == "read":
+                    entry["read_sites"].append(site)
+                    if _node_uses_variable_as_control(node, name):
+                        entry["controls_flow"] = True
+                else:
+                    entry["write_sites"].append(site)
+
+    if not variables:
+        return 0
+
+    count = 0
+    for name, entry in sorted(variables.items()):
+        read_sites = _dedupe_sites(entry["read_sites"])
+        write_sites = _dedupe_sites(entry["write_sites"])
+        lines = [f"Variable dataflow for {name} in {program}:"]
+        if entry.get("origin_group"):
+            lines.append(f"Declared under data group {entry['origin_group']}.")
+        else:
+            lines.append("Declaration origin is not available in this report.")
+        lines.append(f"Reads: {len(read_sites)} site(s). Writes: {len(write_sites)} site(s).")
+        if entry["controls_flow"]:
+            lines.append("This variable is used in control-flow decisions.")
+        if write_sites:
+            lines.append("Write sites:")
+            lines.extend(_render_sites(write_sites))
+        if read_sites:
+            lines.append("Read sites:")
+            lines.extend(_render_sites(read_sites))
+
+        safe = _safe_name(name)
+        metadata = {
+            "chunk_type": "dataflow.variable",
+            "chunk_id": f"{program}:dataflow.variable:{name}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            "variable": name,
+            "origin_group": entry.get("origin_group"),
+            "read_count": len(read_sites),
+            "write_count": len(write_sites),
+            "read_sites": read_sites,
+            "write_sites": write_sites,
+            "controls_flow": entry["controls_flow"],
+            "dataflow_source": "java_cfg_variables",
+        }
+        write_chunk(chunks_dir, f"{program}__dataflow_variable__{safe}.json", "\n".join(lines), metadata)
+        count += 1
+
+    if verbose:
+        print(f"  dataflow.variable: {count} variable chunk(s)")
+    return count
+
+
+def generate_business_rule_chunks(report_dir: Path, chunks_dir: Path,
+                                  program: str, verbose: bool) -> int:
+    """Generate business_rule chunks from conditioned Java CFG edges."""
+    nodes, edges = _cfg_nodes_edges(report_dir)
+    if not nodes or not edges:
+        return 0
+    node_by_id = {node.get("id"): node for node in nodes if node.get("id")}
+
+    count = 0
+    for edge in edges:
+        condition = str(edge.get("condition") or "").strip()
+        if not condition:
+            continue
+        index = count + 1
+        source = node_by_id.get(edge.get(EDGE_SOURCE), {})
+        target = node_by_id.get(edge.get(EDGE_TARGET), {})
+        evidence = _compact_text(edge.get("evidence") or source.get("originalText"))
+        action = _node_label(target)
+        category, severity = _classify_business_rule(edge, target, evidence)
+
+        lines = [
+            f"Business rule in {program}:",
+            f"When {condition}, control flows to {action}.",
+            f"Edge type: {edge.get(EDGE_TYPE)}.",
+        ]
+        if edge.get("sourceLine") is not None:
+            lines.append(f"Source line: {edge.get('sourceLine')}.")
+        if evidence:
+            lines.append(f"Evidence: {evidence}.")
+
+        metadata = {
+            "chunk_type": "business_rule",
+            "chunk_id": f"{program}:business_rule:{index}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            "condition": condition,
+            "action": action,
+            "category": category,
+            "severity": severity,
+            "edge_type": edge.get(EDGE_TYPE),
+            "source_line": edge.get("sourceLine"),
+            "source_column": edge.get("sourceColumn"),
+            "line_origin": edge.get("lineOrigin"),
+            "from_node_id": edge.get(EDGE_SOURCE),
+            "to_node_id": edge.get(EDGE_TARGET),
+            "evidence": evidence,
+            "business_rule_source": "java_cfg_conditioned_edge",
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__business_rule__{index}.json",
+            "\n".join(lines),
+            metadata,
+        )
+        count += 1
+
+    if verbose:
+        print(f"  business_rule: {count} conditioned edge chunk(s)")
+    return count
+
+
+def generate_error_path_chunks(report_dir: Path, chunks_dir: Path,
+                               program: str, verbose: bool) -> int:
+    """Generate structured chunks for user-facing errors and abnormal exits."""
+    facts = _error_path_facts(report_dir)
+    count = 0
+    for fact in facts:
+        index = count + 1
+        lines = [
+            f"Error path in {program}: {fact['category']}.",
+            f"Paragraph: {fact.get('paragraph') or 'unknown'}.",
+        ]
+        if fact.get("trigger"):
+            lines.append(f"Trigger: {fact['trigger']}.")
+        if fact.get("message_or_code"):
+            lines.append(f"Message/code: {fact['message_or_code']}.")
+        if fact.get("target"):
+            lines.append(f"Target: {fact['target']}.")
+        if fact.get("source_line") is not None:
+            lines.append(f"Source line: {fact['source_line']}.")
+        lines.append(f"Evidence: {fact['evidence']}.")
+
+        metadata = {
+            "chunk_type": "error_path",
+            "chunk_id": f"{program}:error_path:{index}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            **fact,
+        }
+        write_chunk(chunks_dir, f"{program}__error_path__{index}.json", "\n".join(lines), metadata)
+        count += 1
+    if verbose:
+        print(f"  error_path: {count} chunk(s)")
+    return count
+
+
+def generate_screen_interaction_chunks(report_dir: Path, chunks_dir: Path,
+                                       program: str, verbose: bool) -> int:
+    """Generate targeted chunks for screen pagination, row selection, row build, and key dispatch."""
+    paragraph_texts = _paragraph_texts_from_cfg(report_dir)
+    specs = [
+        (
+            "screen.pagination",
+            "pagination",
+            ("WCTPAG", "NPAGT", "CALCOLA-NPAG", "MAX-RIGHE", "PF7", "PF8", "DFHPF7", "DFHPF8", "ENTER"),
+        ),
+        (
+            "screen.selection",
+            "row selection",
+            ("SCELTAI", "WPROGR", "WPROGREC", "BROWSE-FASE2-SEL", "NOTFND", "TWCOB-VARCONT-VOCE"),
+        ),
+        (
+            "screen.row_build",
+            "display row build",
+            ("PREP-RIGA", "RIGA-MAPPA", "MRIGAO", "IMPORTO-RATA", "DATA-CESSAZIONE", "WDESCVO", "WPROGREC"),
+        ),
+        (
+            "screen.key_dispatch",
+            "function-key dispatch",
+            ("DFHPF1", "DFHPF2", "DFHPF3", "DFHPF4", "DFHPF7", "DFHPF8", "DFHPF9", "XCTL-LIV"),
+        ),
+    ]
+
+    count = 0
+    for chunk_type, label, keywords in specs:
+        facts = _screen_facts(paragraph_texts, keywords)
+        if not facts:
+            continue
+        lines = [f"Screen {label} facts for {program}:"]
+        for fact in facts:
+            lines.append(f"- {fact['paragraph']}: {fact['evidence']}.")
+        metadata = {
+            "chunk_type": chunk_type,
+            "chunk_id": f"{program}:{chunk_type}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            "interaction_kind": label,
+            "keywords": list(keywords),
+            "facts": facts,
+            "screen_interaction_source": "java_cfg_paragraph_context",
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__{chunk_type.replace('.', '_')}.json",
+            "\n".join(lines),
+            metadata,
+        )
+        count += 1
+
+    if verbose:
+        print(f"  screen.interaction: {count} chunk(s)")
+    return count
+
+
+def _node_label(node: dict) -> str:
+    return str(node.get("label") or node.get("name") or node.get("type") or "unknown").strip()
+
+
+def _compact_text(value, limit: int = 240) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _paragraph_texts_from_cfg(report_dir: Path) -> dict[str, str]:
+    nodes, edges = _cfg_nodes_edges(report_dir)
+    if not nodes:
+        return {}
+    paragraph_by_id = _paragraph_context_by_node_id(nodes, edges)
+    result: dict[str, list[str]] = {}
+    for node in nodes:
+        metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+        paragraph = ""
+        if node.get("type") == "PARAGRAPH" and node.get("name"):
+            paragraph = str(node.get("name")).upper()
+        paragraph = paragraph or paragraph_by_id.get(node.get("id"), "") or _metadata_paragraph(metadata)
+        text = _compact_text(node.get("originalText"), 900)
+        if paragraph and text:
+            result.setdefault(paragraph, []).append(text)
+    return {paragraph: " ".join(parts) for paragraph, parts in result.items()}
+
+
+def _sentences_from_text(text: str) -> list[str]:
+    compact = " ".join(str(text or "").split())
+    if not compact:
+        return []
+    parts = re.split(r"(?<=\.)\s+(?=[A-Z0-9_-])", compact)
+    return [part.strip().rstrip(".") for part in parts if part.strip()]
+
+
+def _unique_preserving_order(values: list[str]) -> list[str]:
+    result = []
+    seen = set()
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _error_path_facts(report_dir: Path) -> list[dict]:
+    paragraph_texts = _paragraph_texts_from_cfg(report_dir)
+    facts: list[dict] = []
+    for paragraph, text in paragraph_texts.items():
+        upper = text.upper()
+        if not any(term in upper for term in (
+            "ABEND", "WABEND-CODE", "TASTOER", "NOTFND", "NOSEL",
+            "SQLERROR", "ERRORE-SQL", "AREA-MSG", "M1MSGO", "PXCSEMAF-STATUS",
+        )):
+            continue
+        for sentence in _sentences_from_text(text):
+            sentence_upper = sentence.upper()
+            if not any(term in sentence_upper for term in (
+                "ABEND", "WABEND-CODE", "TASTOER", "NOTFND", "NOSEL",
+                "SQLERROR", "ERRORE-SQL", "AREA-MSG", "M1MSGO", "PXCSEMAF-STATUS",
+            )):
+                continue
+            facts.append({
+                "paragraph": paragraph,
+                "category": _classify_error_sentence(sentence_upper),
+                "trigger": _extract_if_condition(sentence),
+                "message_or_code": _extract_error_code_or_message(sentence),
+                "target": _extract_go_to_target(sentence),
+                "source_line": None,
+                "evidence": _compact_text(sentence, 260),
+                "error_path_source": "java_cfg_paragraph_context",
+            })
+    return _dedupe_error_facts(facts)
+
+
+def _classify_error_sentence(sentence_upper: str) -> str:
+    if "SQLERROR" in sentence_upper or "ERRORE-SQL" in sentence_upper:
+        return "sql_error"
+    if "PXCSEMAF-STATUS" in sentence_upper or "SEMAF" in sentence_upper:
+        return "semaphore_restriction"
+    if "TASTOER" in sentence_upper:
+        return "invalid_function_key"
+    if "NOTFND" in sentence_upper or "NOSEL" in sentence_upper:
+        return "invalid_or_missing_selection"
+    if "WABEND-CODE" in sentence_upper or "ABEND" in sentence_upper:
+        return "abnormal_termination"
+    if "AREA-MSG" in sentence_upper or "M1MSGO" in sentence_upper:
+        return "user_message"
+    return "error_path"
+
+
+def _extract_if_condition(sentence: str) -> str:
+    match = re.search(r"\bIF\s+(.+?)\s+THEN\b", sentence, re.IGNORECASE)
+    return _compact_text(match.group(1), 180) if match else ""
+
+
+def _extract_error_code_or_message(sentence: str) -> str:
+    match = re.search(r"MOVE\s+('.*?'|\".*?\"|[A-Z0-9_-]+)\s+TO\s+([A-Z0-9_-]+)", sentence, re.IGNORECASE)
+    if match:
+        return f"{match.group(2).upper()} = {match.group(1)}"
+    return ""
+
+
+def _extract_go_to_target(sentence: str) -> str:
+    match = re.search(r"\bGO\s+TO\s+([A-Z0-9_-]+)", sentence, re.IGNORECASE)
+    return match.group(1).upper() if match else ""
+
+
+def _dedupe_error_facts(facts: list[dict]) -> list[dict]:
+    result = []
+    seen = set()
+    for fact in facts:
+        key = (fact.get("paragraph"), fact.get("category"), fact.get("evidence"))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(fact)
+    return result
+
+
+def _screen_facts(paragraph_texts: dict[str, str], keywords: tuple[str, ...]) -> list[dict]:
+    facts: list[dict] = []
+    for paragraph, text in paragraph_texts.items():
+        paragraph_upper = paragraph.upper()
+        upper = text.upper()
+        if not any(keyword in upper or keyword in paragraph_upper for keyword in keywords):
+            continue
+        for sentence in _sentences_from_text(text):
+            sentence_upper = sentence.upper()
+            if any(keyword in sentence_upper or keyword in paragraph_upper for keyword in keywords):
+                facts.append({
+                    "paragraph": paragraph,
+                    "evidence": _compact_text(sentence, 260),
+                })
+    return facts[:40]
+
+
+def _paragraph_context_by_node_id(nodes: list[dict], edges: list[dict]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    current = ""
+    for node in nodes:
+        node_id = node.get("id")
+        metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+        paragraph = _metadata_paragraph(metadata)
+        if node.get("type") == "PARAGRAPH" and node.get("name"):
+            current = str(node.get("name")).upper()
+            paragraph = current
+        if node_id and paragraph:
+            result[node_id] = paragraph
+        elif node_id and current:
+            result[node_id] = current
+
+    node_by_id = {node.get("id"): node for node in nodes if node.get("id")}
+    adjacency: dict[str, list[str]] = {}
+    for edge in edges:
+        if edge.get(EDGE_TYPE) in {"STARTS_WITH", "FOLLOWED_BY"}:
+            adjacency.setdefault(edge.get(EDGE_SOURCE), []).append(edge.get(EDGE_TARGET))
+
+    for node in nodes:
+        if node.get("type") != "PARAGRAPH" or not node.get("name"):
+            continue
+        paragraph = str(node.get("name")).upper()
+        queue = list(adjacency.get(node.get("id"), []))
+        visited: set[str] = set()
+        while queue:
+            node_id = queue.pop(0)
+            if not node_id or node_id in visited:
+                continue
+            visited.add(node_id)
+            target = node_by_id.get(node_id, {})
+            if target.get("type") == "PARAGRAPH" and node_id != node.get("id"):
+                continue
+            result.setdefault(node_id, paragraph)
+            queue.extend(adjacency.get(node_id, []))
+    return result
+
+
+def _dataflow_site(node: dict, paragraph_by_id: dict[str, str]) -> dict:
+    metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    site = {
+        "node_id": node.get("id"),
+        "node_type": node.get("type"),
+        "label": _node_label(node),
+        "paragraph": _metadata_paragraph(metadata) or paragraph_by_id.get(node.get("id"), ""),
+        "source_line": node.get("sourceLine"),
+        "line_origin": node.get("lineOrigin"),
+        "evidence": _compact_text(node.get("originalText")),
+    }
+    return {key: value for key, value in site.items() if value not in (None, "")}
+
+
+def _node_uses_variable_as_control(node: dict, variable: str) -> bool:
+    node_type = str(node.get("type", "")).upper()
+    metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+    condition = str(metadata.get("condition_text") or node.get("originalText") or "").upper()
+    return node_type in {"IF_BRANCH", "EVALUATE", "EVALUATE_BRANCH", "SEARCH", "GOTO"} and variable in condition
+
+
+def _dedupe_sites(sites: list[dict]) -> list[dict]:
+    result: list[dict] = []
+    seen: set[tuple] = set()
+    for site in sites:
+        key = (site.get("node_id"), site.get("source_line"), site.get("evidence"))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(site)
+    return result
+
+
+def _render_sites(sites: list[dict], limit: int = 12) -> list[str]:
+    lines: list[str] = []
+    for site in sites[:limit]:
+        parts = []
+        if site.get("paragraph"):
+            parts.append(f"paragraph {site['paragraph']}")
+        if site.get("source_line") is not None:
+            parts.append(f"line {site['source_line']}")
+        if site.get("node_type"):
+            parts.append(str(site["node_type"]))
+        prefix = ", ".join(parts) if parts else str(site.get("label", "unknown"))
+        evidence = site.get("evidence")
+        if evidence:
+            lines.append(f"- {prefix}: {evidence}.")
+        else:
+            lines.append(f"- {prefix}.")
+    if len(sites) > limit:
+        lines.append(f"- ... and {len(sites) - limit} more site(s).")
+    return lines
+
+
+def _classify_business_rule(edge: dict, target: dict, evidence: str) -> tuple[str, str]:
+    target_text = f"{_node_label(target)} {target.get('originalText', '')} {evidence}".upper()
+    if "ABEND" in target_text:
+        return "error_handling", "fatal"
+    if "JUMPS_TO" in str(edge.get(EDGE_TYPE, "")).upper():
+        return "control_flow", "branch"
+    return "control_flow", "guard"
+
+
 def generate_business_rules(report_dir: Path, chunks_dir: Path,
                             program: str, verbose: bool) -> int:
     """Generate a business_rules chunk aggregating all level-88 conditions.
@@ -5103,6 +5929,16 @@ _SQL_KEYWORD_EXCLUSIONS = frozenset({
     'ON', 'AS', 'BY', 'ALL', 'IN', 'IS', 'AT', 'END', 'EXEC', 'SQL',
 })
 
+_CICS_RESOURCE_ARGUMENTS = {
+    "FILE": "FILE",
+    "DATASET": "DATASET",
+    "QUEUE": "QUEUE",
+    "QNAME": "QUEUE",
+    "MAP": "MAP",
+    "MAPSET": "MAPSET",
+    "TRANSID": "TRANSID",
+}
+
 
 def generate_cics_operations(report_dir: Path, chunks_dir: Path,
                              program: str, verbose: bool) -> int:
@@ -5163,6 +5999,389 @@ def generate_cics_operations(report_dir: Path, chunks_dir: Path,
     if verbose:
         print(f"  cics_operations: commands={len(commands)}, targets={len(targets)}")
     return 1
+
+
+def generate_cics_operation_chunks(report_dir: Path, chunks_dir: Path,
+                                   program: str, verbose: bool) -> int:
+    operations = _cics_operation_facts(report_dir)
+    count = 0
+    for index, op in enumerate(operations, start=1):
+        command = op.get("command", "UNKNOWN")
+        target = op.get("target") or "unknown"
+        lines = [
+            f"CICS operation in {program}: {command}.",
+            f"Type: {op.get('type', 'other')}. Target: {target} [{op.get('target_kind', 'UNKNOWN')}].",
+        ]
+        if op.get("paragraph"):
+            lines.append(f"Paragraph: {op['paragraph']}.")
+        if op.get("target_identifier"):
+            lines.append(f"Target identifier: {op['target_identifier']}.")
+        if op.get("resolution_confidence"):
+            lines.append(f"Resolution confidence: {op['resolution_confidence']}.")
+        if op.get("arguments"):
+            rendered_args = [
+                f"{arg.get('name')}={arg.get('resolved_value') or arg.get('value')} ({arg.get('resolved_value_source') or arg.get('value_source', 'unknown')})"
+                for arg in op["arguments"]
+                if isinstance(arg, dict)
+            ]
+            if rendered_args:
+                lines.append("Arguments: " + ", ".join(rendered_args) + ".")
+        if op.get("source_line") is not None:
+            lines.append(f"Source line: {op['source_line']}.")
+        if op.get("evidence"):
+            lines.append(f"Evidence: {op['evidence']}.")
+
+        metadata = {
+            "chunk_type": "cics.operation",
+            "chunk_id": f"{program}:cics.operation:{index}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            **op,
+        }
+        write_chunk(chunks_dir, f"{program}__cics_operation__{index}.json", "\n".join(lines), metadata)
+        count += 1
+    if verbose:
+        print(f"  cics.operation: {count} chunk(s)")
+    return count
+
+
+def generate_cics_program_transfer_chunks(report_dir: Path, chunks_dir: Path,
+                                          program: str, verbose: bool) -> int:
+    transfers = [
+        op for op in _cics_operation_facts(report_dir)
+        if str(op.get("command", "")).upper() in {"LINK", "XCTL"}
+        and str(op.get("target_kind", "")).upper() == "PROGRAM"
+    ]
+    count = 0
+    for index, op in enumerate(transfers, start=1):
+        command = op.get("command", "LINK")
+        target = op.get("target") or "unknown"
+        lines = [f"CICS program transfer in {program}: {command} to {target}."]
+        if op.get("paragraph"):
+            lines.append(f"Paragraph: {op['paragraph']}.")
+        if op.get("commarea"):
+            lines.append(f"COMMAREA: {op['commarea']}.")
+        if op.get("length"):
+            lines.append(f"LENGTH: {op['length']}.")
+        if op.get("target_identifier"):
+            lines.append(f"Dynamic target identifier: {op['target_identifier']}.")
+        if op.get("target_source"):
+            lines.append(f"Target source: {op['target_source']}.")
+        if op.get("resolution_confidence"):
+            lines.append(f"Resolution confidence: {op['resolution_confidence']}.")
+        if op.get("source_line") is not None:
+            lines.append(f"Source line: {op['source_line']}.")
+
+        metadata = {
+            "chunk_type": "cics.program_transfer",
+            "chunk_id": f"{program}:cics.program_transfer:{index}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            **op,
+        }
+        write_chunk(chunks_dir, f"{program}__cics_program_transfer__{index}.json", "\n".join(lines), metadata)
+        count += 1
+    if verbose:
+        print(f"  cics.program_transfer: {count} chunk(s)")
+    return count
+
+
+def generate_cics_resource_chunks(report_dir: Path, chunks_dir: Path,
+                                  program: str, verbose: bool) -> int:
+    resources = _cics_resource_facts(report_dir)
+    count = 0
+    for index, resource in enumerate(resources, start=1):
+        lines = [
+            f"CICS resource in {program}: {resource.get('kind', 'RESOURCE')} {resource.get('target', 'unknown')}.",
+            f"Command: {resource.get('command', 'UNKNOWN')}. Source: {resource.get('target_source', 'unknown')}.",
+        ]
+        if resource.get("paragraph"):
+            lines.append(f"Paragraph: {resource['paragraph']}.")
+        if resource.get("source_line") is not None:
+            lines.append(f"Source line: {resource['source_line']}.")
+        if resource.get("evidence"):
+            lines.append(f"Evidence: {resource['evidence']}.")
+
+        metadata = {
+            "chunk_type": "cics.resource",
+            "chunk_id": f"{program}:cics.resource:{index}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            **resource,
+        }
+        write_chunk(chunks_dir, f"{program}__cics_resource__{index}.json", "\n".join(lines), metadata)
+        count += 1
+    if verbose:
+        print(f"  cics.resource: {count} chunk(s)")
+    return count
+
+
+def generate_cics_error_handler_chunks(report_dir: Path, chunks_dir: Path,
+                                       program: str, verbose: bool) -> int:
+    handlers = _cics_error_handler_facts(report_dir)
+    count = 0
+    for index, handler in enumerate(handlers, start=1):
+        lines = [
+            f"CICS error/exception handling in {program}: {handler.get('handler_kind', 'RESP')}.",
+            f"Handled key: {handler.get('handled_key', 'response')}. Action: {handler.get('action', 'capture')}.",
+        ]
+        if handler.get("target"):
+            lines.append(f"Target: {handler['target']}.")
+        if handler.get("paragraph"):
+            lines.append(f"Paragraph: {handler['paragraph']}.")
+        if handler.get("source_line") is not None:
+            lines.append(f"Source line: {handler['source_line']}.")
+        if handler.get("active") is False:
+            lines.append("Status: inactive/commented-out evidence.")
+        if handler.get("evidence"):
+            lines.append(f"Evidence: {handler['evidence']}.")
+
+        metadata = {
+            "chunk_type": "cics.error_handler",
+            "chunk_id": f"{program}:cics.error_handler:{index}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            **handler,
+        }
+        write_chunk(chunks_dir, f"{program}__cics_error_handler__{index}.json", "\n".join(lines), metadata)
+        count += 1
+    if verbose:
+        print(f"  cics.error_handler: {count} chunk(s)")
+    return count
+
+
+def _cics_operation_facts(report_dir: Path) -> list[dict]:
+    nodes, _ = _cfg_nodes_edges(report_dir)
+    operations: list[dict] = []
+    for node in nodes:
+        metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+        command = str(metadata.get("cics_command") or "").upper()
+        if not command:
+            continue
+        operation = metadata.get("cics_operation") if isinstance(metadata.get("cics_operation"), dict) else {}
+        arguments = _normalize_cics_arguments(metadata.get("cics_arguments", []) or operation.get("arguments", []))
+        target = _upper_nonempty(metadata.get("resolved_cics_target") or operation.get("target") or metadata.get("cics_target"))
+        fact = {
+            "command": command,
+            "type": operation.get("type") or metadata.get("cics_operation_type") or "other",
+            "target_kind": str(operation.get("target_kind") or metadata.get("cics_target_kind") or "UNKNOWN").upper(),
+            "target": target,
+            "target_source": operation.get("target_source") or metadata.get("cics_target_source") or "unknown",
+            "arguments": arguments,
+            "paragraph": _metadata_paragraph(metadata),
+            "source_line": node.get("sourceLine"),
+            "source_column": node.get("sourceColumn"),
+            "line_origin": node.get("lineOrigin"),
+            "evidence": _compact_text(node.get("originalText")),
+            "provenance_source": "java_cfg_cics_metadata",
+        }
+        if metadata.get("cics_target_identifier"):
+            fact["target_identifier"] = _upper_nonempty(metadata["cics_target_identifier"])
+        if metadata.get("cics_dynamic_resolution_confidence") or operation.get("resolution_confidence"):
+            fact["resolution_confidence"] = metadata.get("cics_dynamic_resolution_confidence") or operation.get("resolution_confidence")
+        if metadata.get("cics_dynamic_resolution_note"):
+            fact["resolution_note"] = metadata["cics_dynamic_resolution_note"]
+        for argument in arguments:
+            name = str(argument.get("name", "")).upper()
+            value = argument.get("resolved_value") or argument.get("value")
+            if name == "COMMAREA":
+                fact["commarea"] = value
+            elif name == "LENGTH":
+                fact["length"] = value
+        operations.append({key: value for key, value in fact.items() if value not in ("", None, [])})
+    return _dedupe_cics_facts(operations)
+
+
+def _cics_resource_facts(report_dir: Path) -> list[dict]:
+    resources: list[dict] = []
+    for op in _cics_operation_facts(report_dir):
+        for argument in op.get("arguments", []) or []:
+            if not isinstance(argument, dict):
+                continue
+            name = str(argument.get("name", "")).upper()
+            kind = _CICS_RESOURCE_ARGUMENTS.get(name)
+            if not kind:
+                continue
+            if kind == "PROGRAM":
+                continue
+            value = argument.get("resolved_value") or argument.get("value")
+            if not value:
+                continue
+            resources.append({
+                "kind": kind,
+                "target": _upper_nonempty(value),
+                "target_source": argument.get("resolved_value_source") or argument.get("value_source", "unknown"),
+                "command": op.get("command"),
+                "paragraph": op.get("paragraph"),
+                "source_line": op.get("source_line"),
+                "source_column": op.get("source_column"),
+                "line_origin": op.get("line_origin"),
+                "evidence": op.get("evidence"),
+                "provenance_source": op.get("provenance_source"),
+            })
+    return _dedupe_cics_facts(resources)
+
+
+def _cics_error_handler_facts(report_dir: Path) -> list[dict]:
+    nodes, _ = _cfg_nodes_edges(report_dir)
+    handlers: list[dict] = []
+    for node in nodes:
+        metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+        paragraph = _metadata_paragraph(metadata)
+        common = {
+            "paragraph": paragraph,
+            "source_line": node.get("sourceLine"),
+            "source_column": node.get("sourceColumn"),
+            "line_origin": node.get("lineOrigin"),
+            "evidence": _compact_text(node.get("originalText")),
+            "provenance_source": "java_cfg_cics_metadata",
+        }
+        for binding in metadata.get("handler_bindings", []) or []:
+            if not isinstance(binding, dict):
+                continue
+            fact = {**common, **binding}
+            handlers.append({key: value for key, value in fact.items() if value not in ("", None)})
+        for argument in _normalize_cics_arguments(metadata.get("cics_arguments", [])):
+            name = str(argument.get("name", "")).upper()
+            if name not in {"RESP", "RESP2"}:
+                continue
+            handlers.append({
+                **common,
+                "handler_kind": "RESPONSE_CAPTURE",
+                "handled_key": name,
+                "target": argument.get("value"),
+                "action": "capture",
+            })
+    handlers.extend(_inactive_cics_error_handler_facts(report_dir))
+    return _dedupe_cics_facts(handlers)
+
+
+def _inactive_cics_error_handler_facts(report_dir: Path) -> list[dict]:
+    inactive_path = report_dir / "commented_out_code.json"
+    if not inactive_path.exists():
+        return []
+    blocks = _normalize_inactive_comment_blocks(load_json(inactive_path))
+    handlers: list[dict] = []
+    for block in blocks:
+        target_paragraph = block.get("target")
+        for statement in _iter_inactive_cics_statements(block):
+            statement_text = statement["statement"]
+            common = {
+                "paragraph": target_paragraph,
+                "source_line": statement.get("source_line"),
+                "line_origin": block.get("reason") or "commented_out_code",
+                "evidence": statement_text,
+                "active": False,
+                "provenance_source": "commented_out_code",
+            }
+            handlers.extend(_inactive_handle_facts(statement_text, common))
+            handlers.extend(_inactive_response_capture_facts(statement_text, common))
+    return handlers
+
+
+def _iter_inactive_cics_statements(block: dict) -> list[dict]:
+    result: list[dict] = []
+    collecting: list[str] = []
+    source_line = None
+    base_line = block.get("line_start")
+    for index, raw_line in enumerate(block.get("lines", []) or []):
+        line = str(raw_line or "").strip()
+        if not line:
+            continue
+        if not collecting and not re.search(r"\bEXEC\s+CICS\b", line, re.IGNORECASE):
+            continue
+        if not collecting:
+            source_line = base_line + index if isinstance(base_line, int) else None
+        collecting.append(line)
+        if re.search(r"\bEND-EXEC\b", line, re.IGNORECASE) or line.endswith("."):
+            result.append({
+                "statement": " ".join(" ".join(collecting).split()),
+                "source_line": source_line,
+            })
+            collecting = []
+            source_line = None
+    if collecting:
+        result.append({
+            "statement": " ".join(" ".join(collecting).split()),
+            "source_line": source_line,
+        })
+    return result
+
+
+def _inactive_handle_facts(statement: str, common: dict) -> list[dict]:
+    facts: list[dict] = []
+    handle_match = re.search(r"\bHANDLE\s+(CONDITION|AID|ABEND)\b", statement, re.IGNORECASE)
+    if handle_match:
+        handler_kind = f"HANDLE {handle_match.group(1).upper()}"
+        for name, value in re.findall(r"\b([A-Z][A-Z0-9-]*)\s*\(([^)]*)\)", statement, re.IGNORECASE):
+            facts.append({
+                **common,
+                "handler_kind": handler_kind,
+                "handled_key": name.upper(),
+                "target": _upper_nonempty(_clean_cics_arg(value)),
+                "action": "branch",
+            })
+    ignore_match = re.search(r"\bIGNORE\s+CONDITION\s+([A-Z][A-Z0-9-]*)\b", statement, re.IGNORECASE)
+    if ignore_match:
+        facts.append({
+            **common,
+            "handler_kind": "IGNORE CONDITION",
+            "handled_key": ignore_match.group(1).upper(),
+            "action": "ignore",
+        })
+    return [
+        {key: value for key, value in fact.items() if value not in ("", None)}
+        for fact in facts
+    ]
+
+
+def _inactive_response_capture_facts(statement: str, common: dict) -> list[dict]:
+    facts: list[dict] = []
+    for name in ["RESP", "RESP2"]:
+        value = _extract_cics_arg(statement, name)
+        if not value:
+            continue
+        facts.append({
+            **common,
+            "handler_kind": "RESPONSE_CAPTURE",
+            "handled_key": name,
+            "target": _upper_nonempty(_clean_cics_arg(value)),
+            "action": "capture",
+        })
+    return [
+        {key: value for key, value in fact.items() if value not in ("", None)}
+        for fact in facts
+    ]
+
+
+def _normalize_cics_arguments(arguments) -> list[dict]:
+    result: list[dict] = []
+    for argument in arguments or []:
+        if not isinstance(argument, dict):
+            continue
+        normalized = {
+            "name": str(argument.get("name", "")).upper(),
+            "value": _upper_nonempty(argument.get("value")),
+            "value_source": argument.get("value_source", "unknown"),
+        }
+        if argument.get("resolved_value"):
+            normalized["resolved_value"] = _upper_nonempty(argument["resolved_value"])
+        if argument.get("resolved_value_source"):
+            normalized["resolved_value_source"] = argument["resolved_value_source"]
+        result.append({key: value for key, value in normalized.items() if value not in ("", None)})
+    return result
+
+
+def _dedupe_cics_facts(facts: list[dict]) -> list[dict]:
+    result: list[dict] = []
+    seen: set[str] = set()
+    for fact in facts:
+        key = json.dumps(fact, sort_keys=True, default=str)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(fact)
+    return result
 
 
 def _extract_sql_tables(sql_text: str) -> list[str]:
@@ -5577,11 +6796,29 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
             report_dir, chunks_dir, program, verbose)
         summary["commented_out_code"] = generate_commented_out_code(
             report_dir, chunks_dir, program, verbose)
+        summary["controlflow.cfg"] = generate_controlflow_cfg(
+            report_dir, chunks_dir, program, verbose)
+        summary["dataflow.variable"] = generate_dataflow_variable_chunks(
+            report_dir, chunks_dir, program, verbose)
         summary["external_program_calls"] = generate_external_program_calls(
+            report_dir, chunks_dir, program, verbose)
+        summary["call_contract"] = generate_call_contract_chunks(
             report_dir, chunks_dir, program, verbose)
         summary["datasets_tables_resources"] = generate_datasets_tables_resources(
             report_dir, chunks_dir, program, verbose)
         summary["cics_operations"] = generate_cics_operations(
+            report_dir, chunks_dir, program, verbose)
+        summary["cics.operation"] = generate_cics_operation_chunks(
+            report_dir, chunks_dir, program, verbose)
+        summary["cics.program_transfer"] = generate_cics_program_transfer_chunks(
+            report_dir, chunks_dir, program, verbose)
+        summary["cics.resource"] = generate_cics_resource_chunks(
+            report_dir, chunks_dir, program, verbose)
+        summary["cics.error_handler"] = generate_cics_error_handler_chunks(
+            report_dir, chunks_dir, program, verbose)
+        summary["error_path"] = generate_error_path_chunks(
+            report_dir, chunks_dir, program, verbose)
+        summary["screen.interaction"] = generate_screen_interaction_chunks(
             report_dir, chunks_dir, program, verbose)
         summary["static_values"] = generate_static_values(
             report_dir, chunks_dir, program, verbose)
@@ -5590,6 +6827,8 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
         summary["variable_group"] = generate_variable_groups(
             report_dir, chunks_dir, program, verbose)
         summary["business_rules"] = generate_business_rules(
+            report_dir, chunks_dir, program, verbose)
+        summary["business_rule"] = generate_business_rule_chunks(
             report_dir, chunks_dir, program, verbose)
         summary["sql_operation"] = generate_sql_operations(
             report_dir, chunks_dir, program, verbose)
