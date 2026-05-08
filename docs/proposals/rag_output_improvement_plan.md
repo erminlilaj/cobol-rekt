@@ -1186,7 +1186,7 @@ Verification:
 
 ### Pre-6A Blocker Fixes
 
-Status: Done (Codex, 2026-05-03)
+Status: Done (2026-05-03)
 
 Goal: fix the four confirmed code correctness blockers identified in the 2026-05-03 critical review before Step 6A sample regeneration begins. These fixes are prerequisites for the Step 6A acceptance checks at lines `copybook_fields.field_source`, null-sentinel guard, fuzzy matching, and split-brain commit.
 
@@ -1240,11 +1240,11 @@ Fix: commit B1+B2+B3 fixes to `chunk_pipeline.py` in a single commit together wi
 - `_variable_matches_cics_arg("WS-CODE", "TRAN-CODE")` returns `False`.
 - `validate_chunks.py` accepts `comments` and `commented_out_code` chunk types.
 - All unit tests pass after the commit.
-- Codex: if you pick this step up mid-implementation, run `grep -n "field_source" chunk_pipeline.py` and `grep -n "var_u in arg_u" chunk_pipeline.py` to confirm which fixes are already applied.
+- To resume mid-implementation, run `grep -n "field_source" chunk_pipeline.py` and `grep -n "var_u in arg_u" chunk_pipeline.py` to confirm which fixes are already applied.
 
 ### Step 6A: Controlled Sample Regeneration And Evaluation Gate
 
-Status: Done For 20-Report Sample (Codex, 2026-05-03)
+Status: Done For 20-Report Sample (2026-05-03)
 
 Goal: prove Steps 0-5 and the redesigned Step 3/6 behavior on real reports before adding more chunk families.
 
