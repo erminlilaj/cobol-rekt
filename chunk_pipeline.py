@@ -5377,13 +5377,20 @@ def generate_controlflow_cfg(report_dir: Path, chunks_dir: Path,
 
     para_performs: dict[str, list[str]] = {}
     para_gotos: dict[str, list[tuple[str, str]]] = {}
+    para_conditioned_edges: dict[str, list[str]] = {}
 
     for edge in edges:
-        if edge.get(EDGE_TYPE) != "JUMPS_TO":
-            continue
         source_id = edge.get(EDGE_SOURCE)
         para = paragraph_by_id.get(source_id, "")
         if not para:
+            continue
+
+        # Collect conditioned edges (any type) for IF/EVALUATE branch accounting.
+        raw_cond = _strip_dialect_noise(str(edge.get("condition") or "")).strip()
+        if raw_cond:
+            para_conditioned_edges.setdefault(para, []).append(raw_cond)
+
+        if edge.get(EDGE_TYPE) != "JUMPS_TO":
             continue
         target_node = node_by_id.get(edge.get(EDGE_TARGET), {})
         target = (edge.get("toLabel") or _node_label(target_node)).strip()
@@ -5411,17 +5418,24 @@ def generate_controlflow_cfg(report_dir: Path, chunks_dir: Path,
             if c and t not in seen_cond:
                 seen_cond.add(t)
                 gotos_cond.append((t, c))
+        conditioned = para_conditioned_edges.get(para, [])
+        conditioned_edge_count = len(conditioned)
 
-        if not performs and not gotos_uncond and not gotos_cond:
+        if not performs and not gotos_uncond and not gotos_cond and not conditioned:
             continue
 
-        lines = [f"Control-flow for {para} in {program}:"]
+        lines = [
+            f"Control-flow for {para} in {program}:",
+            "  Note: sourceLine/sourceColumn are parser token coordinates",
+        ]
         if performs:
             lines.append(f"  PERFORM calls: {', '.join(performs)}")
         if gotos_uncond:
             lines.append(f"  GO TO (unconditional): {', '.join(gotos_uncond)}")
         for target, cond in gotos_cond[:8]:
             lines.append(f"  GO TO {target}: when {cond}")
+        for cond in conditioned[:8]:
+            lines.append(f"  Branch condition: {cond}")
 
         safe_para = re.sub(r"[^\w\-]", "_", para)
         metadata = {
@@ -5432,6 +5446,7 @@ def generate_controlflow_cfg(report_dir: Path, chunks_dir: Path,
             "paragraph": para,
             "performs": performs,
             "goto_targets": list(dict.fromkeys(t for t, _ in raw_gotos)),
+            "conditioned_edge_count": conditioned_edge_count,
         }
         write_chunk(
             chunks_dir,

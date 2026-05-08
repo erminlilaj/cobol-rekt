@@ -191,7 +191,7 @@ class ChunkPipelineTest(unittest.TestCase):
             count = generate_controlflow_cfg(report_dir, chunks_dir, "RULES.CBL", False)
 
             self.assertEqual(1, count)
-            chunk = chunk_pipeline.load_json(chunks_dir / "RULES.CBL__controlflow_cfg.json")
+            chunk = chunk_pipeline.load_json(chunks_dir / "RULES.CBL__controlflow_cfg__MAIN.json")
             self.assertEqual("controlflow.cfg", chunk["metadata"]["chunk_type"])
             self.assertEqual(2, chunk["metadata"]["conditioned_edge_count"])
             self.assertIn("ACCOUNT-STATUS = 'A'", chunk["text"])
