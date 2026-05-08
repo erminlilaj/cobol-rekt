@@ -29,6 +29,7 @@ import org.eclipse.lsp.cobol.core.engine.analysis.AnalysisContext;
 import org.eclipse.lsp.cobol.core.engine.dialects.DialectService;
 import org.eclipse.lsp.cobol.core.engine.errors.ErrorFinalizerService;
 import org.eclipse.lsp.cobol.core.preprocessor.delegates.GrammarPreprocessor;
+import org.eclipse.lsp.cobol.core.semantics.CopybooksRepository;
 import org.eclipse.lsp.cobol.dialects.TrueDialectServiceImpl;
 import org.eclipse.lsp.cobol.dialects.ibm.*;
 import org.smojol.common.dependency.ComponentsBuilder;
@@ -37,12 +38,14 @@ import org.smojol.common.navigation.CobolEntityNavigator;
 import org.smojol.common.navigation.EntityNavigatorBuilder;
 import org.smojol.common.dialect.LanguageDialect;
 import org.smojol.common.vm.structure.CobolDataStructure;
+import org.smojol.common.vm.structure.NullDataStructure;
 import org.smojol.toolkit.analysis.error.ParseDiagnosticRuntimeError;
 import org.smojol.toolkit.analysis.pipeline.config.SourceConfig;
 import org.smojol.toolkit.analysis.validation.DataStructureValidation;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -66,6 +69,14 @@ public class ParsePipeline {
     @Getter private ParserRuleContext tree;
     @Getter private List<ParseTree> transfersOfControl;
     @Getter private List<ParseTree> subroutineCalls;
+    @Getter private boolean lenient = false;
+    @Getter private List<SyntaxError> parseErrors = new ArrayList<>();
+    @Getter private int totalTreeNodes = 0;
+    @Getter private int sourceLineCount = 0;
+    @Getter private List<org.smojol.common.structure.SkippedVariable> skippedDataStructures = List.of();
+    @Getter private boolean dataStructureDegraded = false;
+    @Getter private ExtendedDocument extendedDocument;
+    @Getter private CopybooksRepository copybooksRepository;
 
     public ParsePipeline(SourceConfig sourceConfig, ComponentsBuilder ops, LanguageDialect dialect) {
         this.src = sourceConfig.source();
@@ -74,6 +85,19 @@ public class ParsePipeline {
         this.dialect = dialect;
         cpyExt = new String[]{"", ".cpy"};
         this.dialectJarPath = sourceConfig.dialectJarPath();
+    }
+
+    public void setLenient(boolean lenient) {
+        this.lenient = lenient;
+    }
+
+    private int countTreeNodes(ParseTree tree) {
+        if (tree == null) return 0;
+        int count = 1;
+        for (int i = 0; i < tree.getChildCount(); i++) {
+            count += countTreeNodes(tree.getChild(i));
+        }
+        return count;
     }
 
     public CobolEntityNavigator parse() throws IOException {
@@ -112,8 +136,10 @@ public class ParsePipeline {
                         new ExtendedDocument(resultWithErrors.getResult(), text),
                         dialect.analysisConfig(dialectJarPath),
                         benchmarkService.startSession(), src.toURI().toString(), text, CobolLanguageId.COBOL);
+        extendedDocument = ctx.getExtendedDocument();
         ctx.getAccumulatedErrors().addAll(resultWithErrors.getErrors());
         PipelineResult pipelineResult = pipeline.run(ctx);
+        copybooksRepository = ctx.getCopybooksRepository();
         Gson gson = new GsonBuilder().setPrettyPrinting().addSerializationExclusionStrategy(new ExclusionStrategy() {
             @Override
             public boolean shouldSkipField(FieldAttributes fieldAttributes) {
@@ -136,10 +162,18 @@ public class ParsePipeline {
 
         if (!ctx.getAccumulatedErrors().isEmpty()) {
             ctx.getAccumulatedErrors().forEach(e -> LOGGER.info(e.toString()));
-            throw new ParseDiagnosticRuntimeError("There were parsing errors!", ctx.getAccumulatedErrors());
+            if (!lenient) {
+                throw new ParseDiagnosticRuntimeError("There were parsing errors!", ctx.getAccumulatedErrors());
+            }
+            parseErrors = new ArrayList<>(ctx.getAccumulatedErrors());
+            LOGGER.warning("LENIENT MODE: " + parseErrors.size() +
+                " parse error(s) found but continuing with partial parse tree. " +
+                "ANTLR error recovery was applied.");
         }
 
         tree = lastStageResult.getData().getTree();
+        sourceLineCount = text.split("\n", -1).length;
+        totalTreeNodes = countTreeNodes(tree);
         ParseTreeWalker walker = new ParseTreeWalker();
         EntityNavigatorBuilder navigatorBuilder = ops.getCobolEntityNavigatorBuilder();
         dialect.verifyNoNullDialectStatements(tree, navigatorBuilder);
@@ -151,7 +185,17 @@ public class ParsePipeline {
 
         // TODO: The navigator itself can probably determine these things,
         navigator = navigatorBuilder.navigator(tree);
-        dataStructures = dataStructureValidation.run(ops.getDataStructureBuilder(navigator));
+        try {
+            org.smojol.common.structure.CobolDataStructureBuilder builder = ops.getDataStructureBuilder(navigator);
+            dataStructures = dataStructureValidation.run(builder);
+            skippedDataStructures = builder.getSkippedVariables();
+        } catch (RuntimeException e) {
+            if (!lenient) throw e;
+            LOGGER.warning("LENIENT MODE: Data structure validation failed: " + e.getMessage()
+                + ". Using NullDataStructure as fallback.");
+            dataStructures = new NullDataStructure("LENIENT_FALLBACK");
+            dataStructureDegraded = true;
+        }
         LOGGER.info(gson.toJson(timingResult));
         return navigator;
     }

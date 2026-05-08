@@ -1,0 +1,763 @@
+"""
+Sandbox Manager for COBOL Analysis
+
+Provides isolated environments for running COBOL analysis tools safely.
+Features:
+- Temporary sandboxing with auto-cleanup
+- Case-insensitive file resolution (Linux compatibility)
+- Automatic stub generation for missing copybooks
+"""
+
+import os
+import re
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Optional
+
+BMS_SOURCE_MARKERS = (b"DFHMSD", b"DFHMDI", b"DFHMDF", b"TIOAPFX")
+
+
+def copy_text_normalized(source: Path, target: Path) -> None:
+    """Copy a text source into the sandbox with stable Unix line endings."""
+    content = source.read_bytes()
+    if b"\r\n" in content:
+        content = content.replace(b"\r\n", b"\n")
+    content = b"\n".join(line.rstrip(b" \t") for line in content.split(b"\n"))
+    target.write_bytes(content)
+    try:
+        shutil.copystat(source, target)
+    except OSError:
+        pass
+
+
+def is_bms_source(path: Path) -> bool:
+    """Return True when a .cpy file looks like BMS macro source, not COBOL."""
+    try:
+        content = path.read_bytes().upper()
+    except OSError:
+        return False
+    return any(marker in content for marker in BMS_SOURCE_MARKERS)
+
+
+# ANSI colors for terminal output
+class Colors:
+    GREEN = '\033[0;32m'
+    RED = '\033[0;31m'
+    BLUE = '\033[0;34m'
+    YELLOW = '\033[1;33m'
+    MAGENTA = '\033[0;35m'
+    CYAN = '\033[0;36m'
+    NC = '\033[0m'
+
+    @staticmethod
+    def print_msg(msg, color=None):
+        if color is None:
+            color = Colors.NC
+        print(f"{color}{msg}{Colors.NC}")
+
+
+class CaseInsensitiveResolver:
+    """
+    Builds a case-insensitive lookup for files in a directory.
+    Essential for Linux environments where COBOL's case-insensitive nature
+    conflicts with the case-sensitive filesystem.
+    """
+    
+    # Common COBOL copybook extensions
+    COPYBOOK_EXTENSIONS = {'.cpy', '.cbl', '.cob', '.copy', ''}
+    
+    def __init__(self, search_dirs: list[Path], verbose: bool = False):
+        """
+        Initialize resolver by scanning directories.
+        
+        Args:
+            search_dirs: List of directories to scan for files
+            verbose: Print scanning progress
+        """
+        self._mapping: dict[str, Path] = {}  # lowercase_name -> actual_path
+        self._verbose = verbose
+        
+        for directory in search_dirs:
+            if directory.exists() and directory.is_dir():
+                self._scan_directory(directory)
+    
+    def _scan_directory(self, directory: Path):
+        """Recursively scan directory and build case-insensitive mapping."""
+        if self._verbose:
+            Colors.print_msg(f"  Scanning directory: {directory}", Colors.BLUE)
+        
+        count = 0
+        for path in directory.rglob("*"):
+            if path.is_file():
+                # Map by full lowercase name
+                key = path.name.lower()
+                if key not in self._mapping:
+                    self._mapping[key] = path
+                    count += 1
+                
+                # Also map by stem (without extension) for flexibility
+                stem_key = path.stem.lower()
+                if stem_key not in self._mapping:
+                    self._mapping[stem_key] = path
+        
+        if self._verbose:
+            Colors.print_msg(f"    Found {count} files", Colors.GREEN)
+    
+    def resolve(self, name: str) -> Optional[Path]:
+        """
+        Find file regardless of case.
+        
+        Args:
+            name: Filename or copybook name to resolve
+            
+        Returns:
+            Path to the actual file, or None if not found
+        """
+        name_lower = name.lower()
+        
+        # Try exact match first
+        if name_lower in self._mapping:
+            return self._mapping[name_lower]
+        
+        # Try with common extensions
+        for ext in self.COPYBOOK_EXTENSIONS:
+            candidate = f"{name_lower}{ext}"
+            if candidate in self._mapping:
+                return self._mapping[candidate]
+        
+        return None
+    
+    def get_all_mappings(self) -> dict[str, Path]:
+        """Return all resolved mappings for debugging."""
+        return self._mapping.copy()
+
+
+class AutoStubGenerator:
+    """
+    Automatically generates stub copybooks for missing dependencies.
+    This allows the parser to "fail open" - building CFG for available code
+    while gracefully handling missing dependencies.
+    """
+    
+    # Regex to match COPY statements in COBOL
+    # Handles: COPY NAME. / COPY 'NAME'. / COPY "NAME". / COPY NAME OF LIBRARY.
+    COPY_PATTERN = re.compile(
+        r'COPY\s+[\'"]?([A-Za-z0-9_-]+)[\'"]?(?:\s+(?:OF|IN)\s+[A-Za-z0-9_-]+)?',
+        re.IGNORECASE
+    )
+    
+    # Regex to match EXEC SQL INCLUDE statements (for SQL copybooks)
+    # Handles: EXEC SQL INCLUDE NAME END-EXEC
+    SQL_INCLUDE_PATTERN = re.compile(
+        r'EXEC\s+SQL\s+INCLUDE\s+([A-Za-z0-9_-]+)',
+        re.IGNORECASE
+    )
+    
+    # Minimal valid COBOL stub content (fixed format: 6 spaces + *)
+    STUB_CONTENT = """\
+      * STUB COPYBOOK - Auto-generated by Sandbox Manager
+      * Original copybook not found or incompatible with parser
+      * This stub allows parsing to continue gracefully
+"""
+    
+    def __init__(self, verbose: bool = False):
+        self._verbose = verbose
+        self._stubs_created: list[str] = []
+    
+    def scan_for_copy_statements(self, source_file: Path) -> set[str]:
+        """
+        Scan a COBOL source file for COPY and EXEC SQL INCLUDE statements.
+        
+        Args:
+            source_file: Path to COBOL source file
+            
+        Returns:
+            Set of copybook names referenced in the file
+        """
+        try:
+            content = source_file.read_text(encoding='utf-8', errors='ignore')
+        except Exception as e:
+            if self._verbose:
+                Colors.print_msg(f"  Error reading {source_file}: {e}", Colors.RED)
+            return set()
+        
+        # Find COPY statements
+        copy_matches = self.COPY_PATTERN.findall(content)
+        
+        # Find EXEC SQL INCLUDE statements
+        sql_matches = self.SQL_INCLUDE_PATTERN.findall(content)
+        
+        all_matches = set(copy_matches) | set(sql_matches)
+        
+        if self._verbose and all_matches:
+            Colors.print_msg(f"  Found {len(copy_matches)} COPY + {len(sql_matches)} SQL INCLUDE in {source_file.name}", Colors.BLUE)
+        
+        return all_matches
+    
+    def generate_stubs(self, 
+                       copybook_names: set[str], 
+                       target_dir: Path,
+                       resolver: CaseInsensitiveResolver) -> list[str]:
+        """
+        Generate stub files for missing copybooks.
+        
+        Args:
+            copybook_names: Set of copybook names to check
+            target_dir: Directory to create stubs in
+            resolver: Case-insensitive resolver to check for existing files
+            
+        Returns:
+            List of stub filenames created
+        """
+        stubs_created = []
+        
+        for name in copybook_names:
+            # Check if copybook exists (case-insensitive)
+            existing = resolver.resolve(name)
+            if existing is not None:
+                continue
+            
+            # Check if already in target directory
+            target_file = target_dir / f"{name}.cpy"
+            if target_file.exists():
+                continue
+            
+            # Create stub
+            try:
+                target_file.write_text(self.STUB_CONTENT, encoding='utf-8')
+                stubs_created.append(name)
+                
+                if self._verbose:
+                    Colors.print_msg(f"    [STUB] Created {target_file.name}", Colors.YELLOW)
+            except Exception as e:
+                if self._verbose:
+                    Colors.print_msg(f"    [ERROR] Failed to create stub for {name}: {e}", Colors.RED)
+        
+        self._stubs_created.extend(stubs_created)
+        return stubs_created
+
+    def write_incompatible_stub(self, name: str, target_file: Path, reason: str) -> str:
+        """Write a stub for a resolved copybook that is not valid COBOL source."""
+        content = (
+            self.STUB_CONTENT
+            + f"      * Reason: {reason}\n"
+            + f"      * Original copybook name: {name}\n"
+        )
+        target_file.write_text(content, encoding="utf-8")
+        if name not in self._stubs_created:
+            self._stubs_created.append(name)
+        if self._verbose:
+            Colors.print_msg(f"    [STUB] Replaced incompatible {target_file.name}: {reason}", Colors.YELLOW)
+        return name
+    
+    @property
+    def stubs_created(self) -> list[str]:
+        """Return list of all stubs created by this generator."""
+        return self._stubs_created.copy()
+
+
+class CopybookPreprocessor:
+    """
+    Preprocesses copybooks to fix common format issues, especially
+    those generated by BMS screen painters or other tools.
+    
+    Common issues fixed:
+    - Empty lines in indicator area
+    - Content in wrong columns
+    - Non-standard continuation markers
+    """
+    
+    def __init__(self, verbose: bool = False):
+        self._verbose = verbose
+        self._files_processed = 0
+        self._files_fixed = 0
+    
+    def preprocess_file(self, filepath: Path) -> bool:
+        """
+        Preprocess a copybook file to fix common format issues.
+        
+        Args:
+            filepath: Path to copybook file
+            
+        Returns:
+            True if file was modified, False otherwise
+        """
+        try:
+            content = filepath.read_text(encoding='utf-8', errors='ignore')
+        except Exception as e:
+            if self._verbose:
+                Colors.print_msg(f"    [WARN] Could not read {filepath.name}: {e}", Colors.YELLOW)
+            return False
+        
+        lines = content.split('\n')
+        modified = False
+        new_lines = []
+        
+        for i, line in enumerate(lines):
+            new_line = self._fix_line(line, i + 1)
+            if new_line != line:
+                modified = True
+            new_lines.append(new_line)
+        
+        if modified:
+            try:
+                filepath.write_text('\n'.join(new_lines), encoding='utf-8')
+                self._files_fixed += 1
+                if self._verbose:
+                    Colors.print_msg(f"    [FIX] Preprocessed {filepath.name}", Colors.GREEN)
+            except Exception as e:
+                if self._verbose:
+                    Colors.print_msg(f"    [WARN] Could not write {filepath.name}: {e}", Colors.YELLOW)
+                return False
+        
+        self._files_processed += 1
+        return modified
+    
+    def _fix_line(self, line: str, line_num: int) -> str:
+        """
+        Fix a single line to comply with COBOL fixed format.
+        
+        COBOL fixed format:
+        - Columns 1-6: Sequence number area (optional, usually spaces)
+        - Column 7: Indicator area (* for comment, - for continuation, space for code)
+        - Columns 8-11: Area A (divisions, sections, paragraphs, level indicators)
+        - Columns 12-72: Area B (statements)
+        - Columns 73-80: Identification area (optional)
+        """
+        # Handle empty or very short lines
+        if len(line.strip()) == 0:
+            return ''  # Empty lines are ok
+        
+        if len(line) < 7:
+            # Line too short, pad with spaces
+            return line.ljust(7)
+        
+        # Check if this looks like a comment line but indicator is wrong
+        # Some tools put * at column 7 but with wrong spacing before
+        stripped = line.lstrip()
+        if stripped.startswith('*'):
+            # It's a comment - ensure proper format (6 spaces + *)
+            comment_text = stripped[1:].strip()
+            return f"      * {comment_text}"
+        
+        # Check indicator area (column 7, 0-indexed = 6)
+        indicator = line[6] if len(line) > 6 else ' '
+        
+        # Valid indicators are: space, *, -, /, D, d
+        valid_indicators = {' ', '*', '-', '/', 'D', 'd'}
+        
+        if indicator not in valid_indicators:
+            # Invalid indicator - likely a format issue
+            # Try to determine what it should be
+            if line[6:].lstrip().startswith('0') and line[6:].lstrip()[:2].isdigit():
+                # Looks like a level number starting at wrong column
+                # This is code that should start at column 8
+                code_part = line[6:].lstrip()
+                return f"       {code_part}"
+            else:
+                # Unknown format - make it a comment to be safe
+                if self._verbose:
+                    Colors.print_msg(f"      Line {line_num}: Converting to comment (invalid indicator '{indicator}')", Colors.YELLOW)
+                return f"      * {line.strip()}"
+        
+        return line
+    
+    def preprocess_directory(self, directory: Path) -> int:
+        """
+        Preprocess all copybook files in a directory.
+        
+        Args:
+            directory: Path to directory containing copybooks
+            
+        Returns:
+            Number of files that were modified
+        """
+        count = 0
+        copybook_extensions = {'.cpy', '.copy', '.cbl', '.cob'}
+        
+        for filepath in directory.iterdir():
+            if filepath.is_file() and filepath.suffix.lower() in copybook_extensions:
+                if self.preprocess_file(filepath):
+                    count += 1
+        
+        return count
+
+class SandboxEnvironment:
+    """
+    Context manager for isolated COBOL analysis environment.
+    
+    Creates a temporary directory structure:
+        temp_dir/
+            source/           # Symlinks/copies of source files
+            copybooks/        # Resolved copybooks + generated stubs
+    
+    Benefits:
+    - Never modifies original files
+    - Isolates analysis from user's environment
+    - Auto-generates stubs for missing dependencies
+    - Resolves case-sensitivity issues on Linux
+    - Cleans up automatically on exit
+    
+    Usage:
+        with SandboxEnvironment(source_file, [copybook_dir]) as sandbox:
+            run_analysis(sandbox.sandbox_source, sandbox.sandbox_copybooks)
+    """
+    
+    def __init__(self, 
+                 source_file: Path,
+                 copybook_dirs: list[Path],
+                 auto_stub: bool = True,
+                 verbose: bool = False,
+                 keep_sandbox: bool = False):
+        """
+        Initialize sandbox environment.
+        
+        Args:
+            source_file: Path to main COBOL source file
+            copybook_dirs: List of directories containing copybooks
+            auto_stub: Automatically generate stubs for missing copybooks
+            verbose: Print detailed progress messages
+            keep_sandbox: Don't delete sandbox on exit (for debugging)
+        """
+        self._source_file = Path(source_file).resolve()
+        self._copybook_dirs = [Path(d).resolve() for d in copybook_dirs if Path(d).exists()]
+        self._auto_stub = auto_stub
+        self._verbose = verbose
+        self._keep_sandbox = keep_sandbox
+        
+        self._temp_dir: Optional[tempfile.TemporaryDirectory] = None
+        self._sandbox_root: Optional[Path] = None
+        self._sandbox_source_dir: Optional[Path] = None
+        self._sandbox_copybooks_dir: Optional[Path] = None
+        self._sandbox_source_file: Optional[Path] = None
+        
+        self._resolver: Optional[CaseInsensitiveResolver] = None
+        self._stub_generator: Optional[AutoStubGenerator] = None
+        self._stubs_created: list[str] = []
+    
+    def __enter__(self) -> 'SandboxEnvironment':
+        """Set up the sandbox environment."""
+        if self._verbose:
+            Colors.print_msg("[Sandbox] Creating isolated environment...", Colors.CYAN)
+        
+        # Create temporary directory
+        self._temp_dir = tempfile.TemporaryDirectory(prefix="cobol_sandbox_")
+        self._sandbox_root = Path(self._temp_dir.name)
+        
+        # Create directory structure
+        self._sandbox_source_dir = self._sandbox_root / "source"
+        self._sandbox_copybooks_dir = self._sandbox_root / "copybooks"
+        self._sandbox_source_dir.mkdir()
+        self._sandbox_copybooks_dir.mkdir()
+        
+        if self._verbose:
+            Colors.print_msg(f"  Sandbox root: {self._sandbox_root}", Colors.BLUE)
+        
+        # Initialize case-insensitive resolver
+        all_search_dirs = self._copybook_dirs + [self._source_file.parent]
+        self._resolver = CaseInsensitiveResolver(all_search_dirs, verbose=self._verbose)
+        
+        # Link/copy source file to sandbox
+        self._setup_source_file()
+        
+        # Copy resolved copybooks to sandbox
+        self._setup_copybooks()
+        
+        # Preprocess copybooks to fix format issues (BMS maps, etc.)
+        self._preprocess_copybooks()
+        
+        # Syntax normalization (fix spaces before parentheses, etc.)
+        self._normalize_syntax()
+        
+        # Auto-generate stubs for missing copybooks
+        if self._auto_stub:
+            self._generate_stubs()
+        
+        if self._verbose:
+            Colors.print_msg("[Sandbox] Environment ready", Colors.GREEN)
+        
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Clean up the sandbox environment."""
+        if self._verbose:
+            if self._stubs_created:
+                Colors.print_msg(f"[Sandbox] Created {len(self._stubs_created)} stubs: {', '.join(self._stubs_created)}", Colors.YELLOW)
+        
+        if self._keep_sandbox:
+            if self._verbose:
+                Colors.print_msg(f"[Sandbox] Keeping sandbox at: {self._sandbox_root}", Colors.MAGENTA)
+            # Prevent cleanup
+            self._temp_dir._finalizer.detach()
+        else:
+            if self._verbose:
+                Colors.print_msg("[Sandbox] Cleaning up...", Colors.CYAN)
+        
+        # TemporaryDirectory handles cleanup automatically
+        if self._temp_dir:
+            try:
+                if not self._keep_sandbox:
+                    self._temp_dir.cleanup()
+            except Exception:
+                pass  # Ignore cleanup errors
+        
+        return False  # Don't suppress exceptions
+    
+    def _setup_source_file(self):
+        """Copy the source file to sandbox (copy, not symlink, to allow preprocessing)."""
+        self._sandbox_source_file = self._sandbox_source_dir / self._source_file.name
+        
+        # Always copy (not symlink) so we can preprocess the file.
+        # Normalize CRLF so fixed-format column checks do not count '\r'.
+        copy_text_normalized(self._source_file, self._sandbox_source_file)
+        if self._verbose:
+            Colors.print_msg(f"  Copied source: {self._source_file.name}", Colors.GREEN)
+    
+    def _setup_copybooks(self):
+        """
+        Copy resolved copybooks to sandbox.
+        Uses case-insensitive resolution to find all copybooks.
+        Also copies all copybook-like files from source directories.
+        """
+        # First, copy ALL copybook files from source directories to sandbox
+        # This ensures we don't miss any dependencies
+        copybook_extensions = {'.cpy', '.copy'}
+        copied = 0
+        
+        for search_dir in self._copybook_dirs + [self._source_file.parent]:
+            if not search_dir.exists():
+                continue
+            for path in search_dir.iterdir():
+                if path.is_file() and path.suffix.lower() in copybook_extensions:
+                    # Skip backup files
+                    if '.bak' in path.name:
+                        continue
+                    
+                    # Use the stem as the canonical name with .cpy extension
+                    target = self._sandbox_copybooks_dir / f"{path.stem}.cpy"
+                    if not target.exists():
+                        try:
+                            if is_bms_source(path):
+                                stub_gen = AutoStubGenerator(verbose=self._verbose)
+                                stub_gen.write_incompatible_stub(
+                                    path.stem,
+                                    target,
+                                    "BMS macro source detected",
+                                )
+                                self._stubs_created.append(path.stem)
+                            else:
+                                copy_text_normalized(path, target)
+                            copied += 1
+                        except Exception as e:
+                            if self._verbose:
+                                Colors.print_msg(f"    [WARN] Could not copy {path.name}: {e}", Colors.YELLOW)
+        
+        # Now scan source for COPY/INCLUDE statements and copy any resolved ones
+        stub_gen = AutoStubGenerator(verbose=False)
+        needed_copybooks = stub_gen.scan_for_copy_statements(self._source_file)
+        
+        if self._verbose:
+            Colors.print_msg(f"  Source references {len(needed_copybooks)} copybooks", Colors.BLUE)
+        
+        pending = set(needed_copybooks)
+        seen = set(pending)
+        while pending:
+            name = pending.pop()
+            resolved = self._resolver.resolve(name)
+            if resolved:
+                target = self._sandbox_copybooks_dir / f"{name}.cpy"
+                try:
+                    if is_bms_source(resolved):
+                        stub_gen.write_incompatible_stub(
+                            name,
+                            target,
+                            "BMS macro source detected",
+                        )
+                    else:
+                        copy_text_normalized(resolved, target)
+                    copied += 1
+                    nested = stub_gen.scan_for_copy_statements(resolved) - seen
+                    seen.update(nested)
+                    pending.update(nested)
+                except Exception as e:
+                    if self._verbose:
+                        Colors.print_msg(f"    [WARN] Could not copy {resolved.name}: {e}", Colors.YELLOW)
+        
+        if self._verbose:
+            Colors.print_msg(f"  Copied {copied} copybooks to sandbox", Colors.GREEN)
+    
+    def _preprocess_copybooks(self):
+        """Preprocess all copybooks to fix format issues."""
+        preprocessor = CopybookPreprocessor(verbose=self._verbose)
+        fixed_count = preprocessor.preprocess_directory(self._sandbox_copybooks_dir)
+        
+        if self._verbose and fixed_count > 0:
+            Colors.print_msg(f"  Fixed format issues in {fixed_count} copybooks", Colors.GREEN)
+    
+    def _normalize_syntax(self):
+        """
+        Normalize CICS/SQL syntax to be compatible with the Che parser.
+        Fixes common issues like spaces before parentheses.
+        """
+        try:
+            from .cobol_preprocessor import preprocess_directory, preprocess_file
+        except ImportError:
+            if self._verbose:
+                Colors.print_msg("  [WARN] cobol_preprocessor not found, skipping syntax normalization", Colors.YELLOW)
+            return
+        
+        total_changes = 0
+        
+        # Debug: List files to be preprocessed
+        if self._verbose:
+            Colors.print_msg(f"  [DEBUG] Sandbox copybooks directory: {self._sandbox_copybooks_dir}", Colors.CYAN)
+            copybook_files = list(self._sandbox_copybooks_dir.iterdir()) if self._sandbox_copybooks_dir.exists() else []
+            Colors.print_msg(f"  [DEBUG] Found {len(copybook_files)} copybook files", Colors.CYAN)
+            for f in copybook_files[:10]:  # Show first 10
+                Colors.print_msg(f"    - {f.name}", Colors.CYAN)
+            if len(copybook_files) > 10:
+                Colors.print_msg(f"    ... and {len(copybook_files) - 10} more", Colors.CYAN)
+        
+        # Preprocess source file (if it's a copy, not a symlink)
+        if self._sandbox_source_file and self._sandbox_source_file.is_file():
+            if not self._sandbox_source_file.is_symlink():
+                changes = preprocess_file(str(self._sandbox_source_file), verbose=self._verbose)
+                total_changes += len(changes)
+                if self._verbose and changes:
+                    Colors.print_msg(f"  [DEBUG] Source file: {len(changes)} fixes", Colors.GREEN)
+        
+        # Preprocess all copybooks
+        stats = preprocess_directory(str(self._sandbox_copybooks_dir), verbose=self._verbose)
+        total_changes += stats.get('total_changes', 0)
+        
+        if self._verbose:
+            Colors.print_msg(f"  [DEBUG] Copybook preprocessing: {stats.get('files_changed', 0)} files changed, {stats.get('total_changes', 0)} fixes", Colors.GREEN)
+        
+        if self._verbose and total_changes > 0:
+            Colors.print_msg(f"  Normalized syntax: {total_changes} fixes applied", Colors.GREEN)
+    
+    def _generate_stubs(self):
+        """Generate stubs for any missing copybooks."""
+        self._stub_generator = AutoStubGenerator(verbose=self._verbose)
+        
+        # Scan for all COPY statements (including in sandbox copybooks)
+        all_copies = set()
+        
+        # Scan main source
+        all_copies.update(self._stub_generator.scan_for_copy_statements(self._sandbox_source_file))
+        
+        # Scan all copybooks in sandbox
+        for cpy_file in self._sandbox_copybooks_dir.glob("*"):
+            if cpy_file.is_file():
+                all_copies.update(self._stub_generator.scan_for_copy_statements(cpy_file))
+        
+        # Build resolver for sandbox copybooks directory
+        sandbox_resolver = CaseInsensitiveResolver([self._sandbox_copybooks_dir], verbose=False)
+        
+        # Generate stubs for missing ones
+        missing_stubs = self._stub_generator.generate_stubs(
+            all_copies, 
+            self._sandbox_copybooks_dir,
+            sandbox_resolver
+        )
+        self._stubs_created = list(dict.fromkeys(self._stubs_created + missing_stubs))
+    
+    @property
+    def sandbox_source(self) -> Path:
+        """Path to the source file within the sandbox."""
+        if self._sandbox_source_file is None:
+            raise RuntimeError("Sandbox not initialized. Use within 'with' block.")
+        return self._sandbox_source_file
+    
+    @property
+    def sandbox_source_dir(self) -> Path:
+        """Path to the source directory within the sandbox."""
+        if self._sandbox_source_dir is None:
+            raise RuntimeError("Sandbox not initialized. Use within 'with' block.")
+        return self._sandbox_source_dir
+    
+    @property
+    def sandbox_copybooks(self) -> Path:
+        """Path to the copybooks directory within the sandbox."""
+        if self._sandbox_copybooks_dir is None:
+            raise RuntimeError("Sandbox not initialized. Use within 'with' block.")
+        return self._sandbox_copybooks_dir
+    
+    @property
+    def stubs_created(self) -> list[str]:
+        """List of stub copybook names that were auto-generated."""
+        return self._stubs_created.copy()
+
+
+# Convenience function for simple usage
+def create_sandbox(source_file: str | Path, 
+                   copybook_dirs: list[str | Path] | None = None,
+                   auto_stub: bool = True,
+                   verbose: bool = False) -> SandboxEnvironment:
+    """
+    Create a sandbox environment for COBOL analysis.
+    
+    Args:
+        source_file: Path to main COBOL source file
+        copybook_dirs: List of directories containing copybooks (defaults to source dir)
+        auto_stub: Automatically generate stubs for missing copybooks
+        verbose: Print detailed progress messages
+        
+    Returns:
+        SandboxEnvironment context manager
+    """
+    source_path = Path(source_file).resolve()
+    
+    if copybook_dirs is None:
+        copybook_dirs = [source_path.parent]
+    else:
+        copybook_dirs = [Path(d) for d in copybook_dirs]
+    
+    return SandboxEnvironment(
+        source_file=source_path,
+        copybook_dirs=copybook_dirs,
+        auto_stub=auto_stub,
+        verbose=verbose
+    )
+
+
+# Self-test when run directly
+if __name__ == "__main__":
+    import sys
+    
+    if len(sys.argv) < 2:
+        print("Usage: python sandbox_manager.py <cobol_source_file> [copybook_dir]")
+        print("\nThis will create a sandbox and show what would be set up.")
+        sys.exit(1)
+    
+    source = Path(sys.argv[1])
+    copybook_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else source.parent
+    
+    if not source.exists():
+        Colors.print_msg(f"Error: File not found: {source}", Colors.RED)
+        sys.exit(1)
+    
+    Colors.print_msg("=" * 60, Colors.CYAN)
+    Colors.print_msg("Sandbox Manager Test", Colors.CYAN)
+    Colors.print_msg("=" * 60, Colors.CYAN)
+    
+    with SandboxEnvironment(source, [copybook_dir], auto_stub=True, verbose=True, keep_sandbox=True) as sandbox:
+        Colors.print_msg("\n--- Sandbox Paths ---", Colors.GREEN)
+        Colors.print_msg(f"Source file: {sandbox.sandbox_source}", Colors.NC)
+        Colors.print_msg(f"Copybooks dir: {sandbox.sandbox_copybooks}", Colors.NC)
+        
+        # List contents
+        Colors.print_msg("\n--- Sandbox Contents ---", Colors.GREEN)
+        Colors.print_msg("Source directory:", Colors.BLUE)
+        for f in sandbox.sandbox_source_dir.iterdir():
+            Colors.print_msg(f"  {f.name}", Colors.NC)
+        
+        Colors.print_msg("Copybooks directory:", Colors.BLUE)
+        for f in sandbox.sandbox_copybooks.iterdir():
+            is_stub = f.name.replace('.cpy', '') in sandbox.stubs_created
+            marker = " [STUB]" if is_stub else ""
+            Colors.print_msg(f"  {f.name}{marker}", Colors.YELLOW if is_stub else Colors.NC)
+    
+    Colors.print_msg("\n" + "=" * 60, Colors.CYAN)
+    Colors.print_msg("Test complete!", Colors.GREEN)

@@ -21,7 +21,7 @@ import org.smojol.common.vm.structure.CobolDataStructure;
 import java.util.*;
 import java.util.logging.Logger;
 
-public class CobolFlowNode implements FlowNode {
+public class CobolFlowNode implements FlowNode, VariableUsageProvider {
     private static final Logger LOGGER = Logger.getLogger(CobolFlowNode.class.getName());
     protected final String uuid;
     protected List<FlowNode> outgoingNodes = new ArrayList<>();
@@ -163,6 +163,16 @@ public class CobolFlowNode implements FlowNode {
 
     @Override
     public void resolve(SmojolSymbolTable symbolTable, CobolDataStructure dataStructures) {
+    }
+
+    @Override
+    public List<String> variablesRead() {
+        return List.of();
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return List.of();
     }
 
     public void acceptUnvisited(FlowNodeVisitor visitor, FlowNodeCondition stopCondition, int level) {

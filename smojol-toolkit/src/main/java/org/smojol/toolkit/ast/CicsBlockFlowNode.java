@@ -8,6 +8,7 @@ import org.smojol.common.idms.DialectContainerNode;
 import org.smojol.common.vm.stack.StackFrames;
 
 import java.util.List;
+import java.util.Map;
 
 public class CicsBlockFlowNode extends CobolFlowNode {
 
@@ -28,5 +29,12 @@ public class CicsBlockFlowNode extends CobolFlowNode {
     @Override
     public List<SemanticCategory> categories() {
         return ImmutableList.of(SemanticCategory.TRANSACTION);
+    }
+
+    @Override
+    public Map<String, Object> metadata() {
+        List<Map<String, Object>> handlerBindings = CicsHandleBindingParser.parse(originalText());
+        if (handlerBindings.isEmpty()) return Map.of();
+        return Map.of("handler_bindings", handlerBindings);
     }
 }

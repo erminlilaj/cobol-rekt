@@ -99,4 +99,16 @@ public class SubtractFlowNode extends CobolFlowNode {
         CobolParser.SubtractStatementContext subtractStatement = new SyntaxIdentity<CobolParser.SubtractStatementContext>(executionContext).get();
         return subtractStatement.subtractFromGivingStatement() != null;
     }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.combine(
+                VariableUsageCollector.variableNamesIn(subtrahendExpressions),
+                VariableUsageCollector.variableNamesIn(minuendExpressions));
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(destinationExpressions);
+    }
 }

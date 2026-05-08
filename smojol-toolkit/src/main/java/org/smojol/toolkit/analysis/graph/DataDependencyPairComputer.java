@@ -39,31 +39,43 @@ public class DataDependencyPairComputer {
         }
         if (node.type() == FlowNodeType.MOVE) {
             MoveFlowNode move = (MoveFlowNode) node;
+            if (move.getFromExpressions().isEmpty() || move.getToExpressions().isEmpty())
+                return ImmutablePair.of(ImmutableList.of(), ImmutableList.of());
             List<CobolDataStructure> froms = staticExpressionsFromSingle(move.getFromExpressions().getFirst(), dataRoot);
             List<CobolDataStructure> tos = staticExpressionsFromMany(move.getToExpressions(), dataRoot);
             return ImmutablePair.of(froms, tos);
         } else if (node.type() == FlowNodeType.COMPUTE) {
             ComputeFlowNode compute = (ComputeFlowNode) node;
+            if (compute.getRhsExpression() == null || compute.getDestinationExpressions().isEmpty())
+                return ImmutablePair.of(ImmutableList.of(), ImmutableList.of());
             List<CobolDataStructure> froms = staticExpressionsFromSingle(compute.getRhsExpression(), dataRoot);
             List<CobolDataStructure> tos = staticExpressionsFromMany(compute.getDestinationExpressions(), dataRoot);
             return ImmutablePair.of(froms, tos);
         } else if (node.type() == FlowNodeType.ADD) {
             AddFlowNode add = (AddFlowNode) node;
+            if (add.getToExpressions().isEmpty() && add.getFromExpressions().isEmpty())
+                return ImmutablePair.of(ImmutableList.of(), ImmutableList.of());
             List<CobolDataStructure> froms = staticExpressionsFromMany(add.getToExpressions(), dataRoot);
             List<CobolDataStructure> tos = staticExpressionsFromMany(add.getFromExpressions(), dataRoot);
             return ImmutablePair.of(froms, tos);
         } else if (node.type() == FlowNodeType.SUBTRACT) {
             SubtractFlowNode subtract = (SubtractFlowNode) node;
+            if (subtract.getMinuendExpressions().isEmpty() && subtract.getSubtrahendExpressions().isEmpty())
+                return ImmutablePair.of(ImmutableList.of(), ImmutableList.of());
             List<CobolDataStructure> minuends = staticExpressionsFromMany(subtract.getMinuendExpressions(), dataRoot);
             List<CobolDataStructure> subtrahends = staticExpressionsFromMany(subtract.getSubtrahendExpressions(), dataRoot);
             return ImmutablePair.of(subtrahends, minuends);
         } else if (node.type() == FlowNodeType.MULTIPLY) {
             MultiplyFlowNode multiply = (MultiplyFlowNode) node;
+            if (multiply.getLhsExpression() == null || multiply.getRhsExpressions().isEmpty())
+                return ImmutablePair.of(ImmutableList.of(), ImmutableList.of());
             List<CobolDataStructure> lhses = staticExpressionsFromSingle(multiply.getLhsExpression(), dataRoot);
             List<CobolDataStructure> rhses = staticExpressionsFromMany(multiply.getRhsExpressions(), dataRoot);
             return ImmutablePair.of(lhses, rhses);
         } else if (node.type() == FlowNodeType.DIVIDE) {
             DivideFlowNode divide = (DivideFlowNode) node;
+            if (divide.getDivisorExpression() == null || divide.getDividendExpressions().isEmpty())
+                return ImmutablePair.of(ImmutableList.of(), ImmutableList.of());
             List<CobolDataStructure> dividends = staticExpressionsFromMany(divide.getDividendExpressions(), dataRoot);
             List<CobolDataStructure> divisors = staticExpressionsFromSingle(divide.getDivisorExpression(), dataRoot);
             return ImmutablePair.of(divisors, dividends);

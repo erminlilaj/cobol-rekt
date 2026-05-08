@@ -13,7 +13,7 @@ public class ConversionStrategy {
     public static TypedRecord convert(TypedRecord record, AbstractCobolType targetDataType) {
         return switch (targetDataType) {
             case STRING -> TypedRecord.typedString(record.value().toString());
-            case NUMBER -> TypedRecord.typedNumber(Double.parseDouble(record.value().toString()));
+            case NUMBER -> TypedRecord.typedNumber(Double.parseDouble(record.value().toString().replace(',', '.')));
             case BOOLEAN -> TypedRecord.typedBoolean(Boolean.parseBoolean(record.value().toString()));
             default -> throw new ClassCastException(String.format("Cannot cast %s to requested type: %s", record, targetDataType));
         };
@@ -26,7 +26,7 @@ public class ConversionStrategy {
 
     public static Double asNumber(String s) {
         if (s.trim().isEmpty()) return 0.;
-        return Double.parseDouble(s);
+        return Double.parseDouble(s.replace(',', '.'));
     }
 
     public static String asString(String s) {

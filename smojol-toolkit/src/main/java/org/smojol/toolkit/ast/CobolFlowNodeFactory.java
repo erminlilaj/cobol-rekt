@@ -10,6 +10,7 @@ import org.smojol.common.idms.DialectContainerNode;
 import org.eclipse.lsp.cobol.core.CobolParser;
 import org.eclipse.lsp.cobol.dialects.idms.IdmsParser;
 import org.smojol.common.vm.stack.StackFrames;
+import com.mojo.algorithms.domain.FlowNodeType;
 
 public class CobolFlowNodeFactory {
     public static FlowNode newNode(ParseTree parseTree, FlowNode scope, FlowNodeService nodeService, StackFrames stackFrames) {
@@ -41,6 +42,50 @@ public class CobolFlowNodeFactory {
             return new DisplayFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.MoveStatementContext.class))
             return new MoveFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.SetStatementContext.class))
+            return new SetFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.WriteStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.WRITE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.OpenStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.OPEN);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.CloseStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CLOSE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ReadStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.READ);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.InitializeStatementContext.class))
+            return new InitializeFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ContinueStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CONTINUE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.InspectStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.INSPECT);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.StartStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.START);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.RewriteStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.REWRITE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.AcceptStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.ACCEPT);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ReturnStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.RETURN);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.DeleteStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.DELETE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.SortStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.SORT);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.MergeStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.MERGE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ReleaseStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.RELEASE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.CancelStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CANCEL);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.JsonStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.JSON);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.XmlParseStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.XML_PARSE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.XmlGenerateContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.XML_GENERATE);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.StringStatementContext.class))
+            return new StringFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.UnstringStatementContext.class))
+            return new UnstringFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ComputeStatementContext.class))
             return new ComputeFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.AddStatementContext.class))
@@ -51,8 +96,8 @@ public class CobolFlowNodeFactory {
             return new MultiplyFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.DivideStatementContext.class))
             return new DivideFlowNode(parseTree, scope, nodeService, stackFrames);
-        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.ComputeStatementContext.class))
-            return new ComputeFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isStatementOfType(parseTree, CobolParser.AlterStatementContext.class))
+            return new AlterFlowNode(parseTree, scope, nodeService, stackFrames);
 
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.DialectStatementContext.class))
             return DialectFlowNodeFactory.flowNode(parseTree, scope, nodeService, stackFrames);
@@ -60,6 +105,7 @@ public class CobolFlowNodeFactory {
             CobolParser.StatementContext innerVanillaStatement = ((CobolParser.ConditionalStatementCallContext) parseTree).statement();
             CobolParser.DialectStatementContext innerDialectStatement = ((CobolParser.ConditionalStatementCallContext) parseTree).dialectStatement();
             ParseTree innerStatement = innerVanillaStatement != null ? innerVanillaStatement : innerDialectStatement;
+            if (innerStatement == null) return new GenericStatementFlowNode(parseTree, scope, nodeService, stackFrames);
             return newNode(innerStatement, scope, nodeService, stackFrames);
 //            return new ConditionalStatementFlowNode(parseTree, scope, nodeService, stackFrames);
         }
@@ -131,6 +177,50 @@ public class CobolFlowNodeFactory {
             return new DisplayFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.MoveStatementContext.class))
             return new MoveFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.SetStatementContext.class))
+            return new SetFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.WriteStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.WRITE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.OpenStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.OPEN);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.CloseStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CLOSE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ReadStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.READ);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.InitializeStatementContext.class))
+            return new InitializeFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ContinueStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CONTINUE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.InspectStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.INSPECT);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.StartStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.START);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.RewriteStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.REWRITE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.AcceptStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.ACCEPT);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ReturnStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.RETURN);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.DeleteStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.DELETE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.SortStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.SORT);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.MergeStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.MERGE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ReleaseStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.RELEASE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.CancelStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.CANCEL);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.JsonStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.JSON);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.XmlParseStatementContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.XML_PARSE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.XmlGenerateContext.class))
+            return typed(parseTree, scope, nodeService, stackFrames, FlowNodeType.XML_GENERATE);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.StringStatementContext.class))
+            return new StringFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.UnstringStatementContext.class))
+            return new UnstringFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ComputeStatementContext.class))
             return new ComputeFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.AddStatementContext.class))
@@ -141,13 +231,14 @@ public class CobolFlowNodeFactory {
             return new MultiplyFlowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.DivideStatementContext.class))
             return new DivideFlowNode(parseTree, scope, nodeService, stackFrames);
-        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ComputeStatementContext.class))
-            return new ComputeFlowNode(parseTree, scope, nodeService, stackFrames);
+        else if (SyntaxIdentity.isOfType(parseTree, CobolParser.AlterStatementContext.class))
+            return new AlterFlowNode(parseTree, scope, nodeService, stackFrames);
 
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.DialectStatementContext.class))
             return DialectFlowNodeFactory.flowNode(parseTree, scope, nodeService, stackFrames);
         else if (SyntaxIdentity.isOfType(parseTree, CobolParser.ConditionalStatementCallContext.class)) {
             CobolParser.StatementContext innerStatement = ((CobolParser.ConditionalStatementCallContext) parseTree).statement();
+            if (innerStatement == null) return new GenericStatementFlowNode(parseTree, scope, nodeService, stackFrames);
             return newNode(innerStatement, scope, nodeService, stackFrames);
 //            return new ConditionalStatementFlowNode(parseTree, scope, nodeService, stackFrames);
         }
@@ -193,5 +284,10 @@ public class CobolFlowNodeFactory {
                 executionContext.getClass() == DialectContainerNode.class ||
                 executionContext.getClass() == IdmsParser.InquireMapIfStatementContext.class
                 ;
+    }
+
+    private static FlowNode typed(ParseTree parseTree, FlowNode scope, FlowNodeService nodeService,
+                                  StackFrames stackFrames, FlowNodeType flowNodeType) {
+        return new TypedStatementFlowNode(parseTree, scope, nodeService, stackFrames, flowNodeType);
     }
 }

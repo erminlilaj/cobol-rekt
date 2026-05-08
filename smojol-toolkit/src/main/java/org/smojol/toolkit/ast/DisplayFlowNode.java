@@ -60,4 +60,9 @@ public class DisplayFlowNode extends CobolFlowNode {
         CobolExpressionBuilder builder = new CobolExpressionBuilder();
         operandExpressions = operands.stream().map(op -> builder.literalOrIdentifier(op.literal(), op.generalIdentifier())).toList();
     }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.variableNamesIn(operandExpressions);
+    }
 }

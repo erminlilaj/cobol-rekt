@@ -1,10 +1,13 @@
 [submodule "che-che4z-lsp-for-cobol-integration"]
 	path = che-che4z-lsp-for-cobol-integration
-	url = https://github.com/avishek-sen-gupta/che-che4z-lsp-for-cobol-integration.git
-	branch = poc
+	url = git@github.com:erminlilaj/che-che4z-lsp-for-cobol-integration.git
+	branch = cobol-rekt-integration
 [submodule "woof"]
 	path = woof
 	url = https://github.com/asengupta/woof.git
 [submodule "mojo-common"]
 	path = mojo-common
-	url = https://github.com/asengupta/mojo-common.git
+	url = git@github.com:erminlilaj/mojo-common.git
+[submodule "documentation-wip"]
+	path = documentation-wip
+	url = git@github.com:erminlilaj/thesis-documentation.git

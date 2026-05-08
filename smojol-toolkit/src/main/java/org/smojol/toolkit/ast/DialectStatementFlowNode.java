@@ -13,6 +13,8 @@ import org.smojol.common.navigation.CobolEntityNavigator;
 import org.smojol.common.vm.stack.StackFrames;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 public class DialectStatementFlowNode extends CobolFlowNode {
@@ -27,12 +29,12 @@ public class DialectStatementFlowNode extends CobolFlowNode {
     @Override
     public void acceptUnvisited(FlowNodeVisitor visitor, int level) {
         super.acceptUnvisited(visitor, level);
+        if (dialectChildNode == null) return;
         if (dialectChildNode.getClass() == CobolFlowNode.class) return;
         visitor.visitParentChildLink(this, dialectChildNode, new VisitContext(level), nodeService);
         dialectChildNode.accept(visitor, -1);
     }
 
-    // TODO: Rewrite this monstrosity
     @Override
     public String name() {
         return truncated(originalText(), 30);
@@ -41,7 +43,14 @@ public class DialectStatementFlowNode extends CobolFlowNode {
     @Override
     public void buildInternalFlow() {
         CobolEntityNavigator navigator = nodeService.getNavigator();
-        DialectContainerNode containerNode = (DialectContainerNode) navigator.findByCondition(n -> n.getClass() == DialectContainerNode.class);
+        // Scope the search to executionContext so each dialect statement finds its
+        // own DialectContainerNode rather than always returning the first one in the tree.
+        DialectContainerNode containerNode = (DialectContainerNode) navigator.findByCondition(
+                executionContext, n -> n.getClass() == DialectContainerNode.class);
+        if (containerNode == null) {
+            LOGGER.warning("No DialectContainerNode found under " + executionContext.getText());
+            return;
+        }
         LocalisedDialect dialect = containerNode.getDialect();
         switch (dialect) {
             case IDMS: buildIdmsFlow(navigator);
@@ -54,10 +63,12 @@ public class DialectStatementFlowNode extends CobolFlowNode {
 
     private void buildDb2SqlFlow(DialectContainerNode containerNode) {
         dialectChildNode = new CicsBlockFlowNode(containerNode, this, nodeService, staticFrameContext);
+        nodeService.register(dialectChildNode);
 
     }
     private void buildCicsFLow(DialectContainerNode containerNode) {
         dialectChildNode = new CicsBlockFlowNode(containerNode, this, nodeService, staticFrameContext);
+        nodeService.register(dialectChildNode);
     }
 
     private void buildIdmsFlow(CobolEntityNavigator navigator) {
@@ -97,6 +108,14 @@ public class DialectStatementFlowNode extends CobolFlowNode {
     }
 
     @Override
+    public Map<String, Object> metadata() {
+        Map<String, Object> metadata = new LinkedHashMap<>(DialectMetadataParser.parse(originalText()));
+        List<Map<String, Object>> handlerBindings = CicsHandleBindingParser.parse(originalText());
+        if (!handlerBindings.isEmpty()) metadata.put("handler_bindings", handlerBindings);
+        return metadata;
+    }
+
+    @Override
     public boolean accessesDatabase() {
         return databaseAccess;
     }
@@ -113,6 +132,6 @@ public class DialectStatementFlowNode extends CobolFlowNode {
 
     @Override
     public List<FlowNode> astChildren() {
-        return ImmutableList.of(dialectChildNode);
+        return dialectChildNode == null ? ImmutableList.of() : ImmutableList.of(dialectChildNode);
     }
 }

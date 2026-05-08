@@ -47,10 +47,13 @@ public class AdditionalConditionVisitor extends AntlrCobolExpressionVisitor {
     }
 
     public ComparisonOperator getRelationalOperation() {
-        return ((SimpleConditionExpression) expression).getComparison().getRelationalOperation();
+        if (!(expression instanceof SimpleConditionExpression simpleConditionExpression)
+                || simpleConditionExpression.getComparison() == null) return null;
+        return simpleConditionExpression.getComparison().getRelationalOperation();
     }
 
     public CobolExpression getLhs() {
-        return ((SimpleConditionExpression) expression).getLhs();
+        if (!(expression instanceof SimpleConditionExpression simpleConditionExpression)) return mostRecentLhs;
+        return simpleConditionExpression.getLhs();
     }
 }

@@ -1,13 +1,13 @@
 import argparse
 import json
 
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 from src.common.json_navigator import find_where, node_type, recursive, path, ASTNode
 from src.llm.common.console_colors import ConsoleColors
 from src.llm.common.parameter_constants import ParameterConstants
 
-load_dotenv("env/.env", override=True)
+# load_dotenv("env/.env", override=True)
 c = ConsoleColors()
 
 
@@ -22,8 +22,6 @@ def variable_static_values(root: ASTNode) -> dict[str, set]:
         for n
         in
         final_nodes]
-    value = path(final_nodes[0],
-                 [recursive(node_type("MoveToSendingAreaContext")), recursive(node_type("LiteralContext"))])
     static_assignments: dict[str, set] = {}
     for variable, value in static_assignment_pairs:
         if variable not in static_assignments:

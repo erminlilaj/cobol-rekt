@@ -12,7 +12,8 @@ import java.util.Map;
 public interface TaskRunnerMode {
     TaskRunnerMode DIAGNOSTIC_MODE = new TaskRunnerMode() {
         @Override
-        public Map<String, List<AnalysisTaskResult>> run(Map<String, List<SyntaxError>> errorMap, Map<String, List<AnalysisTaskResult>> results) {
+        public Map<String, List<AnalysisTaskResult>> run(Map<String, List<SyntaxError>> errorMap,
+                Map<String, List<AnalysisTaskResult>> results) {
             return results;
         }
 
@@ -26,10 +27,36 @@ public interface TaskRunnerMode {
             return "DIAGNOSTIC";
         }
     };
+    TaskRunnerMode LENIENT_MODE = new TaskRunnerMode() {
+        @Override
+        public Map<String, List<AnalysisTaskResult>> run(Map<String, List<SyntaxError>> errorMap,
+                Map<String, List<AnalysisTaskResult>> results) {
+            // Log errors but continue processing
+            if (!errorMap.isEmpty()) {
+                System.err.println("WARNING: Parsing errors encountered but continuing in LENIENT mode:");
+                errorMap.forEach((file, errors) -> {
+                    System.err.println("  " + file + ": " + errors.size() + " error(s)");
+                });
+            }
+            return results;
+        }
+
+        @Override
+        public List<CommandLineAnalysisTask> tasks(List<CommandLineAnalysisTask> tasks) {
+            return tasks;
+        }
+
+        @Override
+        public String toString() {
+            return "LENIENT";
+        }
+    };
     TaskRunnerMode PRODUCTION_MODE = new TaskRunnerMode() {
         @Override
-        public Map<String, List<AnalysisTaskResult>> run(Map<String, List<SyntaxError>> errorMap, Map<String, List<AnalysisTaskResult>> taskResults) {
-            if (!errorMap.isEmpty()) throw new DiagnosticRuntimeError(errorMap);
+        public Map<String, List<AnalysisTaskResult>> run(Map<String, List<SyntaxError>> errorMap,
+                Map<String, List<AnalysisTaskResult>> taskResults) {
+            if (!errorMap.isEmpty())
+                throw new DiagnosticRuntimeError(errorMap);
             return taskResults;
         }
 
@@ -44,7 +71,8 @@ public interface TaskRunnerMode {
         }
     };
 
-    Map<String, List<AnalysisTaskResult>> run(Map<String, List<SyntaxError>> errorMap, Map<String, List<AnalysisTaskResult>> results);
+    Map<String, List<AnalysisTaskResult>> run(Map<String, List<SyntaxError>> errorMap,
+            Map<String, List<AnalysisTaskResult>> results);
 
     List<CommandLineAnalysisTask> tasks(List<CommandLineAnalysisTask> tasks);
 }

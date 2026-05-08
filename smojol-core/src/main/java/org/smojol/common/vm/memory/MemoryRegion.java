@@ -74,7 +74,12 @@ public class MemoryRegion {
     }
 
     public MemoryRegion range(int fromIndex, int toIndex) {
-        return new MemoryRegion(blob.subList(fromIndex, toIndex + 1), internalRepresentation);
+        if (fromIndex > toIndex) {
+            return new MemoryRegion(new ArrayList<>(), internalRepresentation);
+        }
+        int safeFrom = Math.max(0, fromIndex);
+        int safeTo = Math.min(blob.size() - 1, toIndex);
+        return new MemoryRegion(blob.subList(safeFrom, safeTo + 1), internalRepresentation);
     }
 
     public List<Byte> asBytes() {

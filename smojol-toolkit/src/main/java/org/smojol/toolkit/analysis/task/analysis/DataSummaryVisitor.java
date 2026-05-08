@@ -20,17 +20,24 @@ public class DataSummaryVisitor extends TreeMapperVisitor<CobolDataStructure, Su
     public SummaryTree processChildResults(CobolDataStructure node, List<SummaryTree> mappedChildren) {
         List<String> childStrings = mappedChildren.stream().map(SummaryTree::toString).toList();
         String s = node.name() + " composed of [" + String.join(",", childStrings) + "]";
-        List<String> advice = advisor.advise("Summarise the following: " + node.content() + ", given the following child summaries: " + s);
+        List<String> advice = advisor
+                .advise("Summarise the following: " + node.content() + ", given the following child summaries: " + s);
         String summary = advice.stream().reduce("", (a, b) -> a + b);
-        return new SummaryTree(summary, asMap(node), mappedChildren);
+        return new SummaryTree(node.getId(), summary, asMap(node), mappedChildren);
     }
 
     private Map<String, String> asMap(CobolDataStructure node) {
         return ImmutableMap.of(
                 "id", node.getId(),
                 "text", node.name(),
-                "type", node.getDataType().abstractType().name()
-        );
+                "type", abstractDataTypeName(node));
+    }
+
+    private String abstractDataTypeName(CobolDataStructure node) {
+        if (node.getDataType() == null || node.getDataType().abstractType() == null) {
+            return "UNKNOWN";
+        }
+        return node.getDataType().abstractType().name();
     }
 
     @Override

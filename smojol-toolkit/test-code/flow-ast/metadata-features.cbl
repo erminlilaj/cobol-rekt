@@ -1,0 +1,44 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. METADATA-FEATURES.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT IN-FILE ASSIGN TO "INFILE".
+           SELECT OUT-FILE ASSIGN TO "OUTFILE".
+       DATA DIVISION.
+       FILE SECTION.
+       FD  IN-FILE.
+       01  IN-REC          PIC X(10).
+       FD  OUT-FILE.
+       01  OUT-REC         PIC X(10).
+       WORKING-STORAGE SECTION.
+       01  CALL-NAME       PIC X(08) VALUE "DYNPROG".
+       01  DEST-FIELD      PIC X(10).
+       01  PART-1          PIC X(05).
+       01  PART-2          PIC X(05).
+       01  SWITCH-FLAG     PIC 9 VALUE 1.
+           88 SWITCH-ON    VALUE 1.
+       01  IX              PIC 9 VALUE 0.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           CALL "SUBPROG" USING BY REFERENCE DEST-FIELD
+                                 BY CONTENT PART-1
+           MOVE "DYNPROG" TO CALL-NAME
+           CALL CALL-NAME USING PART-2
+           PERFORM LOOP-PARA VARYING IX FROM 1 BY 1 UNTIL IX > 3
+           SET SWITCH-ON TO TRUE
+           INITIALIZE DEST-FIELD
+           ACCEPT DEST-FIELD FROM DATE
+           INSPECT DEST-FIELD TALLYING IX FOR ALL "A"
+           OPEN INPUT IN-FILE OUTPUT OUT-FILE
+           READ IN-FILE AT END CONTINUE END-READ
+           WRITE OUT-REC
+           CLOSE IN-FILE OUT-FILE
+           GO TO TARGET-A TARGET-B DEPENDING ON SWITCH-FLAG.
+       LOOP-PARA.
+           CONTINUE.
+       TARGET-A.
+           CANCEL "SUBPROG".
+           GOBACK.
+       TARGET-B.
+           GOBACK.

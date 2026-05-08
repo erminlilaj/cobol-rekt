@@ -206,6 +206,8 @@ public class Format1DataStructure extends CobolDataStructure {
     private Pair<DataTypeSpec, Integer> typeSpecForSingle() {
         if (dataType == CobolDataType.POINTER)
             return ImmutablePair.of(new ZonedDecimalDataTypeSpec(8, 0), 8);
+        else if (dataType == CobolDataType.GROUP && structures.isEmpty())
+            return ImmutablePair.of(new GroupDataTypeSpec(0), 0);
         else if (!isComposite) {
             LOGGER.info("Calculating type spec for single data structure: " + dataDescription.getText());
             return spec(dataDescription);
@@ -304,6 +306,13 @@ public class Format1DataStructure extends CobolDataStructure {
     public void accept(DataStructureVisitor visitor, CobolDataStructure parent, Function<CobolDataStructure, Boolean> stopRecurseCondition, CobolDataStructure root) {
         super.accept(visitor, parent, stopRecurseCondition, root);
         this.conditions.forEach(c -> c.accept(visitor, this, stopRecurseCondition, root));
+    }
+
+    @Override
+    public void acceptScopedVisitor(ScopedDataStructureVisitor visitor) {
+        ScopedDataStructureVisitor scopedVisitor = visitor.visit(this);
+        this.structures.forEach(s -> s.acceptScopedVisitor(scopedVisitor));
+        this.conditions.forEach(c -> c.acceptScopedVisitor(scopedVisitor));
     }
 
     private Optional<ConditionalDataStructure> condition(String subRecordID) {

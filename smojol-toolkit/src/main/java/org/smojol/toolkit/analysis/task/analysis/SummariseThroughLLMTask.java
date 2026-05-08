@@ -4,6 +4,8 @@ import com.mojo.algorithms.navigation.TreeMapperTraversal;
 import com.mojo.woof.*;
 import com.mojo.woof.llm.Advisor;
 import com.mojo.woof.llm.AzureOpenAIAdvisor;
+import com.mojo.woof.llm.OllamaAdvisor;
+import com.mojo.woof.llm.OllamaCredentials;
 import com.mojo.woof.llm.OpenAICredentials;
 import org.neo4j.driver.Record;
 import com.mojo.algorithms.domain.FlowNodeType;
@@ -41,13 +43,20 @@ public class SummariseThroughLLMTask implements AnalysisTask {
     }
 
     private static void summariseThroughLLM(NodeSpecBuilder qualifier, GraphSDK sdk) {
-        Record neo4jProgramRoot = sdk.findNodes(qualifier.cfgNodeCriteria(Map.of(TYPE, FlowNodeType.PROCEDURE_DIVISION_BODY.toString()))).getFirst();
-        Record neo4jDataStructuresRoot = sdk.findNodes(qualifier.dataNodeSearchCriteria(Map.of(SECTION_SOURCE, "ROOT"))).getFirst();
-        Advisor advisor = new AzureOpenAIAdvisor(OpenAICredentials.fromEnv());
+        Record neo4jProgramRoot = sdk
+                .findNodes(qualifier.cfgNodeCriteria(Map.of(TYPE, FlowNodeType.PROCEDURE_DIVISION_BODY.toString())))
+                .getFirst();
+        Record neo4jDataStructuresRoot = sdk.findNodes(qualifier.dataNodeSearchCriteria(Map.of(SECTION_SOURCE, "ROOT")))
+                .getFirst();
+        Advisor advisor = "OLLAMA".equals(System.getenv("LLM_SOURCE"))
+                ? new OllamaAdvisor(OllamaCredentials.fromEnv())
+                : new AzureOpenAIAdvisor(OpenAICredentials.fromEnv());
         // Summarises AST bottom-up
         Function<Record, List<Record>> codeChildrenFn = n -> sdk.directChildren(n, CONTAINS_CODE);
         Function<Record, List<Record>> dataChildrenFn = n -> sdk.directChildren(n, CONTAINS_DATA);
-        new TreeMapperTraversal<Record, ActionResult>().accept(neo4jProgramRoot, new Neo4JCodeSummaryVisitor(advisor, sdk), codeChildrenFn);
-        new TreeMapperTraversal<Record, ActionResult>().accept(neo4jDataStructuresRoot, new Neo4JDataSummaryVisitor(advisor, sdk), dataChildrenFn);
+        new TreeMapperTraversal<Record, ActionResult>().accept(neo4jProgramRoot,
+                new Neo4JCodeSummaryVisitor(advisor, sdk), codeChildrenFn);
+        new TreeMapperTraversal<Record, ActionResult>().accept(neo4jDataStructuresRoot,
+                new Neo4JDataSummaryVisitor(advisor, sdk), dataChildrenFn);
     }
 }

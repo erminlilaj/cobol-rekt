@@ -17,7 +17,8 @@ import java.util.regex.Pattern;
 
 public class CobolEntityNavigator {
     private static final java.util.logging.Logger LOGGER = Logger.getLogger(CobolEntityNavigator.class.getName());
-    @Getter private final ParseTree root;
+    @Getter
+    private final ParseTree root;
     private List<ParseTree> dialectNodes;
     private Map<String, String> symbolText;
 
@@ -26,11 +27,13 @@ public class CobolEntityNavigator {
     }
 
     public CobolParser.ProcedureDivisionBodyContext procedureDivisionBody(ParseTree tree) {
-        return (CobolParser.ProcedureDivisionBodyContext) findByConditionRecursive(tree, n -> n instanceof CobolParser.ProcedureDivisionBodyContext, 1, -1);
+        return (CobolParser.ProcedureDivisionBodyContext) findByConditionRecursive(tree,
+                n -> n instanceof CobolParser.ProcedureDivisionBodyContext, 1, -1);
     }
 
     public CobolParser.DataDivisionContext dataDivisionBody(ParseTree tree) {
-        return (CobolParser.DataDivisionContext) findByConditionRecursive(tree, n -> n instanceof CobolParser.DataDivisionContext, 1, -1);
+        return (CobolParser.DataDivisionContext) findByConditionRecursive(tree,
+                n -> n instanceof CobolParser.DataDivisionContext, 1, -1);
     }
 
     public ParseTree target(String procedureName) {
@@ -47,7 +50,8 @@ public class CobolEntityNavigator {
 
     public <T> T findByCondition(ParseTree searchRoot, Class<T> type) {
         ParseTree searchResult = findByConditionRecursive(searchRoot, n -> n.getClass() == type, 1, -1);
-        if (searchResult == null) return null;
+        if (searchResult == null)
+            return null;
         return (T) searchResult;
     }
 
@@ -76,38 +80,49 @@ public class CobolEntityNavigator {
         symbolText = new HashMap<>();
         dialectNodes.forEach(n -> {
             LOGGER.info("Adding to repository dialect node " + n.getText());
-            if (n.getChildCount() == 0) {
-                LOGGER.info("WARNING: The following dialect node has no children: " + n.getText());
+            if (n.getChildCount() < 2) {
+                LOGGER.warning("WARNING: Dialect node has insufficient children: " + n.getText());
+                return;
             }
             String markerID = "_DIALECT_ " + n.getChild(1).getText();
             ParseTree idmsContainer = findByCondition(n, c -> c.getClass() == DialectContainerNode.class, 1);
+            if (idmsContainer == null || idmsContainer.getChildCount() == 0) {
+                LOGGER.warning("WARNING: Dialect container missing or empty for " + markerID);
+                return;
+            }
             String text = NodeText.originalText(idmsContainer.getChild(0), NodeText::PASSTHROUGH);
             symbolText.put(markerID, text);
         });
     }
 
     public String dialectText(String marker) {
-        if (symbolText == null || symbolText.get(marker) == null) return marker;
+        if (symbolText == null || symbolText.get(marker) == null)
+            return marker;
         return symbolText.get(marker);
     }
 
-    private ParseTree findByConditionRecursive(ParseTree currentNode, ParseTreeSearchCondition c, int level, int maxLevel) {
-        if (c.apply(currentNode)) return currentNode;
+    private ParseTree findByConditionRecursive(ParseTree currentNode, ParseTreeSearchCondition c, int level,
+            int maxLevel) {
+        if (c.apply(currentNode))
+            return currentNode;
         if (maxLevel != -1 && level > maxLevel)
             return null;
         for (int i = 0; i <= currentNode.getChildCount() - 1; i++) {
             ParseTree searchResult = findByConditionRecursive(currentNode.getChild(i), c, level + 1, maxLevel);
-            if (searchResult != null) return searchResult;
+            if (searchResult != null)
+                return searchResult;
         }
 
         return null;
     }
 
-    private void findAllByConditionRecursive(ParseTree currentNode, List<ParseTree> matchedTrees, ParseTreeSearchCondition c, int level, int maxLevel) {
+    private void findAllByConditionRecursive(ParseTree currentNode, List<ParseTree> matchedTrees,
+            ParseTreeSearchCondition c, int level, int maxLevel) {
         if (c.apply(currentNode)) {
             matchedTrees.add(currentNode);
         }
-        if (maxLevel != -1 && level > maxLevel) return;
+        if (maxLevel != -1 && level > maxLevel)
+            return;
         for (int i = 0; i <= currentNode.getChildCount() - 1; i++) {
             findAllByConditionRecursive(currentNode.getChild(i), matchedTrees, c, level + 1, maxLevel);
         }
@@ -116,20 +131,25 @@ public class CobolEntityNavigator {
     public ParseTree findTargetRecursive(String procedureName, ParseTree currentNode) {
         if (currentNode.getClass() == CobolParser.ParagraphContext.class) {
             String name = ((CobolParser.ParagraphContext) currentNode).paragraphDefinitionName().getText();
-            if (name.equals(procedureName)) return currentNode;
+            if (name.equals(procedureName))
+                return currentNode;
         } else if (currentNode.getClass() == CobolParser.ProcedureSectionContext.class) {
-            String name = ((CobolParser.ProcedureSectionContext) currentNode).procedureSectionHeader().sectionName().getText();
-            if (name.equals(procedureName)) return currentNode;
+            String name = ((CobolParser.ProcedureSectionContext) currentNode).procedureSectionHeader().sectionName()
+                    .getText();
+            if (name.equals(procedureName))
+                return currentNode;
         }
         for (int i = 0; i <= currentNode.getChildCount() - 1; i++) {
             ParseTree searchResult = findTargetRecursive(procedureName, currentNode.getChild(i));
-            if (searchResult != null) return searchResult;
+            if (searchResult != null)
+                return searchResult;
         }
 
         return null;
     }
 
-    public static <T> T build(ParseTree tree, BiFunction<ParseTree, T, T> make, Function<ParseTree, Boolean> stopRecurseCondition) {
+    public static <T> T build(ParseTree tree, BiFunction<ParseTree, T, T> make,
+            Function<ParseTree, Boolean> stopRecurseCondition) {
         return internalBuild(tree, null, make, stopRecurseCondition);
     }
 
@@ -139,9 +159,11 @@ public class CobolEntityNavigator {
 
     public static Function<ParseTree, Boolean> NEVER_STOP = n -> false;
 
-    public static <T> T internalBuild(ParseTree tree, T parent, BiFunction<ParseTree, T, T> make, Function<ParseTree, Boolean> stopRecurseCondition) {
+    public static <T> T internalBuild(ParseTree tree, T parent, BiFunction<ParseTree, T, T> make,
+            Function<ParseTree, Boolean> stopRecurseCondition) {
         T node = make.apply(tree, parent);
-        if (stopRecurseCondition.apply(tree)) return node;
+        if (stopRecurseCondition.apply(tree))
+            return node;
         for (int i = 0; i < tree.getChildCount(); i++) {
             T child = internalBuild(tree.getChild(i), node, make, stopRecurseCondition);
         }
@@ -153,10 +175,12 @@ public class CobolEntityNavigator {
     }
 
     private ParseTree findNarrowestByConditionRecursive(ParseTree currentNode, ParseTreeSearchCondition c) {
-        if (!c.apply(currentNode)) return null;
+        if (!c.apply(currentNode))
+            return null;
         for (int j = 0; j <= currentNode.getChildCount() - 1; j++) {
             ParseTree searchResult = findNarrowestByConditionRecursive(currentNode.getChild(j), c);
-            if (searchResult != null) return searchResult;
+            if (searchResult != null)
+                return searchResult;
         }
         return currentNode;
     }

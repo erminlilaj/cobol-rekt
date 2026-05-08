@@ -17,6 +17,8 @@ import org.smojol.common.vm.stack.StackFrames;
 import org.smojol.common.vm.structure.CobolDataStructure;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Getter
 public class IfFlowNode extends CobolFlowNode {
@@ -93,5 +95,29 @@ public class IfFlowNode extends CobolFlowNode {
         conditionExpression = new CobolExpressionBuilder().condition(condition, dataStructures);
         ifThenBlock.resolve(symbolTable, dataStructures);
         if (ifElseBlock != null) ifElseBlock.resolve(symbolTable, dataStructures);
+    }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.combine(
+                VariableUsageCollector.variableNamesIn(conditionExpression),
+                VariableUsageCollector.merge(astChildren(), VariableUsageProvider::variablesRead));
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.merge(astChildren(), VariableUsageProvider::variablesModified);
+    }
+
+    @Override
+    public Map<String, Object> metadata() {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (condition != null) {
+            metadata.put("condition_text", NodeText.originalText(condition, NodeText::PASSTHROUGH));
+        }
+        if (conditionExpression != null) {
+            metadata.put("condition_expression", conditionExpression.description());
+        }
+        return metadata;
     }
 }

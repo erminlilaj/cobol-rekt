@@ -7,13 +7,15 @@ import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 public class SerialisableASTFlowNode extends SerialisableCFGFlowNode {
     List<SerialisableASTFlowNode> children = new ArrayList<>();
 
     public SerialisableASTFlowNode() {
-        super("ROOT", "ROOT", "ROOT", "ROOT", FlowNodeType.DUMMY, ImmutableList.of(SemanticCategory.CODE_ROOT));
+        super("ROOT", "ROOT", "ROOT", "ROOT", FlowNodeType.DUMMY,
+                ImmutableList.of(SemanticCategory.CODE_ROOT), Map.of(), List.of(), List.of(), null);
     }
 
     public SerialisableASTFlowNode(FlowNode current) {

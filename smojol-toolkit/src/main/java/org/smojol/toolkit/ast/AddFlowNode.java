@@ -25,10 +25,10 @@ public class AddFlowNode extends CobolFlowNode {
     private List<CobolParser.AddToContext> tos;
     private List<CobolParser.AddGivingContext> givingDestinations;
     private List<CobolParser.AddToGivingContext> tosGiving;
-    private List<CobolExpression> toExpressions;
-    private List<CobolExpression> fromExpressions;
-    private List<CobolExpression> tosGivingExpressions;
-    private List<CobolExpression> givingDestinationExpressions;
+    private List<CobolExpression> toExpressions = ImmutableList.of();
+    private List<CobolExpression> fromExpressions = ImmutableList.of();
+    private List<CobolExpression> tosGivingExpressions = ImmutableList.of();
+    private List<CobolExpression> givingDestinationExpressions = ImmutableList.of();
     private final List<CobolExpression> destinationExpressions = new ArrayList<>();
     private final List<CobolExpression> sourceExpressions = new ArrayList<>();
 
@@ -93,5 +93,15 @@ public class AddFlowNode extends CobolFlowNode {
             sourceExpressions.addAll(tosGivingExpressions);
             destinationExpressions.addAll(givingDestinationExpressions);
         }
+    }
+
+    @Override
+    public List<String> variablesRead() {
+        return VariableUsageCollector.variableNamesIn(sourceExpressions);
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(destinationExpressions);
     }
 }

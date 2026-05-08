@@ -30,14 +30,21 @@ public class FlowchartBuilder {
         Graphviz.useEngine(new GraphvizCmdLineEngine().timeout(5, java.util.concurrent.TimeUnit.HOURS));
     }
 
-    public void build(String dotFilePath, String imageOutputPath, FlowchartOutputFormat outputFormat) throws IOException, InterruptedException {
-        ChartOverlay chartOverlay = BuildFlowchartMarkupTask.buildOverlay(root);
+    public void build(String dotFilePath, String imageOutputPath, FlowchartOutputFormat outputFormat,
+            ChartOverlay overlay) throws IOException, InterruptedException {
+        ChartOverlay chartOverlay = overlay == null ? BuildFlowchartMarkupTask.buildOverlay(root) : overlay;
         buildChartGraphic(VisitContext::ALWAYS_VISIT, root, chartOverlay);
         write(dotFilePath);
         new GraphGenerator(outputFormat).generateImage(dotFilePath, imageOutputPath);
     }
 
-    private void buildChartGraphic(Function<VisitContext, Boolean> stopCondition, FlowNode root, ChartOverlay chartOverlay) {
+    public void build(String dotFilePath, String imageOutputPath, FlowchartOutputFormat outputFormat)
+            throws IOException, InterruptedException {
+        build(dotFilePath, imageOutputPath, outputFormat, null);
+    }
+
+    private void buildChartGraphic(Function<VisitContext, Boolean> stopCondition, FlowNode root,
+            ChartOverlay chartOverlay) {
         FlowNodeVisitor chartVisitor = new FlowNodeGraphvizVisitor(graph, chartOverlay, stopCondition);
         root.accept(chartVisitor, 1);
     }

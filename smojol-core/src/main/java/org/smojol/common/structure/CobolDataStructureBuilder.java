@@ -10,6 +10,7 @@ import org.smojol.common.vm.structure.*;
 import com.mojo.algorithms.types.CobolDataType;
 import com.mojo.algorithms.domain.TypedRecord;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -22,12 +23,17 @@ public class CobolDataStructureBuilder {
     private CobolDataStructure zerothStructure;
     private final Format1DataStructureBuildStrategy format1DataStructureBuilder;
     private final IdProvider idProvider;
+    private final List<SkippedVariable> skippedVariables = new ArrayList<>();
 
     public CobolDataStructureBuilder(CobolEntityNavigator navigator, UnresolvedReferenceStrategy unresolvedReferenceStrategy, Format1DataStructureBuildStrategy format1DataStructureBuilder, IdProvider idProvider) {
         this.navigator = navigator;
         this.unresolvedReferenceStrategy = unresolvedReferenceStrategy;
         this.format1DataStructureBuilder = format1DataStructureBuilder;
         this.idProvider = idProvider;
+    }
+
+    public List<SkippedVariable> getSkippedVariables() {
+        return List.copyOf(skippedVariables);
     }
 
     public CobolDataStructure build() {
@@ -37,8 +43,18 @@ public class CobolDataStructureBuilder {
         extractFromWorkingStorage(dataDivisionBody);
         extractFromLinkage(dataDivisionBody);
         extractFromFileSection(dataDivisionBody);
-        zerothStructure.expandTables();
-        zerothStructure.calculateMemoryRequirements();
+        try {
+            zerothStructure.expandTables();
+        } catch (RuntimeException e) {
+            LOGGER.warning("Table expansion failed: " + e.getMessage());
+            skippedVariables.add(new SkippedVariable("TABLE_EXPANSION", e.getMessage(), "ALL"));
+        }
+        try {
+            zerothStructure.calculateMemoryRequirements();
+        } catch (RuntimeException e) {
+            LOGGER.warning("Memory calculation failed: " + e.getMessage());
+            skippedVariables.add(new SkippedVariable("MEMORY_CALCULATION", e.getMessage(), "ALL"));
+        }
         zerothStructure.allocateRecordPointers();
         int i = 0;
         while (zerothStructure.buildRedefinitions(zerothStructure)) {
@@ -46,6 +62,10 @@ public class CobolDataStructureBuilder {
         }
         addGlobalSystemStructures();
         addUnreferencedStructures();
+        if (!skippedVariables.isEmpty()) {
+            LOGGER.warning("Data structure building completed with " + skippedVariables.size()
+                + " skipped variable(s). See parse_diagnostics.json for details.");
+        }
         return zerothStructure;
     }
 
@@ -103,38 +123,68 @@ public class CobolDataStructureBuilder {
         CobolDataStructure dataStructure = root;
         // TODO: Does not check if you are adding a structure under a level 77 structure, which is invalid
         for (T dataDescriptionEntry : dataLayouts) {
-            CobolParser.DataDescriptionEntryContext dataDescription = retriever.apply(dataDescriptionEntry);
-            if (dataDescription.dataDescriptionEntryFormat1() != null) {
-                CobolParser.DataDescriptionEntryFormat1Context format1 = dataDescription.dataDescriptionEntryFormat1();
-                int entryLevel = Integer.parseInt(format1.levelNumber().LEVEL_NUMBER().getSymbol().getText());
-                if (currentLevel == 0) {
-                    if (entryLevel != 1) {
-                        LOGGER.warning("Top level variable is not level 01");
-                        // TODO: Should we be strict or lax regarding top level variables not being level 01???
+            try {
+                CobolParser.DataDescriptionEntryContext dataDescription = retriever.apply(dataDescriptionEntry);
+                if (dataDescription.dataDescriptionEntryFormat1() != null) {
+                    CobolParser.DataDescriptionEntryFormat1Context format1 = dataDescription.dataDescriptionEntryFormat1();
+                    int entryLevel = Integer.parseInt(format1.levelNumber().LEVEL_NUMBER().getSymbol().getText());
+                    if (currentLevel == 0) {
+                        if (entryLevel != 1) {
+                            LOGGER.warning("Top level variable is not level 01");
+                            // TODO: Should we be strict or lax regarding top level variables not being level 01???
 //                        throw new RuntimeException("Top Level entry must be 01");
+                        }
+                        dataStructure = dataStructure.addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
+                    } else if (entryLevel == currentLevel) {
+                        dataStructure = dataStructure.addPeer(format1(format1, unresolvedReferenceStrategy, sourceSection));
+                    } else if (entryLevel > currentLevel) {
+                        dataStructure = dataStructure.addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
+                    } else if (entryLevel == 77) {
+                        dataStructure = root.addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
+                        currentLevel = 0;
+                        continue;
+                    } else if (entryLevel == 66) {
+                        // Level 66 RENAME — preserve variable name as detached node
+                        String renameName = format1.entryName() != null
+                            ? format1.entryName().getText() : "UNNAMED_RENAME";
+                        LOGGER.info("Recording Level 66 RENAME alias: " + renameName);
+                        root.addChild(new DetachedDataStructure(renameName, TypedRecord.typedString("RENAME_ALIAS")));
+                        continue;
+                    } else {
+                        // This is for adding a structure at a lower level than the current level's parent.
+                        dataStructure = dataStructure.parent(entryLevel).addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
                     }
-                    dataStructure = dataStructure.addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
-                } else if (entryLevel == currentLevel) {
-                    dataStructure = dataStructure.addPeer(format1(format1, unresolvedReferenceStrategy, sourceSection));
-                } else if (entryLevel > currentLevel) {
-                    dataStructure = dataStructure.addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
-                } else if (entryLevel == 77) {
-                    dataStructure = root.addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
-                    currentLevel = 0;
-                    continue;
-                } else if (entryLevel == 66) {
-                    // TODO: Support RENAME's at some point
-                    LOGGER.warning("Level 66 RENAMEs are not supported yet, skipping...");
-                    continue;
-                } else {
-                    // This is for adding a structure at a lower level than the current level's parent.
-                    dataStructure = dataStructure.parent(entryLevel).addChild(format1(format1, unresolvedReferenceStrategy, sourceSection));
+                } else if (dataDescription.dataDescriptionEntryFormat3() != null) {
+                    CobolParser.DataDescriptionEntryFormat3Context conditionalFormat = dataDescription.dataDescriptionEntryFormat3();
+                    dataStructure = dataStructure.addConditionalVariable(new ConditionalDataStructure(conditionalFormat, dataStructure, sourceSection));
                 }
-            } else if (dataDescription.dataDescriptionEntryFormat3() != null) {
-                CobolParser.DataDescriptionEntryFormat3Context conditionalFormat = dataDescription.dataDescriptionEntryFormat3();
-                dataStructure = dataStructure.addConditionalVariable(new ConditionalDataStructure(conditionalFormat, dataStructure, sourceSection));
+                currentLevel = dataStructure.level();
+            } catch (RuntimeException e) {
+                String varName = extractVariableName(dataDescriptionEntry, retriever);
+                LOGGER.warning("Skipping variable '" + varName + "' in " + sourceSection.name()
+                    + " due to: " + e.getMessage());
+                skippedVariables.add(new SkippedVariable(varName, e.getMessage(), sourceSection.name()));
+                // Do not update currentLevel or dataStructure — next variable
+                // will be processed relative to the last successful position
             }
-            currentLevel = dataStructure.level();
+        }
+    }
+
+    private <T> String extractVariableName(T dataDescriptionEntry, Function<T, CobolParser.DataDescriptionEntryContext> retriever) {
+        try {
+            CobolParser.DataDescriptionEntryContext desc = retriever.apply(dataDescriptionEntry);
+            if (desc.dataDescriptionEntryFormat1() != null) {
+                CobolParser.DataDescriptionEntryFormat1Context format1 = desc.dataDescriptionEntryFormat1();
+                return format1.entryName() != null ? format1.entryName().getText() : "UNNAMED";
+            }
+            if (desc.dataDescriptionEntryFormat3() != null) {
+                CobolParser.DataDescriptionEntryFormat3Context format3 = desc.dataDescriptionEntryFormat3();
+                return format3.entryName() != null
+                    ? format3.entryName().getText() : "UNNAMED_88";
+            }
+            return "UNKNOWN_FORMAT";
+        } catch (Exception ignored) {
+            return "UNKNOWN";
         }
     }
 

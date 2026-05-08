@@ -21,6 +21,9 @@ public class TypedDataStructureVertex implements TypedGraphVertex {
     }
 
     public String type() {
+        if (node.getDataType() == null || node.getDataType().abstractType() == null) {
+            return "UNKNOWN";
+        }
         return node.getDataType().abstractType().name();
     }
 

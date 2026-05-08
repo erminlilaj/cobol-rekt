@@ -1,0 +1,42 @@
+program: COUSR01C.cbl
+cics:
+- RECEIVE
+- RETURN
+- SEND
+- WRITE
+- XCTL
+cics_calls:
+- command: XCTL
+  target: COSGN00C
+  source: indirect_variable
+  variable: CDEMO-TO-PROGRAM
+- command: XCTL
+  target: COADM01C
+  source: indirect_variable
+  variable: CDEMO-TO-PROGRAM
+cics_operations:
+- command: WRITE
+  type: file_write
+  target_kind: DATASET
+  target: WS-USRSEC-FILE
+  target_source: identifier
+- command: RECEIVE
+  type: other
+  target_kind: MAP
+  target: COUSR1A
+  target_source: literal
+- command: SEND
+  type: other
+  target_kind: MAP
+  target: COUSR1A
+  target_source: literal
+- command: XCTL
+  type: program_transfer
+  target_kind: PROGRAM
+  target: CDEMO-TO-PROGRAM
+  target_source: identifier
+- command: RETURN
+  type: program_transfer
+  target_kind: TRANSID
+  target: WS-TRANID
+  target_source: identifier

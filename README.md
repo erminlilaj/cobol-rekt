@@ -34,6 +34,7 @@ You can see the current backlog [here](https://github.com/users/avishek-sen-gupt
 ## Contents
 
 - [Introduction](#introduction)
+- [Setup Guide (Docker & Manual)](SETUP.md)
 - [Demo App (WIP)](#demo-app-very-early---wip)
 - [Major Dependencies](#major-dependencies)
 - [Reverse Engineering Use Cases](#reverse-engineering-use-cases)

@@ -1,6 +1,7 @@
 set -e
 pushd .
 cd ./smojol-app/cobol-lekt
+npm ci
 npm run lint
 npm run build
 popd

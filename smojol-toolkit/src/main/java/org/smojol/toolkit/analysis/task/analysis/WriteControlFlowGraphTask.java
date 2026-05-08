@@ -31,6 +31,7 @@ public class WriteControlFlowGraphTask implements AnalysisTask {
     public AnalysisTaskResult run() {
         SerialisableCFGGraphCollector cfgGraphCollector = new SerialisableCFGGraphCollector(idProvider);
         astRoot.accept(cfgGraphCollector, -1);
+        cfgGraphCollector.annotateReachability();
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         try {
 //            Files.createDirectories(cfgOutputConfig.outputDir());

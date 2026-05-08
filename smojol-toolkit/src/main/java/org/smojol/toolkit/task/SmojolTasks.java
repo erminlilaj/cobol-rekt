@@ -15,12 +15,15 @@ import org.smojol.toolkit.analysis.task.analysis.*;
 import org.smojol.toolkit.flowchart.FlowchartOutputWriter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import static com.mojo.algorithms.task.CommandLineAnalysisTask.DO_NOTHING;
 
 public class SmojolTasks {
+    private static final Logger LOGGER = Logger.getLogger(SmojolTasks.class.getName());
     private final SourceConfig sourceConfig;
     private final FlowchartOutputWriter flowchartOutputWriter;
     private final RawASTOutputConfig rawAstOutputConfig;
@@ -31,6 +34,8 @@ public class SmojolTasks {
     private final CFGOutputConfig cfgOutputConfig;
     private final OutputArtifactConfig dataStructuresOutputConfig;
     private final OutputArtifactConfig mermaidOutputConfig;
+    private final OutputArtifactConfig graphvizOutputConfig;
+
     private final OutputArtifactConfig transpilerModelOutputConfig;
     private final GraphBuildConfig graphBuildConfig;
     private final OutputArtifactConfig llmOutputConfig;
@@ -41,7 +46,15 @@ public class SmojolTasks {
     private final NodeSpecBuilder qualifier;
     private BaseAnalysisModel baseModel;
 
-    public SmojolTasks(ParsePipeline pipeline, SourceConfig sourceConfig, FlowchartOutputWriter flowchartOutputWriter, RawASTOutputConfig rawAstOutputConfig, GraphMLExportConfig graphMLOutputConfig, FlowASTOutputConfig flowASTOutputConfig, CFGOutputConfig cfgOutputConfig, GraphBuildConfig graphBuildConfig, OutputArtifactConfig dataStructuresOutputConfig, OutputArtifactConfig unifiedModelOutputConfig, OutputArtifactConfig similarityOutputConfig, OutputArtifactConfig mermaidOutputConfig, OutputArtifactConfig transpilerModelOutputConfig, OutputArtifactConfig llmOutputConfig, IdProvider idProvider, ResourceOperations resourceOperations, Neo4JDriverBuilder neo4JDriverBuilder) {
+    public SmojolTasks(ParsePipeline pipeline, SourceConfig sourceConfig, FlowchartOutputWriter flowchartOutputWriter,
+            RawASTOutputConfig rawAstOutputConfig, GraphMLExportConfig graphMLOutputConfig,
+            FlowASTOutputConfig flowASTOutputConfig, CFGOutputConfig cfgOutputConfig, GraphBuildConfig graphBuildConfig,
+            OutputArtifactConfig dataStructuresOutputConfig, OutputArtifactConfig unifiedModelOutputConfig,
+            OutputArtifactConfig similarityOutputConfig, OutputArtifactConfig mermaidOutputConfig,
+            OutputArtifactConfig graphvizOutputConfig, OutputArtifactConfig transpilerModelOutputConfig,
+            OutputArtifactConfig llmOutputConfig, IdProvider idProvider, ResourceOperations resourceOperations,
+            Neo4JDriverBuilder neo4JDriverBuilder) {
+
         this.pipeline = pipeline;
         this.sourceConfig = sourceConfig;
         this.flowchartOutputWriter = flowchartOutputWriter;
@@ -53,6 +66,8 @@ public class SmojolTasks {
         this.flowASTOutputConfig = flowASTOutputConfig;
         this.cfgOutputConfig = cfgOutputConfig;
         this.mermaidOutputConfig = mermaidOutputConfig;
+        this.graphvizOutputConfig = graphvizOutputConfig;
+
         this.transpilerModelOutputConfig = transpilerModelOutputConfig;
         this.llmOutputConfig = llmOutputConfig;
         this.idProvider = idProvider;
@@ -63,48 +78,80 @@ public class SmojolTasks {
     }
 
     public List<AnalysisTaskResult> run(List<CommandLineAnalysisTask> commandLineAnalysisTasks) throws IOException {
-        return tasks(commandLineAnalysisTasks).map(AnalysisTask::run).toList();
+        List<AnalysisTask> taskList = tasks(commandLineAnalysisTasks).toList();
+        List<AnalysisTaskResult> results = new ArrayList<>();
+        for (int i = 0; i < taskList.size(); i++) {
+            try {
+                AnalysisTaskResult result = taskList.get(i).run();
+                results.add(result);
+                // Abort remaining tasks if BUILD_BASE_ANALYSIS failed — baseModel is null.
+                boolean isBaseTask = commandLineAnalysisTasks.size() > i
+                        && commandLineAnalysisTasks.get(i) == CommandLineAnalysisTask.BUILD_BASE_ANALYSIS;
+                if (isBaseTask && result instanceof AnalysisTaskResultError) {
+                    LOGGER.severe("BUILD_BASE_ANALYSIS failed, aborting remaining tasks");
+                    break;
+                }
+            } catch (Exception e) {
+                String taskName = commandLineAnalysisTasks.size() > i
+                    ? commandLineAnalysisTasks.get(i).name() : "TASK_" + i;
+                boolean isBaseTask = CommandLineAnalysisTask.BUILD_BASE_ANALYSIS.name().equals(taskName);
+                if (isBaseTask) {
+                    LOGGER.severe("BUILD_BASE_ANALYSIS threw exception, aborting remaining tasks: " + e.getMessage());
+                    results.add(AnalysisTaskResult.ERROR(e, taskName));
+                    break;
+                }
+                LOGGER.warning("Task " + taskName + " threw exception, continuing: " + e.getMessage());
+                results.add(AnalysisTaskResult.ERROR(e, taskName));
+            }
+        }
+        return results;
     }
 
     public AnalysisTask FLOW_TO_NEO4J = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new InjectIntoNeo4JTask(baseModel.flowRoot(), baseModel.dataStructures(), qualifier, neo4JDriverBuilder, graphBuildConfig).run();
+            return new InjectIntoNeo4JTask(baseModel.flowRoot(), baseModel.dataStructures(), qualifier,
+                    neo4JDriverBuilder, graphBuildConfig).run();
         }
     };
 
     public AnalysisTask ATTACH_COMMENTS = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new AttachCommentsTask(baseModel.flowRoot(), baseModel.dataStructures(), baseModel.navigator(), sourceConfig).run();
+            return new AttachCommentsTask(baseModel.flowRoot(), baseModel.dataStructures(), baseModel.navigator(),
+                    sourceConfig).run();
         }
     };
 
     public AnalysisTask WRITE_DATA_STRUCTURES = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new WriteDataStructuresTask(baseModel.dataStructures(), dataStructuresOutputConfig, resourceOperations).run();
+            return new WriteDataStructuresTask(baseModel.dataStructures(), dataStructuresOutputConfig,
+                    resourceOperations, baseModel.extendedDocument(), baseModel.copybooksRepository()).run();
         }
     };
 
     public AnalysisTask FLOW_TO_GRAPHML = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new ExportToGraphMLTask(baseModel.flowRoot(), baseModel.dataStructures(), graphMLOutputConfig, qualifier, resourceOperations).run();
+            return new ExportToGraphMLTask(baseModel.flowRoot(), baseModel.dataStructures(), graphMLOutputConfig,
+                    qualifier, resourceOperations).run();
         }
     };
 
     public AnalysisTask COMPARE_CODE = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new CompareCodeTask(baseModel.flowRoot(), baseModel.dataStructures(), qualifier, similarityOutputConfig, resourceOperations).run();
+            return new CompareCodeTask(baseModel.flowRoot(), baseModel.dataStructures(), qualifier,
+                    similarityOutputConfig, resourceOperations).run();
         }
     };
 
     public AnalysisTask EXPORT_UNIFIED_TO_JSON = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new ExportUnifiedModelToJSONTask(baseModel.flowRoot(), baseModel.dataStructures(), qualifier, unifiedModelOutputConfig, resourceOperations).run();
+            return new ExportUnifiedModelToJSONTask(baseModel.flowRoot(), baseModel.dataStructures(), qualifier,
+                    unifiedModelOutputConfig, resourceOperations).run();
         }
     };
 
@@ -125,7 +172,10 @@ public class SmojolTasks {
     public AnalysisTask BUILD_TRANSPILER_FLOWGRAPH = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            TranspilerFlowgraph transpilerFlowgraph = new BuildTranspilerFlowgraphTask(baseModel.rawAST(), baseModel.dataStructures(), baseModel.symbolTable(), ImmutableList.of("MAIN-SECTION-01", "SUBROUTINE-1"), transpilerModelOutputConfig, resourceOperations, neo4JDriverBuilder).run();
+            TranspilerFlowgraph transpilerFlowgraph = new BuildTranspilerFlowgraphTask(baseModel.rawAST(),
+                    baseModel.dataStructures(), baseModel.symbolTable(),
+                    ImmutableList.of("MAIN-SECTION-01", "SUBROUTINE-1"), transpilerModelOutputConfig,
+                    resourceOperations, neo4JDriverBuilder).run();
             return AnalysisTaskResult.OK(CommandLineAnalysisTask.BUILD_TRANSPILER_FLOWGRAPH, transpilerFlowgraph);
         }
     };
@@ -133,7 +183,8 @@ public class SmojolTasks {
     public AnalysisTask DRAW_FLOWCHART = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new DrawFlowchartTask(baseModel.navigator(), flowchartOutputWriter, sourceConfig, resourceOperations, baseModel.flowRoot()).run();
+            return new DrawFlowchartTask(baseModel.navigator(), flowchartOutputWriter, sourceConfig, resourceOperations,
+                    baseModel.flowRoot()).run();
         }
     };
 
@@ -144,10 +195,18 @@ public class SmojolTasks {
         }
     };
 
+    public AnalysisTask EXPORT_GRAPHVIZ = new AnalysisTask() {
+        @Override
+        public AnalysisTaskResult run() {
+            return new ExportGraphvizTask(baseModel.flowRoot(), graphvizOutputConfig, resourceOperations).run();
+        }
+    };
+
     public AnalysisTask WRITE_CFG = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new WriteControlFlowGraphTask(baseModel.flowRoot(), idProvider, cfgOutputConfig, resourceOperations).run();
+            return new WriteControlFlowGraphTask(baseModel.flowRoot(), idProvider, cfgOutputConfig, resourceOperations)
+                    .run();
         }
     };
 
@@ -168,7 +227,8 @@ public class SmojolTasks {
     public AnalysisTask WRITE_LLM_SUMMARY = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new WriteLLMSummaryTask(baseModel.flowRoot(), baseModel.dataStructures(), llmOutputConfig, resourceOperations).run();
+            return new WriteLLMSummaryTask(baseModel.flowRoot(), baseModel.dataStructures(), llmOutputConfig,
+                    resourceOperations).run();
         }
     };
 
@@ -195,6 +255,8 @@ public class SmojolTasks {
             case WRITE_RAW_AST -> WRITE_RAW_AST;
             case DRAW_FLOWCHART -> DRAW_FLOWCHART;
             case EXPORT_MERMAID -> EXPORT_MERMAID;
+            case EXPORT_GRAPHVIZ -> EXPORT_GRAPHVIZ;
+
             case WRITE_FLOW_AST -> WRITE_FLOW_AST;
             case WRITE_CFG -> WRITE_CFG;
             case ATTACH_COMMENTS -> ATTACH_COMMENTS;

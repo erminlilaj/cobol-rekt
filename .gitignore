@@ -141,3 +141,67 @@ artifacts/
 **/test-code/out/
 
 **/*.sqlite
+
+# Neo4j
+**/neo4j_data
+
+
+**/.venv/
+
+# ChromaDB vector store #
+##########################
+.chroma_db/
+
+# Codex agent config #
+######################
+.codex
+.vscode/
+
+# Generated RAG evaluation artifacts #
+######################################
+rag_kb_evaluation.json
+rag_kb_evaluation.csv
+rag_kb_evaluation_report.md
+rag_evaluation_report.md
+rag_index_stdout.txt
+batch_summary_report.json
+
+# Thesis writing files (kept locally, not in repo) #
+####################################################
+main.tex
+presentation.tex
+report_plan.md
+technical_report.md
+technical_report_answers.md
+thesis_progress.md
+ongoingPlan.md
+java_cfg_investigation.md
+improvement_report.md
+
+# AI agent config files #
+##########################
+AGENTS.md
+CLAUDE.md
+
+# Agent coordination artifacts (not for version control) #
+###########################################################
+docs/handoff.md
+docs/proposals/0*.md
+docs/proposals/README.md
+docs/proposals/rag_chunk_contract_v1_5.md
+docs/proposals/rag_output_improvement_plan.md
+docs/discussions/
+docs/progress/
+docs/audit-discussion-*.md
+docs/java-first-cobol-audit-*.md
+docs/failed-files-comparison-*.md
+workDone.md
+
+# Baseline artifacts (machine-specific or generated) #
+#######################################################
+baselines/source-files-all.txt
+
+# Temporary outputs #
+######################
+error_log.txt
+temp_summary.json

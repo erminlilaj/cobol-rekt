@@ -2,10 +2,10 @@ package org.smojol.toolkit.flowchart;
 
 import com.mojo.algorithms.id.UUIDProvider;
 import org.antlr.v4.runtime.tree.ParseTree;
-import org.eclipse.lsp.cobol.core.CobolParser;
 import com.mojo.algorithms.visualisation.FlowchartOutputFormat;
 import org.smojol.common.navigation.CobolEntityNavigator;
 import org.smojol.toolkit.interpreter.FullProgram;
+import org.eclipse.lsp.cobol.core.CobolParser;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -19,7 +19,8 @@ public abstract class FlowchartGenerationStrategy {
     protected final FlowchartOutputFormat outputFormat;
     public static final FlowchartGenerationStrategy DONT_DRAW = new FlowchartGenerationStrategy(null) {
         @Override
-        public void draw(CobolEntityNavigator navigator, ParseTree root, Path dotFileOutputDir, Path imageOutputDir, String programName) {
+        public void draw(CobolEntityNavigator navigator, ParseTree root, Path dotFileOutputDir, Path imageOutputDir,
+                String programName) {
             LOGGER.info("Not Drawing Flowchart...");
         }
     };
@@ -28,11 +29,20 @@ public abstract class FlowchartGenerationStrategy {
         this.outputFormat = outputFormat;
     }
 
-    public abstract void draw(CobolEntityNavigator navigator, ParseTree root, Path dotFileOutputDir, Path imageOutputDir, String programName) throws IOException, InterruptedException;
+    public abstract void draw(CobolEntityNavigator navigator, ParseTree root, Path dotFileOutputDir,
+            Path imageOutputDir, String programName) throws IOException, InterruptedException;
 
-    public static FlowchartGenerationStrategy strategy(String generationStrategyAsString, String flowchartOutputFormatAsString) {
+    public void draw(CobolEntityNavigator navigator, ParseTree root, Path dotFileOutputDir, Path imageOutputDir,
+            String programName, org.smojol.common.flowchart.ChartOverlay overlay)
+            throws IOException, InterruptedException {
+        draw(navigator, root, dotFileOutputDir, imageOutputDir, programName);
+    }
+
+    public static FlowchartGenerationStrategy strategy(String generationStrategyAsString,
+            String flowchartOutputFormatAsString) {
         FlowchartOutputFormat flowchartOutputFormat = "PNG".equals(flowchartOutputFormatAsString) ? PNG : SVG;
-        if (generationStrategyAsString == null) return new FullProgram(flowchartOutputFormat, new UUIDProvider());
+        if (generationStrategyAsString == null)
+            return new FullProgram(flowchartOutputFormat, new UUIDProvider());
         return switch (generationStrategyAsString) {
             case "SECTION" -> new PerSection(flowchartOutputFormat, new UUIDProvider());
             case "PARAGRAPH" -> new PerParagraph(flowchartOutputFormat, new UUIDProvider());

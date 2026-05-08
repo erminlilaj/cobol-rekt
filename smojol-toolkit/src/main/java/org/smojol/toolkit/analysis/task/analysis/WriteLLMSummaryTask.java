@@ -7,6 +7,8 @@ import com.google.gson.stream.JsonWriter;
 import com.mojo.algorithms.navigation.TreeMapperTraversal;
 import com.mojo.woof.llm.Advisor;
 import com.mojo.woof.llm.AzureOpenAIAdvisor;
+import com.mojo.woof.llm.OllamaAdvisor;
+import com.mojo.woof.llm.OllamaCredentials;
 import com.mojo.woof.llm.OpenAICredentials;
 import org.smojol.common.ast.FlowNode;
 import org.smojol.common.resource.ResourceOperations;
@@ -27,7 +29,8 @@ public class WriteLLMSummaryTask implements AnalysisTask {
     private final OutputArtifactConfig llmOutputConfig;
     private final ResourceOperations resourceOperations;
 
-    public WriteLLMSummaryTask(FlowNode flowRoot, CobolDataStructure dataRoot, OutputArtifactConfig llmOutputConfig, ResourceOperations resourceOperations) {
+    public WriteLLMSummaryTask(FlowNode flowRoot, CobolDataStructure dataRoot, OutputArtifactConfig llmOutputConfig,
+            ResourceOperations resourceOperations) {
         this.flowRoot = flowRoot;
         this.dataRoot = dataRoot;
         this.llmOutputConfig = llmOutputConfig;
@@ -52,13 +55,16 @@ public class WriteLLMSummaryTask implements AnalysisTask {
         }
     }
 
-
     private static Map<String, SummaryTree> summariseThroughLLM(FlowNode flowRoot, CobolDataStructure dataRoot) {
-        Advisor advisor = new AzureOpenAIAdvisor(OpenAICredentials.fromEnv());
+        Advisor advisor = "OLLAMA".equals(System.getenv("LLM_SOURCE"))
+                ? new OllamaAdvisor(OllamaCredentials.fromEnv())
+                : new AzureOpenAIAdvisor(OpenAICredentials.fromEnv());
         Function<FlowNode, List<FlowNode>> codeChildrenFn = FlowNode::astChildren;
         Function<CobolDataStructure, List<CobolDataStructure>> dataChildrenFn = CobolDataStructure::subStructures;
-        SummaryTree codeSummary = new TreeMapperTraversal<FlowNode, SummaryTree>().accept(flowRoot, new CodeSummaryVisitor(advisor), codeChildrenFn);
-        SummaryTree dataSummary = new TreeMapperTraversal<CobolDataStructure, SummaryTree>().accept(dataRoot, new DataSummaryVisitor(advisor), dataChildrenFn);
+        SummaryTree codeSummary = new TreeMapperTraversal<FlowNode, SummaryTree>().accept(flowRoot,
+                new CodeSummaryVisitor(advisor), codeChildrenFn);
+        SummaryTree dataSummary = new TreeMapperTraversal<CobolDataStructure, SummaryTree>().accept(dataRoot,
+                new DataSummaryVisitor(advisor), dataChildrenFn);
         return ImmutableMap.of("codeSummary", codeSummary, "dataSummary", dataSummary);
     }
 }

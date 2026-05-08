@@ -26,9 +26,9 @@ public class MultiplyFlowNode extends CobolFlowNode {
     private CobolParser.MultiplyGivingOperandContext givingRhs;
     private List<CobolParser.MultiplyGivingResultContext> givingDestinations;
     private CobolExpression lhsExpression;
-    private List<CobolExpression> rhsExpressions;
+    private List<CobolExpression> rhsExpressions = ImmutableList.of();
     private CobolExpression givingRhsExpression;
-    private List<CobolExpression> givingDestinationExpressions;
+    private List<CobolExpression> givingDestinationExpressions = ImmutableList.of();
     private final List<CobolExpression> destinationExpressions = new ArrayList<>();
     private final List<CobolExpression> sourceExpressions = new ArrayList<>();
 
@@ -96,5 +96,20 @@ public class MultiplyFlowNode extends CobolFlowNode {
     public boolean isGiving() {
         CobolParser.MultiplyStatementContext multiplyStatement = new SyntaxIdentity<CobolParser.MultiplyStatementContext>(executionContext).get();
         return multiplyStatement.multiplyGiving() != null;
+    }
+
+    @Override
+    public List<String> variablesRead() {
+        List<String> reads = VariableUsageCollector.variableNamesIn(sourceExpressions);
+        if (givingDestinationExpressions.isEmpty()) {
+            reads = VariableUsageCollector.combine(reads,
+                    VariableUsageCollector.variableNamesIn(destinationExpressions));
+        }
+        return reads;
+    }
+
+    @Override
+    public List<String> variablesModified() {
+        return VariableUsageCollector.variableNamesIn(destinationExpressions);
     }
 }

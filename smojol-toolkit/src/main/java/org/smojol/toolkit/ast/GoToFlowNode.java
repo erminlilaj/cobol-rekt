@@ -16,6 +16,8 @@ import org.smojol.common.vm.interpreter.FlowControl;
 import org.smojol.common.vm.stack.StackFrames;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 
@@ -73,6 +75,20 @@ public class GoToFlowNode extends CobolFlowNode implements InternalControlFlowNo
     @Override
     public List<SemanticCategory> categories() {
         return ImmutableList.of(SemanticCategory.CONTROL_FLOW);
+    }
+
+    @Override
+    public Map<String, Object> metadata() {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        CobolParser.GoToStatementContext goToStatement = new SyntaxIdentity<CobolParser.GoToStatementContext>(getExecutionContext()).get();
+        metadata.put("goto_targets", goToStatement.procedureName().stream()
+                .map(RuleContext::getText).toList());
+        if (dependsUponFactor()) {
+            metadata.put("depending_on", goToStatement.generalIdentifier().getText());
+            metadata.put("dynamic_control_hazard", true);
+            metadata.put("warning", "GO TO DEPENDING ON chooses a target dynamically at runtime");
+        }
+        return metadata;
     }
 
     @Override

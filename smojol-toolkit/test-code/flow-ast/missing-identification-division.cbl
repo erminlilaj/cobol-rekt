@@ -1,0 +1,8 @@
+       PROGRAM-ID. MISSING-ID.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+           01 WS-MSG PIC X(8) VALUE "LENIENT".
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           DISPLAY WS-MSG.
+           GOBACK.
