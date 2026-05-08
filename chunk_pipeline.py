@@ -97,6 +97,22 @@ _CURRENT_SOURCE_MTIME: str | None = None
 # Utilities
 # =============================================================================
 
+# Regex that matches the Java parser DIALECT noise tokens and the zero-width
+# Unicode characters (U+200B ZWSP etc.) that accompany them.
+_DIALECT_NOISE_RE = re.compile(
+    r"\s*_DIALECT_\s*\d*[​‌‍﻿ ]*",
+    re.UNICODE,
+)
+_ZERO_WIDTH_RE = re.compile(r"[​‌‍﻿]", re.UNICODE)
+
+
+def _strip_dialect_noise(text: str) -> str:
+    """Remove _DIALECT_ NNN tokens and zero-width Unicode chars from parser output."""
+    text = _DIALECT_NOISE_RE.sub(" ", text)
+    text = _ZERO_WIDTH_RE.sub("", text)
+    return " ".join(text.split())
+
+
 # Tiktoken BPE counter (cl100k_base = GPT-4 / text-embedding-3 tokenizer).
 # Falls back to whitespace splitting if tiktoken is not installed.
 try:
@@ -218,6 +234,9 @@ def _atomic_write_json(path: Path, data):
 def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     """Write a single chunk JSON file."""
     metadata = mark_indexability(text, metadata)
+    # Ensure source_id mirrors chunk_id so BM25-retrieved chunks have a
+    # usable citation reference even when not loaded through the vector store.
+    metadata.setdefault("source_id", metadata.get("chunk_id"))
     metadata["schema_version"] = CHUNK_SCHEMA_VERSION
     metadata["pipeline_version"] = PIPELINE_VERSION
     metadata["analysis_timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -3184,7 +3203,7 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
         # Build chunk text: comment_english (if available) + heading + body
         parts = []
         comment_meta = enriched.get(heading, {})
-        comment_english = comment_meta.get("english", "")
+        comment_english = _fix_translation_typos(comment_meta.get("english", ""))
         if comment_english:
             parts.append(comment_english)
             
@@ -3351,6 +3370,19 @@ def _normalize_call_target(raw: str) -> str:
     """
     return re.split(r"\s+(?:THRU|THROUGH)\s+", raw, maxsplit=1,
                     flags=re.IGNORECASE)[0].strip()
+
+
+_TRANSLATION_TYPOS: list[tuple[str, str]] = [
+    ("semophore", "semaphore"),
+]
+
+
+def _fix_translation_typos(text: str) -> str:
+    """Correct known misspellings in Italian→English machine-translated comments."""
+    for wrong, right in _TRANSLATION_TYPOS:
+        if wrong in text:
+            text = text.replace(wrong, right)
+    return text
 
 
 def _load_enriched_comments(report_dir: Path) -> dict:
@@ -5315,70 +5347,103 @@ def generate_cobol_analysis_health(report_dir: Path, chunks_dir: Path,
 
 def generate_controlflow_cfg(report_dir: Path, chunks_dir: Path,
                              program: str, verbose: bool) -> int:
-    """Generate a controlflow.cfg chunk from Java CFG edges and edge conditions."""
+    """Generate per-paragraph control-flow summary chunks from Java CFG data.
+
+    Replaces the old flat edge-list format (one giant chunk inevitably split
+    into 100+ LLM-hostile parts) with compact, natural-language per-paragraph
+    summaries.  One chunk is written per paragraph that has at least one
+    outgoing PERFORM or GO TO edge.  Example output:
+
+        Control-flow for MAIN-PARA in MYPROG.CBL:
+          PERFORM calls: INIT-FIELDS, PROCESS-DATA, FINALIZE
+          GO TO (unconditional): END-PARA
+          GO TO ERROR-EXIT: when WS-STATUS NOT EQUAL '00'
+
+    Paragraphs with no outgoing control-flow are skipped because their logic
+    already appears in paragraph_logic chunks.
+    """
     nodes, edges = _cfg_nodes_edges(report_dir)
     if not nodes or not edges:
         return 0
 
-    node_by_id = {node.get("id"): node for node in nodes if node.get("id")}
-    edge_summaries: list[dict] = []
-    conditioned = 0
-    for index, edge in enumerate(edges, start=1):
-        source = node_by_id.get(edge.get(EDGE_SOURCE), {})
-        target = node_by_id.get(edge.get(EDGE_TARGET), {})
-        condition = str(edge.get("condition") or "").strip()
-        if condition:
-            conditioned += 1
-        edge_summaries.append({
-            "from": edge.get("fromLabel") or _node_label(source),
-            "to": edge.get("toLabel") or _node_label(target),
-            "edge_type": edge.get(EDGE_TYPE),
-            "condition": condition,
-            "source_line": edge.get("sourceLine"),
-            "line_origin": edge.get("lineOrigin"),
-            "evidence": _compact_text(edge.get("evidence") or source.get("originalText")),
-        })
+    node_by_id = {n.get("id"): n for n in nodes if n.get("id")}
+    paragraph_by_id = _paragraph_context_by_node_id(nodes, edges)
 
-    lines = [
-        f"Control-flow graph for {program}:",
-        (
-            f"Java CFG export contains {len(nodes)} nodes and {len(edges)} edges; "
-            f"{conditioned} edge(s) carry explicit branch conditions."
-        ),
-        "Source-location contract: sourceLine/sourceColumn are parser token coordinates; lineOrigin marks parser_source when Java provided the location.",
-    ]
-    for edge in edge_summaries:
-        line = f"- {edge['from']} -> {edge['to']} [{edge['edge_type']}]"
-        details = []
-        if edge.get("condition"):
-            details.append(f"condition {edge['condition']}")
-        if edge.get("source_line") is not None:
-            details.append(f"source line {edge['source_line']}")
-        if edge.get("evidence"):
-            details.append(f"evidence {edge['evidence']}")
-        if details:
-            line += ": " + "; ".join(details)
-        lines.append(line + ".")
+    all_paragraphs: list[str] = sorted({
+        str(n.get("name")).upper()
+        for n in nodes
+        if n.get("type") == "PARAGRAPH" and n.get("name")
+    })
 
-    metadata = {
-        "chunk_type": "controlflow.cfg",
-        "chunk_id": f"{program}:controlflow.cfg",
-        "parent_program_chunk": f"{program}:program_summary",
-        "program": program,
-        "node_count": len(nodes),
-        "edge_count": len(edges),
-        "conditioned_edge_count": conditioned,
-        "source_location_contract": {
-            "sourceLine": "1-based parser token line when present",
-            "sourceColumn": "0-based parser token column when present",
-            "lineOrigin": "parser_source for Java parser-derived locations",
-        },
-        "edges": edge_summaries,
-    }
-    write_chunk(chunks_dir, f"{program}__controlflow_cfg.json", "\n".join(lines), metadata)
+    para_performs: dict[str, list[str]] = {}
+    para_gotos: dict[str, list[tuple[str, str]]] = {}
+
+    for edge in edges:
+        if edge.get(EDGE_TYPE) != "JUMPS_TO":
+            continue
+        source_id = edge.get(EDGE_SOURCE)
+        para = paragraph_by_id.get(source_id, "")
+        if not para:
+            continue
+        target_node = node_by_id.get(edge.get(EDGE_TARGET), {})
+        target = (edge.get("toLabel") or _node_label(target_node)).strip()
+        if not target or target.startswith("_DIALECT_") or target == "unknown":
+            continue
+        target = _strip_dialect_noise(target)
+        if not target:
+            continue
+        evidence = _compact_text(edge.get("evidence") or "", limit=120)
+        condition = _strip_dialect_noise(str(edge.get("condition") or "")).strip()
+        is_goto = "GO TO" in evidence.upper() or "GOTO" in evidence.upper()
+        if is_goto:
+            para_gotos.setdefault(para, []).append((target, condition))
+        else:
+            para_performs.setdefault(para, []).append(target)
+
+    count = 0
+    for para in all_paragraphs:
+        performs = list(dict.fromkeys(para_performs.get(para, [])))
+        raw_gotos = para_gotos.get(para, [])
+        gotos_uncond = list(dict.fromkeys(t for t, c in raw_gotos if not c))
+        seen_cond: set[str] = set()
+        gotos_cond: list[tuple[str, str]] = []
+        for t, c in raw_gotos:
+            if c and t not in seen_cond:
+                seen_cond.add(t)
+                gotos_cond.append((t, c))
+
+        if not performs and not gotos_uncond and not gotos_cond:
+            continue
+
+        lines = [f"Control-flow for {para} in {program}:"]
+        if performs:
+            lines.append(f"  PERFORM calls: {', '.join(performs)}")
+        if gotos_uncond:
+            lines.append(f"  GO TO (unconditional): {', '.join(gotos_uncond)}")
+        for target, cond in gotos_cond[:8]:
+            lines.append(f"  GO TO {target}: when {cond}")
+
+        safe_para = re.sub(r"[^\w\-]", "_", para)
+        metadata = {
+            "chunk_type": "controlflow.cfg",
+            "chunk_id": f"{program}:controlflow.cfg:{para}",
+            "parent_program_chunk": f"{program}:program_summary",
+            "program": program,
+            "paragraph": para,
+            "performs": performs,
+            "goto_targets": list(dict.fromkeys(t for t, _ in raw_gotos)),
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__controlflow_cfg__{safe_para}.json",
+            "\n".join(lines),
+            metadata,
+        )
+        count += 1
+
     if verbose:
-        print(f"  controlflow.cfg: nodes={len(nodes)}, edges={len(edges)}, conditioned={conditioned}")
-    return 1
+        print(f"  controlflow.cfg: {count}/{len(all_paragraphs)} paragraph chunks written")
+    return count
 
 
 def generate_dataflow_variable_chunks(report_dir: Path, chunks_dir: Path,
@@ -5616,7 +5681,7 @@ def _node_label(node: dict) -> str:
 
 
 def _compact_text(value, limit: int = 240) -> str:
-    text = " ".join(str(value or "").split())
+    text = _strip_dialect_noise(str(value or ""))
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 3)].rstrip() + "..."
@@ -5752,26 +5817,38 @@ def _screen_facts(paragraph_texts: dict[str, str], keywords: tuple[str, ...]) ->
 
 
 def _paragraph_context_by_node_id(nodes: list[dict], edges: list[dict]) -> dict[str, str]:
-    result: dict[str, str] = {}
-    current = ""
-    for node in nodes:
-        node_id = node.get("id")
-        metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
-        paragraph = _metadata_paragraph(metadata)
-        if node.get("type") == "PARAGRAPH" and node.get("name"):
-            current = str(node.get("name")).upper()
-            paragraph = current
-        if node_id and paragraph:
-            result[node_id] = paragraph
-        elif node_id and current:
-            result[node_id] = current
+    """Map every CFG node-id to its enclosing paragraph name.
 
+    Strategy: BFS from each PARAGRAPH node along STARTS_WITH/FOLLOWED_BY edges.
+    The linear-scan "running-current" approach is intentionally avoided because
+    node-list ordering is not guaranteed to interleave PARAGRAPH nodes with their
+    statement children — PERFORM/GOTO nodes often appear after the last PARAGRAPH
+    in the list, which would map them all to that final paragraph.
+    """
     node_by_id = {node.get("id"): node for node in nodes if node.get("id")}
     adjacency: dict[str, list[str]] = {}
     for edge in edges:
         if edge.get(EDGE_TYPE) in {"STARTS_WITH", "FOLLOWED_BY"}:
             adjacency.setdefault(edge.get(EDGE_SOURCE), []).append(edge.get(EDGE_TARGET))
 
+    result: dict[str, str] = {}
+
+    # Seed: PARAGRAPH nodes map to themselves; nodes with explicit metadata win.
+    for node in nodes:
+        node_id = node.get("id")
+        if not node_id:
+            continue
+        if node.get("type") == "PARAGRAPH" and node.get("name"):
+            result[node_id] = str(node.get("name")).upper()
+        else:
+            meta = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+            p = _metadata_paragraph(meta)
+            if p:
+                result[node_id] = p
+
+    # BFS: propagate each paragraph name to all reachable children.
+    # setdefault ensures the first (topologically earlier) paragraph wins for
+    # any node reachable from multiple paragraphs.
     for node in nodes:
         if node.get("type") != "PARAGRAPH" or not node.get("name"):
             continue
@@ -6652,13 +6729,14 @@ def generate_workflow_chunks(
             _normalize_call_target(c) for c in raw_calls_field
         ))
 
-        # Threshold 1: must call 2+ distinct paragraphs
-        if len(callee_names) < 2:
+        # Threshold 1: must call 1+ distinct paragraph (lowered from 2 to
+        # capture single-delegation orchestrators like LINK-wrappers)
+        if len(callee_names) < 1:
             continue
 
-        # Threshold 2: must have 3+ CFG nodes (filters pure dispatchers)
+        # Threshold 2: must have 2+ CFG nodes (filters trivial stubs)
         node_count = meta.get("node_count", 0)
-        if node_count < 3:
+        if node_count < 2:
             continue
 
         # Build workflow chunk text
