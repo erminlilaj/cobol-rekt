@@ -182,3 +182,26 @@ improvement_report.md
 ##########################
 AGENTS.md
 CLAUDE.md
+
+# Agent coordination artifacts (not for version control) #
+###########################################################
+docs/handoff.md
+docs/proposals/0*.md
+docs/proposals/README.md
+docs/proposals/rag_chunk_contract_v1_5.md
+docs/proposals/rag_output_improvement_plan.md
+docs/discussions/
+docs/progress/
+docs/audit-discussion-*.md
+docs/java-first-cobol-audit-*.md
+docs/failed-files-comparison-*.md
+workDone.md
+
+# Baseline artifacts (machine-specific or generated) #
+#######################################################
+baselines/source-files-all.txt
+
+# Temporary outputs #
+######################
+error_log.txt
+temp_summary.json
