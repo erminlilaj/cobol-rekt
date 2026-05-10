@@ -4930,7 +4930,8 @@ def generate_bm25_index(chunks_dir: Path, verbose: bool,
     return len(index_entries)
 
 
-def generate_manifest(chunks_dir: Path, verbose: bool) -> dict:
+def generate_manifest(chunks_dir: Path, verbose: bool,
+                      profile: str = "default") -> dict:
     """Write chunks_manifest.json summarizing all generated chunks."""
     entries = []
     _MANIFEST_SKIP = {"chunks_manifest.json", "bm25_index.json"}
@@ -4971,6 +4972,7 @@ def generate_manifest(chunks_dir: Path, verbose: bool) -> dict:
 
     manifest = {
         "schema_version": CHUNK_SCHEMA_VERSION,
+        "profile": profile,
         "total_chunks": len(entries),
         "type_counts": type_counts,
         "duplicate_content_hashes": duplicate_count,
@@ -6969,7 +6971,8 @@ def _workflow_callee_cics_suffix(chunks_dir: Path, program: str, callee: str) ->
 # =============================================================================
 
 def run_pipeline(report_dir: Path, verbose: bool = False,
-                 label_boost: float = 1.0) -> dict:
+                 label_boost: float = 1.0,
+                 profile: str = "default") -> dict:
     """Run the full chunk pipeline on a report directory.
 
     Returns a summary dict with chunk counts by type.
@@ -6995,6 +6998,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False,
     if is_jcl:
         mode.append("JCL")
     print(f"Mode: {' + '.join(mode)} | Schema: v{CHUNK_SCHEMA_VERSION}")
+    print(f"Profile: {profile}")
     print(f"Output: {chunks_dir}")
     if verbose and removed_stale_chunks:
         print(f"Cleared {removed_stale_chunks} stale chunk JSON file(s)")
@@ -7013,87 +7017,89 @@ def run_pipeline(report_dir: Path, verbose: bool = False,
             print("\n[COBOL chunks]")
         summary["program_summary"] = generate_program_summary(
             report_dir, chunks_dir, program, verbose)
-        summary["dead_code"] = generate_dead_code_reachability(
-            report_dir, chunks_dir, program, verbose)
         summary["dependencies"] = generate_dependencies(
             report_dir, chunks_dir, program, verbose)
-        summary["copybook_mentions"] = generate_copybook_mentions(
-            report_dir, chunks_dir, program, verbose)
-        summary["copybook_fields"] = generate_copybook_fields(
-            report_dir, chunks_dir, program, verbose)
-        summary["unused_copybooks"] = generate_unused_copybook_analysis(
-            report_dir, chunks_dir, program, verbose)
-        summary["comments"] = generate_comments(
-            report_dir, chunks_dir, program, verbose)
-        summary["commented_out_code"] = generate_commented_out_code(
-            report_dir, chunks_dir, program, verbose)
-        summary["controlflow.cfg"] = generate_controlflow_cfg(
-            report_dir, chunks_dir, program, verbose)
-        summary["dataflow.variable"] = generate_dataflow_variable_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["external_program_calls"] = generate_external_program_calls(
-            report_dir, chunks_dir, program, verbose)
-        summary["call_contract"] = generate_call_contract_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["datasets_tables_resources"] = generate_datasets_tables_resources(
-            report_dir, chunks_dir, program, verbose)
-        summary["cics_operations"] = generate_cics_operations(
-            report_dir, chunks_dir, program, verbose)
-        summary["cics.operation"] = generate_cics_operation_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["cics.program_transfer"] = generate_cics_program_transfer_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["cics.resource"] = generate_cics_resource_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["cics.error_handler"] = generate_cics_error_handler_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["error_path"] = generate_error_path_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["screen.interaction"] = generate_screen_interaction_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["static_values"] = generate_static_values(
-            report_dir, chunks_dir, program, verbose)
-        summary["paragraph_logic"] = generate_paragraph_logic(
-            report_dir, chunks_dir, program, verbose)
         summary["variable_group"] = generate_variable_groups(
-            report_dir, chunks_dir, program, verbose)
-        summary["business_rules"] = generate_business_rules(
-            report_dir, chunks_dir, program, verbose)
-        summary["business_rule"] = generate_business_rule_chunks(
-            report_dir, chunks_dir, program, verbose)
-        summary["sql_operation"] = generate_sql_operations(
             report_dir, chunks_dir, program, verbose)
         summary["cobol_analysis_health"] = generate_cobol_analysis_health(
             report_dir, chunks_dir, program, verbose)
 
-        # Enrich paragraph chunks with CFG metadata
-        enriched = enrich_paragraph_chunks(
-            chunks_dir, report_dir, program, verbose)
-        summary["cfg_enriched"] = enriched
+        if profile == "default":
+            summary["dead_code"] = generate_dead_code_reachability(
+                report_dir, chunks_dir, program, verbose)
+            summary["copybook_mentions"] = generate_copybook_mentions(
+                report_dir, chunks_dir, program, verbose)
+            summary["copybook_fields"] = generate_copybook_fields(
+                report_dir, chunks_dir, program, verbose)
+            summary["unused_copybooks"] = generate_unused_copybook_analysis(
+                report_dir, chunks_dir, program, verbose)
+            summary["comments"] = generate_comments(
+                report_dir, chunks_dir, program, verbose)
+            summary["commented_out_code"] = generate_commented_out_code(
+                report_dir, chunks_dir, program, verbose)
+            summary["controlflow.cfg"] = generate_controlflow_cfg(
+                report_dir, chunks_dir, program, verbose)
+            summary["dataflow.variable"] = generate_dataflow_variable_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["external_program_calls"] = generate_external_program_calls(
+                report_dir, chunks_dir, program, verbose)
+            summary["call_contract"] = generate_call_contract_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["datasets_tables_resources"] = generate_datasets_tables_resources(
+                report_dir, chunks_dir, program, verbose)
+            summary["cics_operations"] = generate_cics_operations(
+                report_dir, chunks_dir, program, verbose)
+            summary["cics.operation"] = generate_cics_operation_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["cics.program_transfer"] = generate_cics_program_transfer_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["cics.resource"] = generate_cics_resource_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["cics.error_handler"] = generate_cics_error_handler_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["error_path"] = generate_error_path_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["screen.interaction"] = generate_screen_interaction_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["static_values"] = generate_static_values(
+                report_dir, chunks_dir, program, verbose)
+            summary["paragraph_logic"] = generate_paragraph_logic(
+                report_dir, chunks_dir, program, verbose)
+            summary["business_rules"] = generate_business_rules(
+                report_dir, chunks_dir, program, verbose)
+            summary["business_rule"] = generate_business_rule_chunks(
+                report_dir, chunks_dir, program, verbose)
+            summary["sql_operation"] = generate_sql_operations(
+                report_dir, chunks_dir, program, verbose)
 
-        # Apply size guard to paragraph chunks
-        guard_stats = apply_size_guard(chunks_dir, program, verbose)
-        if verbose and (guard_stats["merged"] or guard_stats["split"]):
-            print(f"  Size guard: {guard_stats['merged']} merges, "
-                  f"{guard_stats['split']} splits")
+            # Enrich paragraph chunks with CFG metadata
+            enriched = enrich_paragraph_chunks(
+                chunks_dir, report_dir, program, verbose)
+            summary["cfg_enriched"] = enriched
 
-        # Section-level and workflow chunks (new in schema v1.2).
-        # section_summary groups paragraphs by COBOL SECTION for mid-level retrieval.
-        # workflow groups orchestrating paragraphs with their callee summaries.
-        # Both run AFTER paragraph enrichment so they can read calls_names metadata.
-        summary["section_summary"] = generate_section_summaries(
-            report_dir, chunks_dir, program, verbose)
-        summary["workflow"] = generate_workflow_chunks(
-            report_dir, chunks_dir, program, verbose)
+            # Apply size guard to paragraph chunks
+            guard_stats = apply_size_guard(chunks_dir, program, verbose)
+            if verbose and (guard_stats["merged"] or guard_stats["split"]):
+                print(f"  Size guard: {guard_stats['merged']} merges, "
+                      f"{guard_stats['split']} splits")
 
-        # Phase 2 post-processing enrichments
-        enrich_called_by(chunks_dir, program, verbose)        # R2.4
-        enrich_calls_chunk_ids(chunks_dir, program, verbose)  # R3.2
-        enrich_program_summary_links(chunks_dir, program, verbose)  # R3.3
+            # Section-level and workflow chunks (new in schema v1.2).
+            # section_summary groups paragraphs by COBOL SECTION for mid-level retrieval.
+            # workflow groups orchestrating paragraphs with their callee summaries.
+            # Both run AFTER paragraph enrichment so they can read calls_names metadata.
+            summary["section_summary"] = generate_section_summaries(
+                report_dir, chunks_dir, program, verbose)
+            summary["workflow"] = generate_workflow_chunks(
+                report_dir, chunks_dir, program, verbose)
 
-        # Phase 3 post-processing enrichments
-        enrich_variable_group_usage(chunks_dir, report_dir, program, verbose)  # R2.1
-        enrich_related_variable_groups(chunks_dir, program, verbose)           # R3.1
+            # Phase 2 post-processing enrichments
+            enrich_called_by(chunks_dir, program, verbose)        # R2.4
+            enrich_calls_chunk_ids(chunks_dir, program, verbose)  # R3.2
+            enrich_program_summary_links(chunks_dir, program, verbose)  # R3.3
+
+            # Phase 3 post-processing enrichments
+            enrich_variable_group_usage(chunks_dir, report_dir, program, verbose)  # R2.1
+            enrich_related_variable_groups(chunks_dir, program, verbose)           # R3.1
 
     # --- JCL chunks ---
     if is_jcl:
@@ -7114,7 +7120,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False,
     # --- Manifest ---
     if verbose:
         print()
-    manifest = generate_manifest(chunks_dir, verbose)
+    manifest = generate_manifest(chunks_dir, verbose, profile)
     summary["total"] = manifest.get("total_chunks", 0)
     summary["rag_bundle"] = generate_rag_bundle(report_dir, chunks_dir, program, verbose)
 
@@ -7157,6 +7163,12 @@ def main():
         "--label-boost", type=float, default=1.0,
         help="Weight applied to BM25 structured paragraph-label terms (default: 1.0)",
     )
+    parser.add_argument(
+        "--profile",
+        choices=["default", "facts-only"],
+        default="default",
+        help="Retrieval profile: default emits all chunks; facts-only emits core fact chunks",
+    )
     args = parser.parse_args()
 
     if not args.report_dir.is_dir():
@@ -7174,7 +7186,8 @@ def main():
     set_token_counter(args.token_counter)
 
     summary = run_pipeline(args.report_dir, verbose=args.verbose,
-                           label_boost=args.label_boost)
+                           label_boost=args.label_boost,
+                           profile=args.profile)
     if summary:
         counter_label = "BPE" if _USE_BPE else "whitespace"
         print(f"\nDone. {summary.get('total', 0)} chunks generated "

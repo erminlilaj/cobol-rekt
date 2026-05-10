@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-10 — Stage 5: D6 facts-only chunk profile
+
+**File(s):** `chunk_pipeline.py`, `test_chunk_pipeline_profiles.py`, `workDone.md`
+**What changed:** Added `--profile {default,facts-only}` to `chunk_pipeline.py`. The default profile keeps the existing chunk generation path; the facts-only profile emits only core fact chunks (`program_summary`, `dependencies`, `variable_group`, and COBOL analysis health) before BM25 indexing and manifest generation. Added `profile` to `chunks_manifest.json`. Added five exact unittest cases covering default paragraph_logic emission, facts-only omission of paragraph_logic/section_summary/workflow, program_summary and variable_group presence, and manifest profile tagging.
+**Why:** Stage 5 of proposal 0006 — provide an opt-in retrieval profile for fact-focused chunk sets while leaving default human-readable chunk generation unchanged.
+
+---
+
 ## 2026-05-10 — Stage 3: D4 BM25 structured term weights
 
 **File(s):** `chunk_pipeline.py`, `test_bm25_index.py`, `scripts/bm25_boost_selection.md`, `workDone.md`
