@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-10 — Stage 8: D10 final verification and wrap-up
+
+**File(s):** `workDone.md`
+**What changed:** Recorded final verification for Stages 3–7. Python suite passed with `python3 -m unittest test_chunk_pipeline_cics.py test_chunk_pipeline.py test_pipeline_hardening.py test_bm25_index.py test_chunk_pipeline_profiles.py test_bench_compaction.py` (88 tests, 2 skipped). Java suite passed with `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` (27 tests, 0 failures, 0 errors, 2 skipped, BUILD SUCCESS). Draft PR title: `feat: optimization and compaction — Stages 3–8 (D4, D6–D10)`.
+**Why:** Stage 8 of proposal 0006 — finalize local verification and leave the branch ready for review without pushing or merging.
+
+---
+
 ## 2026-05-10 — Stage 7: D8+D9 optimization documentation
 
 **File(s):** `docs/optimization-and-compaction.md`, `CLAUDE.md`, `workDone.md`
