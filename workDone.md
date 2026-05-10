@@ -1,0 +1,37 @@
+# Work Done — Change Log
+
+Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recent first). Do not edit or delete existing entries.
+
+---
+
+## 2026-05-10 — Stage 3: D4 BM25 structured term weights
+
+**File(s):** `chunk_pipeline.py`, `test_bm25_index.py`, `scripts/bm25_boost_selection.md`, `workDone.md`
+**What changed:** Added additive `structured_term_weights` maps to every BM25 index entry, sourced from existing `structured_terms` plus `metadata.search_boost.paragraph_labels`, with a configurable `--label-boost` CLI flag defaulting to `1.0`. Added paragraph-label search boost metadata for paragraph_logic, controlflow.cfg, section_summary, and workflow chunks, and stripped only redundant standalone label lines while keeping the first mention. Added five Stage 3 unittest cases covering field emission, paragraph-label weights, unchanged `term_freq`, unchanged `structured_terms`, and the CLI flag. Documented the conservative `1.0` boost selection in `scripts/bm25_boost_selection.md`.
+**Why:** Stage 3 of proposal 0006 — expose paragraph labels as weighted retrieval metadata without mutating the existing BM25 term-frequency shape or deprecating `structured_terms`.
+
+---
+
+## 2026-05-10 — Stage 2: D3 CICS presentation-level dedup in `dependencies` chunk
+
+**File(s):** `chunk_pipeline.py`, `validate_chunks.py`, `test_chunk_pipeline_cics.py`, `test_chunk_pipeline.py`, `CLAUDE.md`, `docs/proposals/0006-optimization-and-compaction-plan.md`, `documentation-wip/proposals/0006-optimization-and-compaction-plan.md`, `workDone.md`
+**What changed:** Added `_HANDLE_IGNORE_CMDS` constant and `_aggregate_cics_for_deps_text()` helper in `chunk_pipeline.py`. Modified `generate_dependencies()` to use the aggregated CICS text: repeated `(command, target, operation_type)` triples are collapsed to one line per group listing up to 5 paragraphs (with `... +M more` suffix for N > 5); `HANDLE` and `IGNORE` commands bypass aggregation and appear one-per-occurrence to preserve error-handler evidence. Bumped `CHUNK_SCHEMA_VERSION` and `PIPELINE_VERSION` from `"1.5"` to `"1.6"` (both move together). Added `"1.6"` to `validate_chunks.SUPPORTED_SCHEMA_VERSIONS`. Added 6 contract tests in `test_chunk_pipeline_cics.py` covering aggregation, cap-at-5, HANDLE preservation, cics.operation-unchanged, schema version, and validate_chunks acceptance. Updated the one hardcoded `"1.5"` in `test_chunk_pipeline.py` to `"1.6"`. Updated CLAUDE.md §4 schema changelog. All 75 tests green.
+**Why:** Stage 2 of proposal 0006 — reduce CICS token bloat in the `dependencies` chunk by collapsing repeated `(command, target, type)` triples across paragraphs into a single aggregate line, while preserving error-handler evidence (HANDLE/IGNORE) verbatim.
+
+---
+
+## 2026-05-08 — Stage 1: D1+D2 contract-locking JUnit tests on `feature/optimization`
+
+**File(s):** `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/optimization-stage1.cbl`, `docs/proposals/0006-optimization-and-compaction-plan.md`, `documentation-wip/proposals/0006-optimization-and-compaction-plan.md`, `workDone.md`
+**What changed:** Added six contract-locking JUnit tests in `JavaHardeningRegressionTest` covering the literal-fact gates (D1) and dynamic CALL/CICS resolution (D2): `exportsNoAssignmentFactsForLiteralArithmeticCompute`, `exportsAssignmentFactsForFigurativeConstantsAsLiterals`, `exportsNoAssignmentFactsForSetEightyEightCondition`, `exportsChainedCallResolutionEachUsingItsPrecedingMoveLiteralWithMediumConfidence`, `exportsCallTargetSourceUnresolvedWhenWalkOrderHasNoPriorLiteralForTarget`, `exportsChainedXctlResolutionEachUsingItsPrecedingMoveLiteralWithMediumConfidence`. New fixture `optimization-stage1.cbl` covers the cases not already exercised by existing fixtures. Zero edits under `smojol-toolkit/src/main/`. Full class result: `Tests run: 15, Failures: 0, Errors: 0`. Plan revision 4 records two empirical findings that contradicted prior plan assumptions: figurative constants `SPACES`/`ZEROS` are treated as literals by `MoveFlowNode` and DO emit `assignment_facts`; dynamic CALL resolution is driven by CFG emission order, not source order or control flow, so a CALL after a same-paragraph MOVE+EXEC SQL is annotated `unresolved_identifier conf=low`. Tests lock the actual current behaviour.
+**Why:** Stage 1 of proposal 0006 — lock the current literal-fact and dynamic call resolution behaviour before any compaction stage (Stage 2 onward) can change adjacent code. Empirical findings replace plan assumptions; locking actual behaviour means any future drift is forced to be a deliberate, reviewed decision.
+
+---
+
+## 2026-05-08 — Stage 0: optimization branch plan finalized and mirrored
+
+**File(s):** `docs/proposals/0006-optimization-and-compaction-plan.md`, `documentation-wip/proposals/0006-optimization-and-compaction-plan.md`, `workDone.md`
+**What changed:** Created proposal 0006 (optimization-and-compaction implementation plan) and applied two rounds of Codex review fixes: schema bumps from `1.5` → `1.6` (both `CHUNK_SCHEMA_VERSION` and `PIPELINE_VERSION` together); root-level `python3 -m unittest` test layout (no `tests/` package); CICS dedup key `(command, target/resource, category)` aggregating paragraphs with HANDLE/IGNORE preservation guard; BM25 adds new additive `structured_term_weights` field, leaves `term_freq` and `structured_terms` untouched; BM25 boost sweep `{1.0, 1.5, 2.0}`; D5 (`pruned_paragraphs.json`) deferred unless re-justified; benchmark baseline pinned to a frozen `baseline_sha`; bench query set primarily derived from `rag_kb_evaluator.py:_build_queries()` with a labelled supplement; `structured_terms` retained indefinitely on this branch. Mirrored to `documentation-wip/proposals/0006-...`. Recreated `workDone.md` (was missing).
+**Why:** Discussion `docs/discussions/0005-optimization-techniques.md` resolved with the conclusion that cobol-rekt should remain source-preserving (no constant folding, no general constant propagation). Plan turns that conclusion into a staged, test-first implementation on branch `feature/optimization`. Two Codex review passes pinned each design decision to repo state and CLAUDE.md rules.
+
+---

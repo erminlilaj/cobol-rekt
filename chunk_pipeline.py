@@ -252,6 +252,48 @@ def write_chunk(chunks_dir: Path, filename: str, text: str, metadata: dict):
     _atomic_write_json(chunks_dir / filename, chunk)
 
 
+def _with_paragraph_label_boost(metadata: dict, labels: list[str]) -> dict:
+    """Attach paragraph-label search boosts without changing compatibility fields."""
+    clean_labels: list[str] = []
+    seen: set[str] = set()
+    for label in labels:
+        value = str(label or "").strip().upper()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        clean_labels.append(value)
+    if clean_labels:
+        metadata.setdefault("search_boost", {})["paragraph_labels"] = clean_labels
+    return metadata
+
+
+def _strip_redundant_label_mentions(text: str, labels: list[str]) -> str:
+    """Remove repeated standalone label mentions while keeping the first mention."""
+    if not text or not labels:
+        return text
+    seen: set[str] = set()
+    label_set = {str(label).strip().upper() for label in labels if str(label).strip()}
+    if not label_set:
+        return text
+
+    result_lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        upper = stripped.upper()
+        if upper in label_set:
+            if upper in seen:
+                continue
+            seen.add(upper)
+            result_lines.append(line)
+            continue
+
+        for label in label_set:
+            if re.search(rf"(?<![A-Z0-9_-]){re.escape(label)}(?![A-Z0-9_-])", upper):
+                seen.add(label)
+        result_lines.append(line)
+    return "\n".join(result_lines)
+
+
 def clear_existing_chunks(chunks_dir: Path) -> int:
     """Remove generated chunk JSON files before a fresh chunk pipeline run."""
     removed = 0
@@ -3296,7 +3338,7 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
             
         parts.append(heading)
         parts.append(body)
-        chunk_text = "\n".join(parts)
+        chunk_text = _strip_redundant_label_mentions("\n".join(parts), [heading])
 
         # raw_calls already extracted above (before body strip)
         # Normalize THRU whitespace (7b.7): collapse multiple spaces
@@ -3315,6 +3357,7 @@ def generate_paragraph_logic(report_dir: Path, chunks_dir: Path,
             "comment_english": comment_english if has_comments else None,
             "comment_category": comment_meta.get("category") if has_comments else None,
         }
+        _with_paragraph_label_boost(metadata, [heading])
         if prof and prof.get("structural_patterns"):
             metadata["structural_patterns"] = prof["structural_patterns"]
         safe_name = re.sub(r"[^\w\-]", "_", heading)
@@ -4800,7 +4843,8 @@ def apply_universal_size_guard(chunks_dir: Path, stats: dict | None = None,
     return stats
 
 
-def generate_bm25_index(chunks_dir: Path, verbose: bool) -> int:
+def generate_bm25_index(chunks_dir: Path, verbose: bool,
+                        label_boost: float = 1.0) -> int:
     """Generate bm25_index.json for hybrid BM25 + vector retrieval.
 
     Pre-tokenizes every chunk's text into term-frequency maps so that a BM25
@@ -4851,12 +4895,22 @@ def generate_bm25_index(chunks_dir: Path, verbose: bool) -> int:
                             if isinstance(vv, str) and vv:
                                 structured.add(vv.upper())
 
+        boost_terms = set(structured)
+        search_boost = meta.get("search_boost") if isinstance(meta.get("search_boost"), dict) else {}
+        for label in search_boost.get("paragraph_labels", []) or []:
+            if isinstance(label, str) and label:
+                boost_terms.add(label.upper())
+
         index_entries.append({
             "chunk_id": meta.get("chunk_id", f.stem),
             "file": f.name,
             "chunk_type": meta.get("chunk_type", "unknown"),
             "term_freq": tf,
             "structured_terms": sorted(structured),
+            "structured_term_weights": {
+                term: float(label_boost)
+                for term in sorted(boost_terms)
+            },
             "total_tokens": len(tokens_upper),
         })
 
@@ -5516,6 +5570,7 @@ def generate_controlflow_cfg(report_dir: Path, chunks_dir: Path,
             lines.append(f"  Branch condition: {cond}")
 
         safe_para = re.sub(r"[^\w\-]", "_", para)
+        label_boosts = [para] + performs + [target for target, _ in raw_gotos]
         metadata = {
             "chunk_type": "controlflow.cfg",
             "chunk_id": f"{program}:controlflow.cfg:{para}",
@@ -5526,10 +5581,11 @@ def generate_controlflow_cfg(report_dir: Path, chunks_dir: Path,
             "goto_targets": list(dict.fromkeys(t for t, _ in raw_gotos)),
             "conditioned_edge_count": conditioned_edge_count,
         }
+        _with_paragraph_label_boost(metadata, label_boosts)
         write_chunk(
             chunks_dir,
             f"{program}__controlflow_cfg__{safe_para}.json",
-            "\n".join(lines),
+            _strip_redundant_label_mentions("\n".join(lines), label_boosts),
             metadata,
         )
         count += 1
@@ -6729,7 +6785,7 @@ def generate_section_summaries(
             unique = [c for c in external_calls if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
             parts.append("External calls: " + "; ".join(unique))
 
-        chunk_text = "\n".join(parts)
+        chunk_text = _strip_redundant_label_mentions("\n".join(parts), paragraphs)
 
         # Sanitize section name for use in chunk ID and filename
         safe_name = re.sub(r"[^\w\-]", "_", section_name)
@@ -6743,6 +6799,7 @@ def generate_section_summaries(
             "paragraph_count": len(paragraphs),
             "paragraphs": paragraphs,
         }
+        _with_paragraph_label_boost(metadata, paragraphs)
         write_chunk(chunks_dir, f"{program}__section__{safe_name}.json",
                     chunk_text, metadata)
         count += 1
@@ -6855,7 +6912,8 @@ def generate_workflow_chunks(
             else:
                 parts.append(f"  - {callee}{cics_suffix}")
 
-        chunk_text = "\n".join(parts)
+        label_boosts = [entry_para] + callee_names
+        chunk_text = _strip_redundant_label_mentions("\n".join(parts), label_boosts)
 
         # Sanitize paragraph name for chunk ID / filename (no colons or spaces)
         safe_para = re.sub(r"[^\w\-]", "_", entry_para)
@@ -6869,6 +6927,7 @@ def generate_workflow_chunks(
             "called_paragraphs": callee_names,
             "callee_count": len(callee_names),
         }
+        _with_paragraph_label_boost(metadata, label_boosts)
         write_chunk(chunks_dir, f"{program}__workflow__{safe_para}.json",
                     chunk_text, metadata)
         count += 1
@@ -6909,7 +6968,8 @@ def _workflow_callee_cics_suffix(chunks_dir: Path, program: str, callee: str) ->
 # Main orchestrator
 # =============================================================================
 
-def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
+def run_pipeline(report_dir: Path, verbose: bool = False,
+                 label_boost: float = 1.0) -> dict:
     """Run the full chunk pipeline on a report directory.
 
     Returns a summary dict with chunk counts by type.
@@ -7049,7 +7109,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False) -> dict:
     summary["universal_splits"] = split_stats.get("split", 0)
 
     # --- BM25 index (after all chunks written, before manifest) ---
-    summary["bm25_entries"] = generate_bm25_index(chunks_dir, verbose)
+    summary["bm25_entries"] = generate_bm25_index(chunks_dir, verbose, label_boost)
 
     # --- Manifest ---
     if verbose:
@@ -7093,6 +7153,10 @@ def main():
         help="Token counting strategy: 'bpe' uses tiktoken cl100k_base (default), "
              "'whitespace' uses simple split()",
     )
+    parser.add_argument(
+        "--label-boost", type=float, default=1.0,
+        help="Weight applied to BM25 structured paragraph-label terms (default: 1.0)",
+    )
     args = parser.parse_args()
 
     if not args.report_dir.is_dir():
@@ -7109,7 +7173,8 @@ def main():
 
     set_token_counter(args.token_counter)
 
-    summary = run_pipeline(args.report_dir, verbose=args.verbose)
+    summary = run_pipeline(args.report_dir, verbose=args.verbose,
+                           label_boost=args.label_boost)
     if summary:
         counter_label = "BPE" if _USE_BPE else "whitespace"
         print(f"\nDone. {summary.get('total', 0)} chunks generated "
