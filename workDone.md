@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-10 — Stage 7: D8+D9 optimization documentation
+
+**File(s):** `docs/optimization-and-compaction.md`, `CLAUDE.md`, `workDone.md`
+**What changed:** Added human-readable optimization and compaction documentation with the source-preserving problem statement, support matrix, usage examples for `--profile facts-only` and `--label-boost`, future-work boundaries, and the benchmark table copied from `scripts/bench_results.md`. Updated CLAUDE.md with schema 1.6 wording for `structured_term_weights` and manifest `profile`, a `bm25_index.json` reference, and a source-preserving compaction design decision pointing to the new doc.
+**Why:** Stage 7 of proposal 0006 — document what the branch shipped, what remains deferred, and how to use the new retrieval compaction controls without overclaiming compiler-style optimization.
+
+---
+
 ## 2026-05-10 — Stage 6: D7 benchmark harness
 
 **File(s):** `scripts/bench_fixtures.json`, `scripts/bench_queries.json`, `scripts/bench_compaction.py`, `scripts/bench_results.json`, `scripts/bench_results.md`, `test_bench_compaction.py`, `workDone.md`
