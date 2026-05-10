@@ -26,8 +26,8 @@ import yaml
 # Constants
 # =============================================================================
 
-CHUNK_SCHEMA_VERSION = "1.5"
-PIPELINE_VERSION = "1.5"
+CHUNK_SCHEMA_VERSION = "1.6"
+PIPELINE_VERSION = "1.6"
 
 # CFG JSON field names (NOT source/target/label as CLAUDE.md incorrectly states)
 EDGE_SOURCE = "fromNodeID"
@@ -91,6 +91,10 @@ _CURRENT_PARSE_QUALITY: str = "unknown"
 # Analysis run timestamp for the current program (from pipeline_report.json).
 # Set by run_pipeline() before any write_chunk() call; stamped into every chunk.
 _CURRENT_SOURCE_MTIME: str | None = None
+
+# CICS commands that must NOT be aggregated in the dependencies chunk text —
+# they are error-handler declarations whose paragraph attribution is evidence.
+_HANDLE_IGNORE_CMDS: frozenset[str] = frozenset({"HANDLE", "IGNORE"})
 
 
 # =============================================================================
@@ -924,17 +928,7 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         lines.append(f"SQL operations: {', '.join(sql_stmts)}.")
     if calls:
         lines.append(f"Called programs: {', '.join(calls)}.")
-    if cics:
-        lines.append(f"CICS commands: {', '.join(cics)}.")
-    if cics_calls:
-        targets = [c.get("target", "?") for c in cics_calls]
-        lines.append(f"CICS program transfers (LINK/XCTL): {', '.join(targets)}.")
-    if cics_resources:
-        rendered = [
-            f"{resource['target_kind']} {resource['target']}"
-            for resource in cics_resources
-        ]
-        lines.append(f"CICS resources: {', '.join(rendered)}.")
+    # CICS section — aggregated from Java CFG facts when available
     cics_resource_parts = []
     for label, key in [
         ("MAP", "MAP"),
@@ -945,16 +939,31 @@ def generate_dependencies(report_dir: Path, chunks_dir: Path,
         cics_resource_parts.extend(
             f"{label} {value}" for value in cfg_cics_literals.get(key, [])
         )
-    if cics_resource_parts:
-        lines.append(f"CICS resources: {', '.join(cics_resource_parts)}.")
-    if cfg_cics_literals.get("DATASET"):
-        lines.append(f"CICS files/datasets: {', '.join(cfg_cics_literals['DATASET'])}.")
-    if cfg_cics_literals.get("QUEUE"):
-        lines.append(f"CICS queues: {', '.join(cfg_cics_literals['QUEUE'])}.")
+    cics_dep_lines = _aggregate_cics_for_deps_text(report_dir)
+    if cics_dep_lines:
+        lines.extend(cics_dep_lines)
+    else:
+        if cics:
+            lines.append(f"CICS commands: {', '.join(cics)}.")
+        if cics_calls:
+            targets = [c.get("target", "?") for c in cics_calls]
+            lines.append(f"CICS program transfers (LINK/XCTL): {', '.join(targets)}.")
+        if cics_resources:
+            rendered = [
+                f"{resource['target_kind']} {resource['target']}"
+                for resource in cics_resources
+            ]
+            lines.append(f"CICS resources: {', '.join(rendered)}.")
+        if cics_resource_parts:
+            lines.append(f"CICS resources: {', '.join(cics_resource_parts)}.")
+        if cfg_cics_literals.get("DATASET"):
+            lines.append(f"CICS files/datasets: {', '.join(cfg_cics_literals['DATASET'])}.")
+        if cfg_cics_literals.get("QUEUE"):
+            lines.append(f"CICS queues: {', '.join(cfg_cics_literals['QUEUE'])}.")
     if not any([
-        tables_read, tables_updated, sql_stmts, calls, cics, cics_calls,
-        cics_resources, cics_resource_parts, cfg_cics_literals.get("DATASET"),
-        cfg_cics_literals.get("QUEUE"),
+        tables_read, tables_updated, sql_stmts, calls, cics_dep_lines,
+        cics, cics_calls, cics_resources, cics_resource_parts,
+        cfg_cics_literals.get("DATASET"), cfg_cics_literals.get("QUEUE"),
     ]):
         lines.append("No external dependencies detected.")
 
@@ -1018,6 +1027,75 @@ def _summarize_cics_resources(cics_operations: list[dict]) -> list[dict]:
             entry["target_source"] = target_source
         resources.append(entry)
     return resources
+
+
+def _aggregate_cics_for_deps_text(report_dir: Path) -> list[str]:
+    """Return CICS lines for the dependencies chunk, aggregated by (command, target, category).
+
+    Each unique (command, target, operation_type) triple produces one line:
+      EXEC CICS <command> <target> — used in N paragraph(s): PARA-1, PARA-2, ...
+    Paragraphs are capped at 5; excess shown as '... +M more'.
+
+    HANDLE and IGNORE commands bypass aggregation and appear one-per-occurrence so
+    that error-handler evidence (which paragraph registered which handler) is preserved.
+
+    Returns an empty list when no Java-enriched CFG facts are present, allowing
+    the caller to fall back to the legacy YAML-based CICS rendering.
+    """
+    ops = _cics_operation_facts(report_dir)
+    if not ops:
+        return []
+
+    preserved: list[str] = []
+    grouped: dict[tuple, list[str]] = {}
+    group_order: list[tuple] = []
+    group_evidence: dict[tuple, str] = {}
+
+    for op in ops:
+        command = str(op.get("command") or "").upper()
+        if not command:
+            continue
+        target = str(op.get("target") or "").strip()
+        category = str(op.get("type") or "other").strip()
+        paragraph = str(op.get("paragraph") or "").strip()
+        evidence = str(op.get("evidence") or "").strip()
+
+        if command in _HANDLE_IGNORE_CMDS:
+            display = re.sub(r"\s*END-EXEC\s*$", "", evidence, flags=re.IGNORECASE).strip()
+            if not display:
+                display = f"EXEC CICS {command}"
+            para_suffix = f" (paragraph: {paragraph})" if paragraph else ""
+            preserved.append(f"{display}{para_suffix}.")
+            continue
+
+        key = (command, target, category)
+        if key not in grouped:
+            grouped[key] = []
+            group_order.append(key)
+            group_evidence[key] = evidence
+        if paragraph and paragraph not in grouped[key]:
+            grouped[key].append(paragraph)
+
+    lines: list[str] = []
+    for key in group_order:
+        command, target_val, _cat = key
+        paragraphs = grouped[key]
+        evidence = group_evidence[key]
+        display = re.sub(r"\s*END-EXEC\s*$", "", evidence, flags=re.IGNORECASE).strip()
+        if not display:
+            display = f"EXEC CICS {command}"
+            if target_val:
+                display += f" {target_val}"
+        n = len(paragraphs)
+        if n == 0:
+            lines.append(f"{display}.")
+        elif n <= 5:
+            lines.append(f"{display} — used in {n} paragraph(s): {', '.join(paragraphs)}.")
+        else:
+            listed = ", ".join(paragraphs[:5])
+            lines.append(f"{display} — used in {n} paragraph(s): {listed} ... +{n - 5} more.")
+    lines.extend(preserved)
+    return lines
 
 
 def _extract_cics_literal_arguments_from_cfg(report_dir: Path) -> dict[str, list[str]]:

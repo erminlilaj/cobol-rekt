@@ -39,7 +39,7 @@ except Exception:
 
 
 REQUIRED_FIELDS = {"schema_version", "pipeline_version", "analysis_timestamp", "content_hash"}
-SUPPORTED_SCHEMA_VERSIONS = {"1.3", "1.4", "1.5"}
+SUPPORTED_SCHEMA_VERSIONS = {"1.3", "1.4", "1.5", "1.6"}
 
 # All known chunk types as of schema 1.3
 VALID_COBOL_CHUNK_TYPES = {

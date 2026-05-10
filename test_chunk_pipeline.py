@@ -459,7 +459,7 @@ class ChunkPipelineTest(unittest.TestCase):
 
             self.assertTrue(data["metadata"]["indexable"])
             self.assertFalse(data["metadata"]["thin_chunk"])
-            self.assertEqual("1.5", data["metadata"]["schema_version"])
+            self.assertEqual("1.6", data["metadata"]["schema_version"])
 
     def test_dependency_negative_evidence_stays_indexable(self) -> None:
         with tempfile.TemporaryDirectory() as td:
