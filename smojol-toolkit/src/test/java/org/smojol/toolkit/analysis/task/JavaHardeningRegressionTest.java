@@ -171,6 +171,120 @@ class JavaHardeningRegressionTest {
         assertTrue(hasConditionedEdge(edges, "FLAG = 'Y'"));
     }
 
+    // -----------------------------------------------------------------------
+    // Stage 1 (proposal 0006) — D1 + D2 contract-locking tests.
+    // These tests assert the *current* literal-fact gate and dynamic call
+    // resolution behaviour. They must pass against unmodified main/. If a
+    // future change alters the behaviour, the test must be edited explicitly,
+    // forcing the change to be a deliberate, reviewed decision.
+    // -----------------------------------------------------------------------
+
+    @Test
+    void exportsNoAssignmentFactsForLiteralArithmeticCompute() throws IOException {
+        new TestTaskRunner("optimization-stage1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("optimization-stage1.cbl.report/cfg/cfg-optimization-stage1.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+
+        JsonObject computeNode = findNodeByOriginalText(nodes, "COMPUTE WS-COMP-X = 1 + 2");
+        assertNotNull(computeNode);
+        assertFalse(computeNode.has("metadata") && computeNode.getAsJsonObject("metadata").has("assignment_facts"),
+                "COMPUTE with non-bare-literal RHS (1 + 2) must not emit assignment_facts; "
+                        + "the current gate is value.matches(\"\\\\d+(\\\\.\\\\d+)?\") which only accepts a single bare numeric literal");
+    }
+
+    @Test
+    void exportsAssignmentFactsForFigurativeConstantsAsLiterals() throws IOException {
+        new TestTaskRunner("optimization-stage1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("optimization-stage1.cbl.report/cfg/cfg-optimization-stage1.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+
+        // Locks current behaviour: figurative constants SPACES/ZEROS are treated as
+        // literals by the MoveFlowNode gate and emit assignment_facts. If this is later
+        // changed (e.g., to flag them as figurative_constant rather than literal), this
+        // test must change explicitly so the decision is deliberate and reviewable.
+        assertTrue(hasAssignmentFact(nodes, "WS-FIG-A", "SPACES",
+                "D1-MOVE-FIGURATIVE-PARA", "java_move_literal"));
+        assertTrue(hasAssignmentFact(nodes, "WS-FIG-B", "ZEROS",
+                "D1-MOVE-FIGURATIVE-PARA", "java_move_literal"));
+    }
+
+    @Test
+    void exportsNoAssignmentFactsForSetEightyEightCondition() throws IOException {
+        new TestTaskRunner("metadata-features.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("metadata-features.cbl.report/cfg/cfg-metadata-features.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+
+        JsonObject setNode = findNodeByOriginalText(nodes, "SET SWITCH-ON TO TRUE");
+        assertNotNull(setNode);
+        assertFalse(setNode.has("metadata") && setNode.getAsJsonObject("metadata").has("assignment_facts"),
+                "SET to an 88-level condition name must not emit assignment_facts; "
+                        + "the SetFlowNode gate requires sendingField().literal() != null");
+    }
+
+    @Test
+    void exportsChainedCallResolutionEachUsingItsPrecedingMoveLiteralWithMediumConfidence() throws IOException {
+        new TestTaskRunner("optimization-stage1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("optimization-stage1.cbl.report/cfg/cfg-optimization-stage1.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+
+        // D2-CHAINED-CALL-PARA: MOVE 'PROG-A', CALL, MOVE 'PROG-B', CALL.
+        // Both CALLs are CALL WS-CALL-CH. Within a single paragraph, walk order
+        // matches source order, so the latest-literal map carries 'PROG-A' to the
+        // first CALL and 'PROG-B' to the second.
+        assertTrue(hasResolvedCall(nodes, "WS-CALL-CH", "PROG-A",
+                "inferred_literal_assignment", "medium"));
+        assertTrue(hasResolvedCall(nodes, "WS-CALL-CH", "PROG-B",
+                "inferred_literal_assignment", "medium"));
+    }
+
+    @Test
+    void exportsCallTargetSourceUnresolvedWhenWalkOrderHasNoPriorLiteralForTarget() throws IOException {
+        new TestTaskRunner("optimization-stage1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("optimization-stage1.cbl.report/cfg/cfg-optimization-stage1.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+
+        // D2-CALL-AFTER-SQL-PARA: even though MOVE 'PROG-C' precedes the CALL in
+        // *source* order, the SerialisableCFGGraphCollector walks nodes in CFG
+        // emission order (not source order), and the CALL is annotated before the
+        // MOVE has populated latestLiteralAssignments. Result: unresolved_identifier
+        // with confidence low. This locks the "not path-sensitive" guarantee.
+        assertTrue(hasResolvedCall(nodes, "WS-CALL-SQ", "WS-CALL-SQ",
+                "unresolved_identifier", "low"));
+
+        // D2-CALL-IN-IF-PARA: CALL inside an IF with no MOVE for WS-CALL-IF anywhere
+        // in the program. The resolved field echoes the identifier itself.
+        assertTrue(hasResolvedCall(nodes, "WS-CALL-IF", "WS-CALL-IF",
+                "unresolved_identifier", "low"));
+    }
+
+    @Test
+    void exportsChainedXctlResolutionEachUsingItsPrecedingMoveLiteralWithMediumConfidence() throws IOException {
+        new TestTaskRunner("optimization-stage1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("optimization-stage1.cbl.report/cfg/cfg-optimization-stage1.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+
+        // D2-XCTL-CHAINED-PARA: MOVE 'TARGET-X', XCTL, MOVE 'TARGET-Y', XCTL.
+        // Same chained semantics as the CALL case but via CICS XCTL.
+        assertTrue(hasResolvedCicsTarget(nodes, "WS-CALL-XC", "TARGET-X",
+                "inferred_literal_assignment", "medium"));
+        assertTrue(hasResolvedCicsTarget(nodes, "WS-CALL-XC", "TARGET-Y",
+                "inferred_literal_assignment", "medium"));
+        assertTrue(hasCicsOperation(nodes, "XCTL", "PROGRAM", "TARGET-X"));
+        assertTrue(hasCicsOperation(nodes, "XCTL", "PROGRAM", "TARGET-Y"));
+    }
+
     @Test
     void abortsAfterBaseAnalysisFailureWithoutCascadeNoise() throws IOException {
         Map<String, List<AnalysisTaskResult>> results = runTasks(

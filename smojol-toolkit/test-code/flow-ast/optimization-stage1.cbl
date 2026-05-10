@@ -1,0 +1,42 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. OPTIMIZATION-STAGE1.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-COMP-X        PIC 9(4) VALUE 0.
+       01  WS-FIG-A         PIC X(4) VALUE SPACES.
+       01  WS-FIG-B         PIC X(4) VALUE SPACES.
+       01  WS-CALL-CH       PIC X(8) VALUE SPACES.
+       01  WS-CALL-SQ       PIC X(8) VALUE SPACES.
+       01  WS-CALL-IF       PIC X(8) VALUE SPACES.
+       01  WS-CALL-XC       PIC X(8) VALUE SPACES.
+       01  WS-FLAG          PIC X    VALUE 'N'.
+       01  WS-RESULT        PIC 9(4) VALUE 0.
+       PROCEDURE DIVISION.
+       D1-COMPUTE-ARITH-PARA.
+           COMPUTE WS-COMP-X = 1 + 2.
+       D1-MOVE-FIGURATIVE-PARA.
+           MOVE SPACES TO WS-FIG-A.
+           MOVE ZEROS  TO WS-FIG-B.
+       D2-CHAINED-CALL-PARA.
+           MOVE 'PROG-A' TO WS-CALL-CH
+           CALL WS-CALL-CH
+           MOVE 'PROG-B' TO WS-CALL-CH
+           CALL WS-CALL-CH.
+       D2-CALL-AFTER-SQL-PARA.
+           MOVE 'PROG-C' TO WS-CALL-SQ
+           EXEC SQL
+                SELECT 1 INTO :WS-RESULT FROM SYSIBM.SYSDUMMY1
+           END-EXEC
+           CALL WS-CALL-SQ.
+       D2-CALL-IN-IF-PARA.
+           IF WS-FLAG = 'Y'
+               CALL WS-CALL-IF
+           END-IF.
+       D2-XCTL-CHAINED-PARA.
+           MOVE 'TARGET-X' TO WS-CALL-XC
+           EXEC CICS XCTL PROGRAM(WS-CALL-XC)
+           END-EXEC
+           MOVE 'TARGET-Y' TO WS-CALL-XC
+           EXEC CICS XCTL PROGRAM(WS-CALL-XC)
+           END-EXEC.
+           GOBACK.
