@@ -1,0 +1,54 @@
+{
+  "queries": [
+    {
+      "query": "What does PROCESS-MAIN perform?",
+      "expected_chunk_ids": [
+        "hello.cbl:paragraph_logic:PROCESS-MAIN",
+        "hello.cbl:controlflow.cfg:PROCESS-MAIN",
+        "hello.cbl:workflow:PROCESS-MAIN"
+      ],
+      "source": "proposal_0006_supplement",
+      "tags": ["paragraph_label_boost"]
+    },
+    {
+      "query": "Which variable group defines WS-FIELD?",
+      "expected_chunk_ids": [
+        "hello.cbl:variable_group:BENCH-REC",
+        "test-exp1.cbl:variable_group:BENCH-REC",
+        "nist85.cbl:variable_group:BENCH-REC"
+      ],
+      "source": "proposal_0006_supplement",
+      "tags": ["requires_facts_only_recall"]
+    },
+    {
+      "query": "What external dependencies are detected?",
+      "expected_chunk_ids": [
+        "hello.cbl:dependencies",
+        "test-exp1.cbl:dependencies",
+        "nist85.cbl:dependencies"
+      ],
+      "source": "proposal_0006_supplement",
+      "tags": ["requires_facts_only_recall"]
+    },
+    {
+      "query": "Does the benchmark preserve CICS HANDLE evidence?",
+      "expected_chunk_ids": [
+        "nist85.cbl:dependencies",
+        "nist85.cbl:cics.error_handler:1",
+        "nist85.cbl:cics.operation:1"
+      ],
+      "source": "proposal_0006_supplement",
+      "tags": ["cics_handle"]
+    },
+    {
+      "query": "What is the analysis health of the fixture?",
+      "expected_chunk_ids": [
+        "hello.cbl:analysis_health",
+        "test-exp1.cbl:analysis_health",
+        "nist85.cbl:analysis_health"
+      ],
+      "source": "proposal_0006_supplement",
+      "tags": ["requires_facts_only_recall"]
+    }
+  ]
+}

@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-10 — Stage 6: D7 benchmark harness
+
+**File(s):** `scripts/bench_fixtures.json`, `scripts/bench_queries.json`, `scripts/bench_compaction.py`, `scripts/bench_results.json`, `scripts/bench_results.md`, `test_bench_compaction.py`, `workDone.md`
+**What changed:** Added frozen public fixtures from `smojol-test-code/` with SHA-256 checksums, `baseline_branch: "main"`, and `baseline_sha`. Added five proposal-specific benchmark queries with required tags. Added a deterministic benchmark harness that synthesizes report fixtures, calls `chunk_pipeline.py` for default and facts-only profiles, measures chunk count, token totals, max tokens, duplicate content hashes, and BM25 entry counts, and writes JSON/Markdown outputs. Added three unittest cases covering harness execution, deterministic JSON output, and baseline SHA metadata.
+**Why:** Stage 6 of proposal 0006 — provide a reproducible compaction benchmark surface for the branch without depending on private corpus files or mutating source-derived JSON artifacts.
+
+---
+
 ## 2026-05-10 — Stage 5: D6 facts-only chunk profile
 
 **File(s):** `chunk_pipeline.py`, `test_chunk_pipeline_profiles.py`, `workDone.md`

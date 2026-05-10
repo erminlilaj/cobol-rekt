@@ -1,0 +1,40 @@
+{
+  "baseline_branch": "main",
+  "baseline_sha": "904b22a5ddceec95c40bc303f5c071880d262568",
+  "notes": "smojol-test-code has no 200-800 line COBOL fixture; test-exp1.cbl is the largest non-nist85 fixture and is recorded as medium-proxy.",
+  "fixtures": [
+    {
+      "name": "small-hello",
+      "size_class": "small",
+      "source_path": "smojol-test-code/hello.cbl",
+      "line_count": 44,
+      "sha256": "7a302a0fba0f4f7398477a1622b762c0276b61b1fa027369c5198bb7832db818",
+      "baseline_expectations": {
+        "default": {"chunk_count": 11},
+        "facts-only": {"chunk_count": 4}
+      }
+    },
+    {
+      "name": "medium-proxy-test-exp1",
+      "size_class": "medium-proxy",
+      "source_path": "smojol-test-code/test-exp1.cbl",
+      "line_count": 191,
+      "sha256": "02627e110770edbb7d3f945e571e3fcbc4b0a63ea7d84b3fb72383a96da12f08",
+      "baseline_expectations": {
+        "default": {"chunk_count": 11},
+        "facts-only": {"chunk_count": 4}
+      }
+    },
+    {
+      "name": "large-nist85",
+      "size_class": "large",
+      "source_path": "smojol-test-code/nist85.cbl",
+      "line_count": 348271,
+      "sha256": "744a04982095a3abea29a9df5faf63d226083edecc7b5bf34bc412eae0d53274",
+      "baseline_expectations": {
+        "default": {"chunk_count": 11},
+        "facts-only": {"chunk_count": 4}
+      }
+    }
+  ]
+}

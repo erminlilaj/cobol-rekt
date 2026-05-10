@@ -1,0 +1,71 @@
+{
+  "baseline_branch": "main",
+  "baseline_sha": "904b22a5ddceec95c40bc303f5c071880d262568",
+  "label_boost": 1.0,
+  "query_count": 5,
+  "results": [
+    {
+      "name": "small-hello",
+      "profiles": {
+        "default": {
+          "bm25_index_entry_count": 9,
+          "chunk_count": 11,
+          "duplicate_content_hash_count": 0,
+          "max_bpe_per_chunk": 45,
+          "total_bpe_tokens": 212
+        },
+        "facts-only": {
+          "bm25_index_entry_count": 3,
+          "chunk_count": 4,
+          "duplicate_content_hash_count": 0,
+          "max_bpe_per_chunk": 35,
+          "total_bpe_tokens": 68
+        }
+      },
+      "size_class": "small",
+      "source_path": "smojol-test-code/hello.cbl"
+    },
+    {
+      "name": "medium-proxy-test-exp1",
+      "profiles": {
+        "default": {
+          "bm25_index_entry_count": 9,
+          "chunk_count": 11,
+          "duplicate_content_hash_count": 0,
+          "max_bpe_per_chunk": 45,
+          "total_bpe_tokens": 212
+        },
+        "facts-only": {
+          "bm25_index_entry_count": 3,
+          "chunk_count": 4,
+          "duplicate_content_hash_count": 0,
+          "max_bpe_per_chunk": 35,
+          "total_bpe_tokens": 68
+        }
+      },
+      "size_class": "medium-proxy",
+      "source_path": "smojol-test-code/test-exp1.cbl"
+    },
+    {
+      "name": "large-nist85",
+      "profiles": {
+        "default": {
+          "bm25_index_entry_count": 9,
+          "chunk_count": 11,
+          "duplicate_content_hash_count": 0,
+          "max_bpe_per_chunk": 45,
+          "total_bpe_tokens": 212
+        },
+        "facts-only": {
+          "bm25_index_entry_count": 3,
+          "chunk_count": 4,
+          "duplicate_content_hash_count": 0,
+          "max_bpe_per_chunk": 35,
+          "total_bpe_tokens": 68
+        }
+      },
+      "size_class": "large",
+      "source_path": "smojol-test-code/nist85.cbl"
+    }
+  ]
+}
