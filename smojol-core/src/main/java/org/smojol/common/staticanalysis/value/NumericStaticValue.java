@@ -6,15 +6,11 @@ import java.util.Map;
 
 public record NumericStaticValue(String decimal, int scale, int precision, String sign) {
     public static NumericStaticValue from(BigDecimal value) {
-        BigDecimal normalized = value.stripTrailingZeros();
-        if (normalized.scale() < 0) {
-            normalized = normalized.setScale(0);
-        }
         return new NumericStaticValue(
-                normalized.toPlainString(),
-                normalized.scale(),
-                normalized.precision(),
-                signOf(normalized)
+                value.toPlainString(),
+                Math.max(value.scale(), 0),
+                value.precision(),
+                signOf(value)
         );
     }
 

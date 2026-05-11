@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-11 — Phase 1 constant folding coverage checkpoint
+
+**File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/value/NumericStaticValue.java`, `smojol-core/src/test/java/org/smojol/common/staticanalysis/value/StaticValueTest.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Preserved exact BigDecimal scale in numeric static values, added exact payload tests, expanded the Phase 1 golden fixture to cover decimal addition, subtraction, multiplication, unary signs, parentheses, exact division, non-terminating division, figurative constants, and exponentiation, and recorded fixture-level folding stats plus broader Java verification in the implementation plan.
+**Why:** User asked to proceed carefully, keep discussion 0006 and the committed documentation synchronized, and stop for a commit after each important implementation step.
+
+---
+
 ## 2026-05-11 — Phase 1 constant folding implementation checkpoint
 
 **File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/value/*`, `smojol-core/src/main/java/org/smojol/common/staticanalysis/folding/*`, `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/ComputeFlowNode.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

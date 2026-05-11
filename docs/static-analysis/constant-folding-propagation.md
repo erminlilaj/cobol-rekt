@@ -289,13 +289,13 @@ If implementation discovers that this document is wrong, the documentation must 
 | 0.2 | `DONE` | Human-readable strategy document committed. | `docs/static-analysis/constant-folding-propagation.md` exists in git history. |
 | 0.3 | `DONE` | Final Phase 1 scope pinned. | PR 1 scope and non-goals listed in this document. |
 | 0.4 | `DONE` | Accuracy/performance reporting requirement added. | Section 20 defines metrics to record during implementation. |
-| 1.1 | `WORKING` | Add `StaticValue` model and payload records. | Unit tests prove states, kinds, exact decimal representation, and no `Double` use. |
+| 1.1 | `DONE` | Add `StaticValue` model and payload records. | Unit tests prove states, kinds, exact decimal representation, and code inspection verifies no `Double` use in `org.smojol.common.staticanalysis`. |
 | 1.2 | `WORKING` | Add `StaticValueLiteralExtractor`. | Tests parse numeric literals, signed literals, invalid literals, and unsupported figuratives. |
-| 1.3 | `WORKING` | Add `StaticExpressionFolder` for closed numeric expressions. | Tests fold addition, subtraction, multiplication, unary signs, parentheses, and exact division. |
-| 1.4 | `WORKING` | Emit `folded_value_facts` from `ComputeFlowNode.metadata()`. | Golden fixture has folded value `3` for `COMPUTE WS-A = 1 + 2`. |
-| 1.5 | `WORKING` | Emit `folding_diagnostics` for considered unsupported/unsafe `COMPUTE` statements. | Golden fixture emits `FOLD_UNSUPPORTED_VARIABLE_REFERENCE` and `FOLD_UNSAFE_DIVIDE_BY_ZERO`. |
+| 1.3 | `DONE` | Add `StaticExpressionFolder` for closed numeric expressions. | Tests fold addition, subtraction, multiplication, unary signs, parentheses, decimal addition, and exact division. |
+| 1.4 | `DONE` | Emit `folded_value_facts` from `ComputeFlowNode.metadata()`. | Golden fixture has folded facts for `COMPUTE WS-A = 1 + 2`, `(1 + 2) * -3`, `1.20 + 2.30`, `1 / 4`, and `10 - 3`. |
+| 1.5 | `DONE` | Emit `folding_diagnostics` for considered unsupported/unsafe `COMPUTE` statements. | Golden fixture emits exact diagnostics for variable reference, divide by zero, non-terminating division, figurative constant, and exponentiation. |
 | 1.6 | `WORKING` | Preserve existing artifacts and behavior. | Tests prove `assignment_facts`, `originalText`, CFG edge count, dynamic CALL/CICS legacy fields, and RAG chunks are unchanged. |
-| 1.7 | `PENDING` | Record Phase 1 accuracy/performance stats. | Report includes inspected/folded/skipped counts, diagnostic counts, Java runtime delta, and CFG size delta. |
+| 1.7 | `WORKING` | Record Phase 1 accuracy/performance stats. | Report includes inspected/folded/skipped counts, diagnostic counts, Java runtime delta, and CFG size delta. |
 | 2.1 | `PENDING` | Add `static_analysis/dataflow.json` skeleton. | Artifact has schema version, analysis version, config, summary, diagnostics, and empty node state support. |
 | 2.2 | `PENDING` | Add paragraph summaries. | Dataflow artifact records direct/transitive reads, writes, kills, side effects, cycles, and unsupported constructs. |
 | 2.3 | `PENDING` | Add alias-set builder. | `REDEFINES`, group/child, OCCURS, and reference-modification ambiguity produce conservative kill sets. |
@@ -314,6 +314,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | Date | Status | What changed | Verification |
 |---|---|---|---|
 | 2026-05-11 | `WORKING` | Added the sealed `StaticValue` model, closed numeric expression folder, additive `folded_value_facts`/`folding_diagnostics` emission from `ComputeFlowNode.metadata()`, and the first golden fixture. | `mvn -pl smojol-core install -Dcheckstyle.skip=true -DskipTests`; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest` passed, 19 tests. |
+| 2026-05-11 | `WORKING` | Added exact decimal payload tests, preserved BigDecimal scale in `StaticValue`, extended the fixture to cover parentheses, unary minus, decimal addition, exact division, subtraction, non-terminating division, figurative constants, and exponentiation. | Targeted checks passed: `StaticValueTest` 3 tests and `JavaHardeningRegressionTest` 21 tests. Broader checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true` 94 tests; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` 33 tests, 2 skipped. Code inspection found no `Double`, `double`, `Float`, `float`, or `TypedRecord` usage in the new static-analysis package. |
 
 ### Fool-Proof Execution Rules
 
@@ -649,6 +650,23 @@ Phase 1 folding stats should include:
 - Number of CFG edge changes, expected to be zero.
 - Runtime overhead for Java `WRITE_CFG`.
 - CFG JSON size delta.
+
+Current Phase 1 golden-fixture stats, measured on `smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl`:
+
+| Metric | Before Phase 1 | Current Phase 1 |
+|---|---:|---:|
+| `COMPUTE` statements inspected by the folder | 0 | 10 |
+| Folded closed numeric `COMPUTE` expressions | 0 | 5 |
+| Unsupported variable-reference diagnostics | 0 | 1 |
+| Unsafe divide-by-zero diagnostics | 0 | 1 |
+| Unsafe non-terminating-division diagnostics | 0 | 1 |
+| Unsupported figurative-constant diagnostics | 0 | 1 |
+| Unsupported exponentiation diagnostics | 0 | 1 |
+| Existing `MOVE 7 TO WS-D` assignment facts changed | 0 | 0 |
+| Dynamic `CALL`/CICS behavior changed | 0 | 0 |
+| Constant propagation facts emitted | 0 | 0 |
+
+These are fixture-level accuracy stats, not corpus-wide performance numbers. Runtime overhead and CFG JSON size delta are still `WORKING` under step 1.7 and must be measured before Phase 1 is called complete.
 
 Phase 2 propagation stats should include:
 
