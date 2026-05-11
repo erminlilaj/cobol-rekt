@@ -253,6 +253,73 @@ Propagation facts are sidecar facts. They do not rewrite source, CFG text, or as
 
 ## 8. Implementation Plan
 
+### Status Flags
+
+This plan is a living implementation ledger. Every step below must carry one of these flags:
+
+| Flag | Meaning |
+|---|---|
+| `DONE` | Completed and committed. |
+| `WORKING` | Actively being implemented on the current branch. |
+| `PENDING` | Planned but not started. |
+| `BLOCKED` | Cannot proceed until a named blocker is resolved. |
+| `SKIPPED` | Deliberately not implemented; reason must be recorded. |
+
+### Living Documentation Rule
+
+This document is part of the implementation contract. It must be updated whenever any of the following changes:
+
+- Scope changes for a phase or PR.
+- A planned step moves from `PENDING` to `WORKING`, `DONE`, `BLOCKED`, or `SKIPPED`.
+- A diagnostic code is added, removed, or renamed.
+- A JSON schema field is added, removed, or renamed.
+- A supported or unsupported COBOL construct changes status.
+- A safety rule, kill rule, merge rule, or alias rule changes.
+- Accuracy or performance measurements are produced.
+- A benchmark, golden fixture, or acceptance criterion changes.
+- An implementation decision contradicts this document.
+
+If implementation discovers that this document is wrong, the documentation must be corrected and committed before the code that depends on the corrected decision is merged. No phase is considered complete until the document status and measured results match the implementation.
+
+### Grand Plan Status Ledger
+
+| Step | Flag | Deliverable | Acceptance Check |
+|---|---|---|---|
+| 0.1 | `DONE` | Source-preserving strategy agreed in discussion 0006. | Discussion resolved with Claude/Codex agreement. |
+| 0.2 | `DONE` | Human-readable strategy document committed. | `docs/static-analysis/constant-folding-propagation.md` exists in git history. |
+| 0.3 | `DONE` | Final Phase 1 scope pinned. | PR 1 scope and non-goals listed in this document. |
+| 0.4 | `DONE` | Accuracy/performance reporting requirement added. | Section 20 defines metrics to record during implementation. |
+| 1.1 | `PENDING` | Add `StaticValue` model and payload records. | Unit tests prove states, kinds, exact decimal representation, and no `Double` use. |
+| 1.2 | `PENDING` | Add `StaticValueLiteralExtractor`. | Tests parse numeric literals, signed literals, invalid literals, and unsupported figuratives. |
+| 1.3 | `PENDING` | Add `StaticExpressionFolder` for closed numeric expressions. | Tests fold addition, subtraction, multiplication, unary signs, parentheses, and exact division. |
+| 1.4 | `PENDING` | Emit `folded_value_facts` from `ComputeFlowNode.metadata()`. | Golden fixture has folded value `3` for `COMPUTE WS-A = 1 + 2`. |
+| 1.5 | `PENDING` | Emit `folding_diagnostics` for considered unsupported/unsafe `COMPUTE` statements. | Golden fixture emits `FOLD_UNSUPPORTED_VARIABLE_REFERENCE` and `FOLD_UNSAFE_DIVIDE_BY_ZERO`. |
+| 1.6 | `PENDING` | Preserve existing artifacts and behavior. | Tests prove `assignment_facts`, `originalText`, CFG edge count, dynamic CALL/CICS legacy fields, and RAG chunks are unchanged. |
+| 1.7 | `PENDING` | Record Phase 1 accuracy/performance stats. | Report includes inspected/folded/skipped counts, diagnostic counts, Java runtime delta, and CFG size delta. |
+| 2.1 | `PENDING` | Add `static_analysis/dataflow.json` skeleton. | Artifact has schema version, analysis version, config, summary, diagnostics, and empty node state support. |
+| 2.2 | `PENDING` | Add paragraph summaries. | Dataflow artifact records direct/transitive reads, writes, kills, side effects, cycles, and unsupported constructs. |
+| 2.3 | `PENDING` | Add alias-set builder. | `REDEFINES`, group/child, OCCURS, and reference-modification ambiguity produce conservative kill sets. |
+| 2.4 | `PENDING` | Add fixed-point CFG propagation. | Entry/exit states converge deterministically or emit limit diagnostics. |
+| 2.5 | `PENDING` | Add transfer and kill rules. | Tests cover MOVE, COMPUTE, ACCEPT, READ, CALL, SQL, CICS, STRING, UNSTRING, INSPECT, INITIALIZE, and unknown statements. |
+| 2.6 | `PENDING` | Record Phase 2 accuracy/performance stats. | Report includes node count, variable count, iteration count, proven constants, unknown merges, kills by reason, runtime, and memory. |
+| 3.1 | `PENDING` | Add path-sensitive dynamic CALL facts. | New `path_sensitive_*` fields coexist with unchanged legacy fields. |
+| 3.2 | `PENDING` | Add path-sensitive CICS target facts. | New CICS path-sensitive fields coexist with unchanged legacy fields. |
+| 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures report precision/recall or exact expected-target pass/fail counts versus legacy behavior. |
+| 4.1 | `PENDING` | Add optional static-value RAG chunks. | Chunks include only high-confidence facts with provenance and no unsupported "always" wording. |
+| 4.2 | `PENDING` | Evaluate retrieval and token impact. | Benchmark reports chunk count, token count, recall, and retrieval-ranking deltas. |
+| 5.1 | `PENDING` | Publish final implementation documentation update. | This document records final schemas, measured results, known limitations, and any skipped work. |
+
+### Fool-Proof Execution Rules
+
+1. Do not start a later step while an earlier required safety step is `PENDING` or `BLOCKED`.
+2. Do not mark a step `DONE` unless its acceptance check is covered by an exact test, committed artifact, or measured report.
+3. Do not silently expand scope. New supported COBOL constructs require this document to be updated first.
+4. Do not silently drop scope. Skipped work must be marked `SKIPPED` with a reason.
+5. Do not merge implementation if this ledger says `WORKING`, `PENDING`, or `BLOCKED` for the same deliverable.
+6. Do not claim constant propagation until `static_analysis/dataflow.json`, fixed-point CFG propagation, conservative merge rules, loop handling, alias kills, and runtime-input kill rules are all `DONE`.
+7. Do not claim dynamic CALL/CICS improvement until path-sensitive fields and accuracy measurements are `DONE`.
+8. Do not claim RAG improvement until retrieval and token metrics are `DONE`.
+
 ### Phase 1: Local Closed Numeric COMPUTE Folding
 
 Phase 1 includes:
