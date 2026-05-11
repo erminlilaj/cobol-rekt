@@ -9,6 +9,8 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.lsp.cobol.core.CobolParser;
 import org.smojol.common.ast.*;
 import org.smojol.common.pseudocode.SmojolSymbolTable;
+import org.smojol.common.staticanalysis.folding.FoldedValueFact;
+import org.smojol.common.staticanalysis.folding.StaticExpressionFolder;
 import org.smojol.common.vm.expression.CobolExpression;
 import org.smojol.common.vm.expression.CobolExpressionBuilder;
 import org.smojol.common.vm.interpreter.CobolInterpreter;
@@ -84,11 +86,24 @@ public class ComputeFlowNode extends CobolFlowNode {
         if (rhs == null || destinations == null || destinations.isEmpty()) {
             return Map.of();
         }
+        Map<String, Object> metadata = new LinkedHashMap<>();
         String value = rhs.getText();
-        if (!value.matches("\\d+(\\.\\d+)?")) {
-            return Map.of();
+        if (value.matches("\\d+(\\.\\d+)?")) {
+            metadata.put("assignment_facts", assignmentFacts(value));
         }
 
+        StaticExpressionFolder.FoldingResult folded = new StaticExpressionFolder().fold(rhs);
+        if (folded.folded()) {
+            metadata.put("folded_value_facts", foldedValueFacts(folded));
+            metadata.put("folding_diagnostics", List.of());
+        } else if (!folded.diagnostics().isEmpty()) {
+            metadata.put("folding_diagnostics", folded.diagnosticJson());
+        }
+
+        return metadata.isEmpty() ? Map.of() : metadata;
+    }
+
+    private List<Map<String, Object>> assignmentFacts(String value) {
         List<Map<String, Object>> assignments = new ArrayList<>();
         for (CobolParser.ComputeStoreContext destination : destinations) {
             Map<String, Object> assignment = new LinkedHashMap<>();
@@ -106,7 +121,29 @@ public class ComputeFlowNode extends CobolFlowNode {
             if (line != null) assignment.put("source_line", line);
             assignments.add(assignment);
         }
-        return Map.of("assignment_facts", assignments);
+        return assignments;
+    }
+
+    private List<Map<String, Object>> foldedValueFacts(StaticExpressionFolder.FoldingResult folded) {
+        List<Map<String, Object>> facts = new ArrayList<>();
+        String paragraph = enclosingName(FlowNodeType.PARAGRAPH);
+        String section = enclosingName(FlowNodeType.SECTION);
+        Integer line = sourceLine();
+        for (CobolParser.ComputeStoreContext destination : destinations) {
+            FoldedValueFact fact = new FoldedValueFact(
+                    "COMPUTE",
+                    destination.generalIdentifier().getText().toUpperCase(),
+                    rhs.getText(),
+                    folded.foldedExpression(),
+                    folded.value(),
+                    originalText(),
+                    paragraph,
+                    section,
+                    line
+            );
+            facts.add(fact.toJsonMap());
+        }
+        return facts;
     }
 
     private String enclosingName(FlowNodeType type) {

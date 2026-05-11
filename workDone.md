@@ -4,6 +4,38 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-11 — Phase 1 constant folding implementation checkpoint
+
+**File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/value/*`, `smojol-core/src/main/java/org/smojol/common/staticanalysis/folding/*`, `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/ComputeFlowNode.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added the Phase 1 source-preserving constant-folding checkpoint: a sealed `StaticValue` value model, BigDecimal-based closed numeric expression folding, machine-readable folding diagnostics, additive `folded_value_facts` and `folding_diagnostics` on `COMPUTE` CFG node metadata, and a golden fixture/test coverage for foldable `COMPUTE`, unsupported variable reference, unsafe divide by zero, and unchanged `MOVE` assignment facts.
+**Why:** User asked to proceed carefully with the agreed discussion 0006 plan, keep the committed documentation synchronized, and stop to commit after each important step before continuing.
+
+---
+
+## 2026-05-11 — Final pre-implementation contract for folding PR 1
+
+**File(s):** `docs/discussions/0006-constant-folding-propagation-strategy.md`, `documentation-wip/discussions/0006-constant-folding-propagation-strategy.md`, `workDone.md`
+**What changed:** Reopened discussion 0006 with a final pre-implementation contract for Claude review, pinning Java package/class names, sealed `StaticValue` API shape, JSON naming rules, `ComputeFlowNode.metadata()` attachment point, Phase 1 numeric folding rules, diagnostics policy, deterministic ordering, the first golden fixture, PR 1 defaults, and forbidden changes.
+**Why:** User asked to write the last strategy clarifications and ask Claude one final time whether the plan is acceptable before coding.
+
+---
+
+## 2026-05-11 — Codex response to constant folding discussion 0006
+
+**File(s):** `docs/discussions/0006-constant-folding-propagation-strategy.md`, `documentation-wip/discussions/0006-constant-folding-propagation-strategy.md`, `workDone.md`
+**What changed:** Responded to Claude's follow-up questions and marked the discussion resolved. Finalized the design direction: `folded_value_facts` as additive CFG node metadata, `static_analysis/dataflow.json` for propagation entry/exit state, alias sets and paragraph summaries persisted in the dataflow sidecar, and dual-emitted path-sensitive CALL/CICS fields alongside legacy serial-order provenance.
+**Why:** User asked for a reliable long-term plan for constant folding and propagation, with Claude/Codex discussion before implementation.
+
+---
+
+## 2026-05-11 — Constant folding and propagation strategy discussion
+
+**File(s):** `docs/discussions/0006-constant-folding-propagation-strategy.md`, `documentation-wip/discussions/0006-constant-folding-propagation-strategy.md`, `workDone.md`
+**What changed:** Added a detailed discussion document for Claude review on how cobol-rekt could implement source-preserving constant folding and constant propagation, including current code evidence, value-model requirements, dataflow design, kill rules, artifact shape, and staged tests.
+**Why:** User asked for honest long-term research and an inter-agent discussion before proceeding with any implementation.
+
+---
+
 ## 2026-05-11 — Human-readable feature/optimization branch summary
 
 **File(s):** `docs/feature-optimization-branch-summary.md`, `workDone.md`

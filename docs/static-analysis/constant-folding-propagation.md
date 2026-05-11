@@ -147,9 +147,7 @@ Expected added metadata:
             "scale": 0,
             "precision": 1,
             "sign": "POSITIVE"
-          },
-          "figurative": null,
-          "type_context": null
+          }
         },
         "confidence": "high",
         "provenance_source": "java_static_value_folded_expression"
@@ -159,6 +157,8 @@ Expected added metadata:
   }
 }
 ```
+
+The current CFG writer uses Gson without `serializeNulls()`, so optional payloads such as `figurative` and `type_context` are omitted when they are not present.
 
 For:
 
@@ -289,12 +289,12 @@ If implementation discovers that this document is wrong, the documentation must 
 | 0.2 | `DONE` | Human-readable strategy document committed. | `docs/static-analysis/constant-folding-propagation.md` exists in git history. |
 | 0.3 | `DONE` | Final Phase 1 scope pinned. | PR 1 scope and non-goals listed in this document. |
 | 0.4 | `DONE` | Accuracy/performance reporting requirement added. | Section 20 defines metrics to record during implementation. |
-| 1.1 | `PENDING` | Add `StaticValue` model and payload records. | Unit tests prove states, kinds, exact decimal representation, and no `Double` use. |
-| 1.2 | `PENDING` | Add `StaticValueLiteralExtractor`. | Tests parse numeric literals, signed literals, invalid literals, and unsupported figuratives. |
-| 1.3 | `PENDING` | Add `StaticExpressionFolder` for closed numeric expressions. | Tests fold addition, subtraction, multiplication, unary signs, parentheses, and exact division. |
-| 1.4 | `PENDING` | Emit `folded_value_facts` from `ComputeFlowNode.metadata()`. | Golden fixture has folded value `3` for `COMPUTE WS-A = 1 + 2`. |
-| 1.5 | `PENDING` | Emit `folding_diagnostics` for considered unsupported/unsafe `COMPUTE` statements. | Golden fixture emits `FOLD_UNSUPPORTED_VARIABLE_REFERENCE` and `FOLD_UNSAFE_DIVIDE_BY_ZERO`. |
-| 1.6 | `PENDING` | Preserve existing artifacts and behavior. | Tests prove `assignment_facts`, `originalText`, CFG edge count, dynamic CALL/CICS legacy fields, and RAG chunks are unchanged. |
+| 1.1 | `WORKING` | Add `StaticValue` model and payload records. | Unit tests prove states, kinds, exact decimal representation, and no `Double` use. |
+| 1.2 | `WORKING` | Add `StaticValueLiteralExtractor`. | Tests parse numeric literals, signed literals, invalid literals, and unsupported figuratives. |
+| 1.3 | `WORKING` | Add `StaticExpressionFolder` for closed numeric expressions. | Tests fold addition, subtraction, multiplication, unary signs, parentheses, and exact division. |
+| 1.4 | `WORKING` | Emit `folded_value_facts` from `ComputeFlowNode.metadata()`. | Golden fixture has folded value `3` for `COMPUTE WS-A = 1 + 2`. |
+| 1.5 | `WORKING` | Emit `folding_diagnostics` for considered unsupported/unsafe `COMPUTE` statements. | Golden fixture emits `FOLD_UNSUPPORTED_VARIABLE_REFERENCE` and `FOLD_UNSAFE_DIVIDE_BY_ZERO`. |
+| 1.6 | `WORKING` | Preserve existing artifacts and behavior. | Tests prove `assignment_facts`, `originalText`, CFG edge count, dynamic CALL/CICS legacy fields, and RAG chunks are unchanged. |
 | 1.7 | `PENDING` | Record Phase 1 accuracy/performance stats. | Report includes inspected/folded/skipped counts, diagnostic counts, Java runtime delta, and CFG size delta. |
 | 2.1 | `PENDING` | Add `static_analysis/dataflow.json` skeleton. | Artifact has schema version, analysis version, config, summary, diagnostics, and empty node state support. |
 | 2.2 | `PENDING` | Add paragraph summaries. | Dataflow artifact records direct/transitive reads, writes, kills, side effects, cycles, and unsupported constructs. |
@@ -308,6 +308,12 @@ If implementation discovers that this document is wrong, the documentation must 
 | 4.1 | `PENDING` | Add optional static-value RAG chunks. | Chunks include only high-confidence facts with provenance and no unsupported "always" wording. |
 | 4.2 | `PENDING` | Evaluate retrieval and token impact. | Benchmark reports chunk count, token count, recall, and retrieval-ranking deltas. |
 | 5.1 | `PENDING` | Publish final implementation documentation update. | This document records final schemas, measured results, known limitations, and any skipped work. |
+
+### Phase 1 Checkpoints
+
+| Date | Status | What changed | Verification |
+|---|---|---|---|
+| 2026-05-11 | `WORKING` | Added the sealed `StaticValue` model, closed numeric expression folder, additive `folded_value_facts`/`folding_diagnostics` emission from `ComputeFlowNode.metadata()`, and the first golden fixture. | `mvn -pl smojol-core install -Dcheckstyle.skip=true -DskipTests`; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest` passed, 19 tests. |
 
 ### Fool-Proof Execution Rules
 
@@ -441,6 +447,9 @@ FOLD_UNSUPPORTED_REFERENCE_MODIFICATION
 FOLD_UNSUPPORTED_DECIMAL_COMMA_MODE_UNKNOWN
 FOLD_UNSUPPORTED_FIGURATIVE_CONSTANT
 FOLD_UNSUPPORTED_SPECIAL_REGISTER
+FOLD_UNSUPPORTED_NON_NUMERIC_LITERAL
+FOLD_UNSUPPORTED_EXPONENTIATION
+FOLD_UNSUPPORTED_DIALECT_NODE
 FOLD_UNSAFE_DIVIDE_BY_ZERO
 FOLD_UNSAFE_NON_TERMINATING_DIVISION
 FOLD_UNSAFE_SIZE_ERROR_SEMANTICS

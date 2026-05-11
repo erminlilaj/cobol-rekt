@@ -195,6 +195,109 @@ class JavaHardeningRegressionTest {
     }
 
     @Test
+    void exportsFoldedValueFactForClosedNumericCompute() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("constant-folding-phase1.cbl.report/cfg/cfg-constant-folding-phase1.cbl.json");
+        JsonObject computeNode = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "COMPUTE WS-A = 1 + 2", "COMPUTE");
+        assertNotNull(computeNode);
+        assertTrue(computeNode.get("originalText").getAsString().contains("COMPUTE WS-A = 1 + 2"));
+        assertFalse(computeNode.getAsJsonObject("metadata").has("assignment_facts"));
+
+        JsonObject fact = firstFoldedValueFact(computeNode);
+        assertEquals("1.0", fact.get("schema_version").getAsString());
+        assertEquals("folded_expression", fact.get("fact_type").getAsString());
+        assertEquals("folded", fact.get("status").getAsString());
+        assertEquals("COMPUTE", fact.get("statement_type").getAsString());
+        assertEquals("WS-A", fact.get("target_variable").getAsString());
+        assertEquals("1+2", fact.get("original_expression").getAsString());
+        assertEquals("3", fact.get("folded_expression").getAsString());
+        assertEquals("high", fact.get("confidence").getAsString());
+        assertEquals("java_static_value_folded_expression", fact.get("provenance_source").getAsString());
+        assertEquals("MAIN-PARA", fact.get("paragraph").getAsString());
+
+        JsonObject value = fact.getAsJsonObject("value");
+        assertEquals("CONSTANT", value.get("state").getAsString());
+        assertEquals("NUMERIC", value.get("kind").getAsString());
+        assertEquals("3", value.get("raw_lexeme").getAsString());
+        assertEquals("3", value.get("normalized_value").getAsString());
+        assertEquals("3", value.get("display_value").getAsString());
+
+        JsonObject numeric = value.getAsJsonObject("numeric");
+        assertEquals("3", numeric.get("decimal").getAsString());
+        assertEquals(0, numeric.get("scale").getAsInt());
+        assertEquals(1, numeric.get("precision").getAsInt());
+        assertEquals("POSITIVE", numeric.get("sign").getAsString());
+    }
+
+    @Test
+    void reportsVariableReferenceAsUnsupportedForPhaseOneFolding() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("constant-folding-phase1.cbl.report/cfg/cfg-constant-folding-phase1.cbl.json");
+        JsonObject computeNode = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "COMPUTE WS-B = WS-A + 1", "COMPUTE");
+        assertNotNull(computeNode);
+        JsonObject metadata = computeNode.getAsJsonObject("metadata");
+        assertFalse(metadata.has("assignment_facts"));
+        assertFalse(metadata.has("folded_value_facts"));
+
+        JsonObject diagnostic = firstFoldingDiagnostic(computeNode);
+        assertEquals("FOLD_UNSUPPORTED_VARIABLE_REFERENCE", diagnostic.get("code").getAsString());
+        assertEquals("info", diagnostic.get("severity").getAsString());
+        assertEquals("unsupported", diagnostic.get("category").getAsString());
+        assertEquals("WS-A", diagnostic.get("construct").getAsString());
+        assertEquals("Expression contains variable WS-A; Phase 1 folds only closed literal expressions.",
+                diagnostic.get("message").getAsString());
+    }
+
+    @Test
+    void reportsDivideByZeroAsUnsafeForPhaseOneFolding() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("constant-folding-phase1.cbl.report/cfg/cfg-constant-folding-phase1.cbl.json");
+        JsonObject computeNode = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "COMPUTE WS-C = 1 / 0", "COMPUTE");
+        assertNotNull(computeNode);
+        JsonObject metadata = computeNode.getAsJsonObject("metadata");
+        assertFalse(metadata.has("assignment_facts"));
+        assertFalse(metadata.has("folded_value_facts"));
+
+        JsonObject diagnostic = firstFoldingDiagnostic(computeNode);
+        assertEquals("FOLD_UNSAFE_DIVIDE_BY_ZERO", diagnostic.get("code").getAsString());
+        assertEquals("warning", diagnostic.get("severity").getAsString());
+        assertEquals("unsafe", diagnostic.get("category").getAsString());
+        assertEquals("/0", diagnostic.get("construct").getAsString());
+        assertEquals("Division by zero cannot be folded safely.", diagnostic.get("message").getAsString());
+    }
+
+    @Test
+    void leavesMoveAssignmentFactsUnchangedAndDoesNotEmitFoldingMetadata() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("constant-folding-phase1.cbl.report/cfg/cfg-constant-folding-phase1.cbl.json");
+        JsonObject moveNode = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"), "MOVE 7 TO WS-D", "MOVE");
+        assertNotNull(moveNode);
+        JsonObject metadata = moveNode.getAsJsonObject("metadata");
+        assertTrue(metadata.has("assignment_facts"));
+        assertFalse(metadata.has("folded_value_facts"));
+        assertFalse(metadata.has("folding_diagnostics"));
+
+        JsonObject assignment = jsonObjects(metadata.getAsJsonArray("assignment_facts")).get(0);
+        assertEquals("WS-D", assignment.get("target_variable").getAsString());
+        assertEquals("7", assignment.get("source_value").getAsString());
+        assertEquals("literal", assignment.get("source_kind").getAsString());
+        assertEquals("MOVE", assignment.get("statement_type").getAsString());
+        assertEquals("java_move_literal", assignment.get("provenance_source").getAsString());
+        assertEquals("MAIN-PARA", assignment.get("paragraph").getAsString());
+    }
+
+    @Test
     void exportsAssignmentFactsForFigurativeConstantsAsLiterals() throws IOException {
         new TestTaskRunner("optimization-stage1.cbl", "test-code/flow-ast")
                 .runTask(CommandLineAnalysisTask.WRITE_CFG);
@@ -540,6 +643,30 @@ class JavaHardeningRegressionTest {
                 .filter(node -> node.has("originalText") && node.get("originalText").getAsString().contains(text))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private JsonObject findNodeByOriginalTextAndType(JsonArray nodes, String text, String type) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("type") && type.equals(node.get("type").getAsString()))
+                .filter(node -> node.has("originalText") && node.get("originalText").getAsString().contains(text))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private JsonObject firstFoldedValueFact(JsonObject node) {
+        JsonObject metadata = node.getAsJsonObject("metadata");
+        assertNotNull(metadata);
+        assertTrue(metadata.has("folded_value_facts"));
+        assertEquals(1, metadata.getAsJsonArray("folded_value_facts").size());
+        return metadata.getAsJsonArray("folded_value_facts").get(0).getAsJsonObject();
+    }
+
+    private JsonObject firstFoldingDiagnostic(JsonObject node) {
+        JsonObject metadata = node.getAsJsonObject("metadata");
+        assertNotNull(metadata);
+        assertTrue(metadata.has("folding_diagnostics"));
+        assertEquals(1, metadata.getAsJsonArray("folding_diagnostics").size());
+        return metadata.getAsJsonArray("folding_diagnostics").get(0).getAsJsonObject();
     }
 
     private boolean jsonArrayContainsString(JsonArray array, String value) {
