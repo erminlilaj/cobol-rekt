@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-11 — Human-readable feature/optimization branch summary
+
+**File(s):** `docs/feature-optimization-branch-summary.md`, `workDone.md`
+**What changed:** Added a human-readable summary of what the `feature/optimization` branch did, including the explicit no/yes evaluation for constant folding and constant propagation, the shipped compaction features, benchmark interpretation, user-facing commands, and verification status.
+**Why:** User asked for a plain explanatory document before proceeding, so reviewers can understand that the branch improves static-fact confidence and retrieval compaction without claiming compiler-style optimization.
+
+---
+
 ## 2026-05-10 — Stage 8: D10 final verification and wrap-up
 
 **File(s):** `workDone.md`
