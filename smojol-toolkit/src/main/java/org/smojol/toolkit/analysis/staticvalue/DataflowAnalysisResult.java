@@ -14,7 +14,7 @@ public record DataflowAnalysisResult(
         Map<String, Object> config,
         Map<String, Object> summary,
         @SerializedName("node_states") Map<String, DataflowNodeState> nodeStates,
-        @SerializedName("alias_sets") Map<String, Object> aliasSets,
+        @SerializedName("alias_sets") Map<String, AliasSetSummary> aliasSets,
         @SerializedName("paragraph_summaries") Map<String, ParagraphSummary> paragraphSummaries,
         List<Map<String, Object>> diagnostics) {
 }

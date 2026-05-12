@@ -205,8 +205,8 @@ public class SmojolTasks {
     public AnalysisTask WRITE_CFG = new AnalysisTask() {
         @Override
         public AnalysisTaskResult run() {
-            return new WriteControlFlowGraphTask(baseModel.flowRoot(), idProvider, cfgOutputConfig, resourceOperations)
-                    .run();
+            return new WriteControlFlowGraphTask(baseModel.flowRoot(), baseModel.dataStructures(), idProvider,
+                    cfgOutputConfig, resourceOperations).run();
         }
     };
 

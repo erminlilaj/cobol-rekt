@@ -13,18 +13,26 @@ import org.smojol.toolkit.analysis.pipeline.SerialisableCFGGraphCollector;
 import com.mojo.algorithms.task.AnalysisTask;
 import com.mojo.algorithms.task.AnalysisTaskResult;
 import org.smojol.toolkit.analysis.pipeline.config.CFGOutputConfig;
+import org.smojol.common.vm.structure.CobolDataStructure;
 
 import java.io.IOException;
 import java.nio.file.Path;
 
 public class WriteControlFlowGraphTask implements AnalysisTask {
     private final FlowNode astRoot;
+    private final CobolDataStructure dataStructures;
     private final IdProvider idProvider;
     private final CFGOutputConfig cfgOutputConfig;
     private final ResourceOperations resourceOperations;
 
     public WriteControlFlowGraphTask(FlowNode astRoot, IdProvider idProvider, CFGOutputConfig cfgOutputConfig, ResourceOperations resourceOperations) {
+        this(astRoot, null, idProvider, cfgOutputConfig, resourceOperations);
+    }
+
+    public WriteControlFlowGraphTask(FlowNode astRoot, CobolDataStructure dataStructures, IdProvider idProvider,
+                                     CFGOutputConfig cfgOutputConfig, ResourceOperations resourceOperations) {
         this.astRoot = astRoot;
+        this.dataStructures = dataStructures;
         this.idProvider = idProvider;
         this.cfgOutputConfig = cfgOutputConfig;
         this.resourceOperations = resourceOperations;
@@ -57,7 +65,7 @@ public class WriteControlFlowGraphTask implements AnalysisTask {
         Path staticAnalysisDir = cfgOutputConfig.outputDir().getParent().resolve("static_analysis");
         resourceOperations.createDirectories(staticAnalysisDir);
         DataflowAnalysisResult result = new StaticValueDataflowPass()
-                .buildSkeleton(programName(), cfgGraphCollector.nodes(), cfgGraphCollector.edges());
+                .buildSkeleton(programName(), cfgGraphCollector.nodes(), cfgGraphCollector.edges(), dataStructures);
         try (JsonWriter writer = new JsonWriter(resourceOperations.fileWriter(
                 staticAnalysisDir.resolve("dataflow.json").toAbsolutePath().normalize().toString()))) {
             writer.setIndent("  ");

@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-12 — Phase 2.3 alias-set summaries in dataflow sidecar
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/AliasSetSummary.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowAnalysisResult.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/WriteControlFlowGraphTask.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/task/SmojolTasks.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added deterministic conservative alias-set summaries to `static_analysis/dataflow.json` for group/child storage, `OCCURS` storage, and `REDEFINES` overlap. The sidecar now carries analysis version `0.3`, status `alias_summary_skeleton`, and syntax-derived alias evidence, while entry/exit constants, kills, and propagation remain empty.
+**Why:** User asked to proceed and document all work; this checkpoint prepares alias facts needed by later propagation without applying any kill rules or overclaiming constant propagation.
+
+---
+
 ## 2026-05-12 — Phase 2.2 paragraph summaries in dataflow sidecar
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/ParagraphSummary.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowAnalysisResult.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

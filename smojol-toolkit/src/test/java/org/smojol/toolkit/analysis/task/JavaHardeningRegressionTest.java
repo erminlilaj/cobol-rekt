@@ -16,6 +16,7 @@ import org.smojol.common.resource.LocalFilesystemOperations;
 import org.smojol.toolkit.analysis.pipeline.ProgramSearch;
 import org.smojol.toolkit.analysis.task.analysis.CodeTaskRunner;
 import org.smojol.toolkit.interpreter.FullProgram;
+import org.smojol.toolkit.interpreter.structure.DefaultFormat1DataStructureBuilder;
 import org.smojol.toolkit.interpreter.structure.OccursIgnoringFormat1DataStructureBuilder;
 import org.smojol.toolkit.task.TaskRunnerMode;
 
@@ -355,15 +356,15 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("0.2", dataflow.get("analysis_version").getAsString());
-        assertEquals("paragraph_summary_skeleton", dataflow.get("status").getAsString());
+        assertEquals("0.3", dataflow.get("analysis_version").getAsString());
+        assertEquals("alias_summary_skeleton", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
         assertFalse(config.get("constant_propagation_enabled").getAsBoolean());
         assertFalse(config.get("path_sensitive_targets_enabled").getAsBoolean());
         assertTrue(config.get("paragraph_summaries_enabled").getAsBoolean());
-        assertFalse(config.get("alias_analysis_enabled").getAsBoolean());
-        assertEquals("paragraph_summary_skeleton", config.get("mode").getAsString());
+        assertTrue(config.get("alias_analysis_enabled").getAsBoolean());
+        assertEquals("alias_summary_skeleton", config.get("mode").getAsString());
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
         assertEquals(18, summary.get("node_count").getAsInt());
@@ -441,6 +442,56 @@ class JavaHardeningRegressionTest {
         JsonObject loop = paragraphSummaries.getAsJsonObject("LOOP-PARA");
         assertEquals("complete_no_paragraph_calls", loop.get("transitive_summary_status").getAsString());
         assertEquals(0, loop.getAsJsonArray("unsupported_constructs").size());
+    }
+
+    @Test
+    void dataflowAliasSetsRecordRedefinesAndGroupChildStorage() throws IOException {
+        new TestTaskRunner("data-structures.cbl", "test-code/structure")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject dataflow = readJson("data-structures.cbl.report/static_analysis/dataflow.json");
+        JsonObject aliasSets = dataflow.getAsJsonObject("alias_sets");
+
+        JsonObject sometext = aliasSets.getAsJsonObject("redefines:SOMETEXT");
+        assertEquals("redefines:SOMETEXT", sometext.get("alias_set_id").getAsString());
+        assertEquals("REDEFINES_OVERLAP", sometext.get("alias_kind").getAsString());
+        assertEquals("SOMETEXT", sometext.get("base_variable").getAsString());
+        assertEquals(List.of("NUMERIC-SOMETEXT", "REDEF-SOMETEXT", "SOMETEXT"),
+                jsonArrayStrings(sometext.getAsJsonArray("members")));
+        assertEquals("all_overlapping_members", sometext.get("kill_scope").getAsString());
+        assertEquals("conservative", sometext.get("confidence").getAsString());
+        assertEquals("java_static_value_dataflow", sometext.get("summary_source").getAsString());
+
+        JsonObject someGroup = aliasSets.getAsJsonObject("group_child:SOME-GROUP");
+        assertEquals("GROUP_CHILD_STORAGE", someGroup.get("alias_kind").getAsString());
+        assertEquals("SOME-GROUP", someGroup.get("base_variable").getAsString());
+        assertEquals(List.of("AA", "AA1", "AA2", "LEVEL-10-A", "LEVEL-10-B", "LEVEL-20-B", "SOME-GROUP"),
+                jsonArrayStrings(someGroup.getAsJsonArray("members")));
+        assertEquals("all_members", someGroup.get("kill_scope").getAsString());
+    }
+
+    @Test
+    void dataflowAliasSetsRecordOccursStorageConservatively() throws IOException {
+        new TestTaskRunner("data-structures.cbl", "test-code/structure")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject dataflow = readJson("data-structures.cbl.report/static_analysis/dataflow.json");
+        JsonObject aliasSets = dataflow.getAsJsonObject("alias_sets");
+        assertEquals(aliasSets.size(), dataflow.getAsJsonObject("summary").get("alias_set_count").getAsInt());
+
+        JsonObject someArray = aliasSets.getAsJsonObject("occurs:SOME-ARRAY");
+        assertEquals("occurs:SOME-ARRAY", someArray.get("alias_set_id").getAsString());
+        assertEquals("OCCURS_STORAGE", someArray.get("alias_kind").getAsString());
+        assertEquals("SOME-ARRAY", someArray.get("base_variable").getAsString());
+        assertEquals(List.of("SOME-ARRAY"), jsonArrayStrings(someArray.getAsJsonArray("members")));
+        assertEquals("all_occurrences_and_children", someArray.get("kill_scope").getAsString());
+
+        JsonObject level10B = aliasSets.getAsJsonObject("occurs:LEVEL-10-B");
+        assertEquals("OCCURS_STORAGE", level10B.get("alias_kind").getAsString());
+        assertEquals(List.of("LEVEL-10-B", "LEVEL-20-B"), jsonArrayStrings(level10B.getAsJsonArray("members")));
+        JsonObject level10BEvidence = level10B.getAsJsonArray("evidence").get(0).getAsJsonObject();
+        assertEquals("LEVEL-10-B", level10BEvidence.get("variable").getAsString());
+        assertEquals(2, level10BEvidence.get("occurs_count").getAsInt());
     }
 
     @Test
