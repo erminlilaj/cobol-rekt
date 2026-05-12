@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-12 — Phase 2.2 paragraph summaries in dataflow sidecar
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/ParagraphSummary.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowAnalysisResult.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added paragraph summaries to `static_analysis/dataflow.json`, including contained CFG node IDs, direct read/write variables, called paragraphs, called programs, external side effects, unsupported/deferred constructs, and conservative transitive status. PERFORM transitive expansion is explicitly deferred with a machine-readable unsupported construct instead of being overclaimed.
+**Why:** User asked to proceed with the next phase and document everything; this checkpoint prepares the summary data needed by later propagation while keeping entry/exit constants and solver logic unimplemented.
+
+---
+
 ## 2026-05-12 — Phase 2.1 dataflow skeleton sidecar
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowAnalysisResult.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowNodeState.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/pipeline/SerialisableCFGGraphCollector.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/WriteControlFlowGraphTask.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

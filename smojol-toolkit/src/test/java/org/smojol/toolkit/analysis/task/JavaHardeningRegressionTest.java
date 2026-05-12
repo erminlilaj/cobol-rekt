@@ -355,15 +355,15 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("0.1", dataflow.get("analysis_version").getAsString());
-        assertEquals("skeleton", dataflow.get("status").getAsString());
+        assertEquals("0.2", dataflow.get("analysis_version").getAsString());
+        assertEquals("paragraph_summary_skeleton", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
         assertFalse(config.get("constant_propagation_enabled").getAsBoolean());
         assertFalse(config.get("path_sensitive_targets_enabled").getAsBoolean());
-        assertFalse(config.get("paragraph_summaries_enabled").getAsBoolean());
+        assertTrue(config.get("paragraph_summaries_enabled").getAsBoolean());
         assertFalse(config.get("alias_analysis_enabled").getAsBoolean());
-        assertEquals("skeleton", config.get("mode").getAsString());
+        assertEquals("paragraph_summary_skeleton", config.get("mode").getAsString());
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
         assertEquals(18, summary.get("node_count").getAsInt());
@@ -373,12 +373,74 @@ class JavaHardeningRegressionTest {
         assertEquals(0, summary.get("kill_count").getAsInt());
         assertEquals(0, summary.get("diagnostic_count").getAsInt());
         assertEquals(0, summary.get("alias_set_count").getAsInt());
-        assertEquals(0, summary.get("paragraph_summary_count").getAsInt());
+        assertEquals(1, summary.get("paragraph_summary_count").getAsInt());
 
         assertEquals(0, dataflow.getAsJsonArray("diagnostics").size());
         assertEquals(0, dataflow.getAsJsonObject("alias_sets").size());
-        assertEquals(0, dataflow.getAsJsonObject("paragraph_summaries").size());
+        assertEquals(1, dataflow.getAsJsonObject("paragraph_summaries").size());
         assertEquals(18, dataflow.getAsJsonObject("node_states").size());
+    }
+
+    @Test
+    void dataflowSkeletonEmitsDeterministicParagraphSummary() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("constant-folding-phase1.cbl.report/cfg/cfg-constant-folding-phase1.cbl.json");
+        JsonObject dataflow = readJson("constant-folding-phase1.cbl.report/static_analysis/dataflow.json");
+        JsonObject paragraphNode = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MAIN-PARA.\n           COMPUTE WS-A = 1 + 2\n           COMPUTE WS-B = WS-A + 1\n           COMPUTE WS-C = 1 / 0\n           MOVE 7 TO WS-D\n           COMPUTE WS-E = (1 + 2) * -3\n           COMPUTE WS-F = 1.20 + 2.30\n           COMPUTE WS-G = 1 / 4\n           COMPUTE WS-H = 1 / 3\n           COMPUTE WS-I = ZERO + 1\n           COMPUTE WS-J = 2 ** 3\n           COMPUTE WS-K = 10 - 3\n           COMPUTE WS-L = +4\n           GOBACK.",
+                "PARAGRAPH");
+
+        JsonObject summary = dataflow.getAsJsonObject("paragraph_summaries").getAsJsonObject("MAIN-PARA");
+        assertEquals("MAIN-PARA", summary.get("paragraph").getAsString());
+        assertEquals(paragraphNode.get("id").getAsString(), summary.get("paragraph_node_id").getAsString());
+        assertEquals(containedParagraphNodeIds(cfg.getAsJsonArray("nodes"), paragraphNode),
+                jsonArrayStrings(summary.getAsJsonArray("node_ids")));
+        assertEquals(List.of("WS-A"), jsonArrayStrings(summary.getAsJsonArray("variables_read_direct")));
+        assertEquals(List.of("WS-A", "WS-B", "WS-C", "WS-D", "WS-E", "WS-F",
+                        "WS-G", "WS-H", "WS-I", "WS-J", "WS-K", "WS-L"),
+                jsonArrayStrings(summary.getAsJsonArray("variables_modified_direct")));
+        assertEquals(jsonArrayStrings(summary.getAsJsonArray("variables_read_direct")),
+                jsonArrayStrings(summary.getAsJsonArray("variables_read_transitive")));
+        assertEquals(jsonArrayStrings(summary.getAsJsonArray("variables_modified_direct")),
+                jsonArrayStrings(summary.getAsJsonArray("variables_modified_transitive")));
+        assertEquals(0, summary.getAsJsonArray("calls_paragraphs").size());
+        assertEquals(0, summary.getAsJsonArray("called_programs").size());
+        assertEquals(0, summary.getAsJsonArray("external_side_effects").size());
+        assertEquals(0, summary.getAsJsonArray("unsupported_constructs").size());
+        assertFalse(summary.get("cycle_detected").getAsBoolean());
+        assertEquals("complete_no_paragraph_calls", summary.get("transitive_summary_status").getAsString());
+        assertEquals("java_static_value_dataflow", summary.get("summary_source").getAsString());
+    }
+
+    @Test
+    void paragraphSummaryRecordsCallsSideEffectsAndDeferredTransitiveExpansion() throws IOException {
+        new TestTaskRunner("metadata-features.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject dataflow = readJson("metadata-features.cbl.report/static_analysis/dataflow.json");
+        JsonObject paragraphSummaries = dataflow.getAsJsonObject("paragraph_summaries");
+        assertEquals(4, paragraphSummaries.size());
+
+        JsonObject main = paragraphSummaries.getAsJsonObject("MAIN-PARA");
+        assertEquals(List.of("LOOP-PARA"), jsonArrayStrings(main.getAsJsonArray("calls_paragraphs")));
+        assertEquals(List.of("DYNPROG", "SUBPROG"), jsonArrayStrings(main.getAsJsonArray("called_programs")));
+        assertEquals(List.of("ACCEPT", "CALL", "CLOSE", "OPEN", "READ", "WRITE"),
+                jsonArrayStrings(main.getAsJsonArray("external_side_effects")));
+        assertEquals("not_computed_perform_targets_present", main.get("transitive_summary_status").getAsString());
+        assertEquals(0, main.getAsJsonArray("variables_read_transitive").size());
+        assertEquals(0, main.getAsJsonArray("variables_modified_transitive").size());
+
+        JsonObject unsupported = main.getAsJsonArray("unsupported_constructs").get(0).getAsJsonObject();
+        assertEquals("PARAGRAPH_TRANSITIVE_SUMMARY_NOT_COMPUTED", unsupported.get("code").getAsString());
+        assertEquals("info", unsupported.get("severity").getAsString());
+        assertEquals("deferred", unsupported.get("category").getAsString());
+        assertEquals(List.of("LOOP-PARA"), jsonArrayStrings(unsupported.getAsJsonArray("calls_paragraphs")));
+
+        JsonObject loop = paragraphSummaries.getAsJsonObject("LOOP-PARA");
+        assertEquals("complete_no_paragraph_calls", loop.get("transitive_summary_status").getAsString());
+        assertEquals(0, loop.getAsJsonArray("unsupported_constructs").size());
     }
 
     @Test
@@ -781,6 +843,27 @@ class JavaHardeningRegressionTest {
                 .filter(node -> node.has("originalText") && node.get("originalText").getAsString().contains(text))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private List<String> containedParagraphNodeIds(JsonArray nodes, JsonObject paragraphNode) {
+        int startLine = paragraphNode.get("sourceLine").getAsInt();
+        int endLine = paragraphNode.get("sourceEndLine").getAsInt();
+        String paragraphNodeId = paragraphNode.get("id").getAsString();
+        return jsonObjects(nodes).stream()
+                .filter(node -> !paragraphNodeId.equals(node.get("id").getAsString()))
+                .filter(node -> node.has("sourceLine") && node.has("sourceEndLine"))
+                .filter(node -> node.get("sourceLine").getAsInt() >= startLine)
+                .filter(node -> node.get("sourceEndLine").getAsInt() <= endLine)
+                .filter(node -> !List.of("PROCEDURE_DIVISION_BODY", "PARAGRAPHS", "PARAGRAPH")
+                        .contains(node.get("type").getAsString()))
+                .map(node -> node.get("id").getAsString())
+                .toList();
+    }
+
+    private List<String> jsonArrayStrings(JsonArray array) {
+        List<String> values = new ArrayList<>();
+        array.forEach(element -> values.add(element.getAsString()));
+        return values;
     }
 
     private JsonObject firstFoldedValueFact(JsonObject node) {

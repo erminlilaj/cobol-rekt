@@ -297,7 +297,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 1.6 | `DONE` | Preserve existing artifacts and behavior. | Tests prove `assignment_facts`, statement text, CFG node/edge count, and dynamic CALL/CICS legacy behavior are unchanged; no RAG/chunk code changed in Phase 1. |
 | 1.7 | `DONE` | Record Phase 1 accuracy/performance stats. | Report includes inspected/folded/skipped counts, diagnostic counts, Java target-suite wall-clock, and additive CFG size delta. |
 | 2.1 | `DONE` | Add `static_analysis/dataflow.json` skeleton. | `WRITE_CFG` emits a sidecar artifact with schema version, analysis version, disabled propagation config, summary counts, empty diagnostics, empty alias/paragraph sections, and one empty node state per CFG node. |
-| 2.2 | `PENDING` | Add paragraph summaries. | Dataflow artifact records direct/transitive reads, writes, kills, side effects, cycles, and unsupported constructs. |
+| 2.2 | `DONE` | Add paragraph summaries. | Dataflow artifact records one summary per CFG `PARAGRAPH`: contained node IDs, direct read/write sets, paragraph calls, called programs, external side effects, unsupported/deferred constructs, cycle flag, and conservative transitive summary status. |
 | 2.3 | `PENDING` | Add alias-set builder. | `REDEFINES`, group/child, OCCURS, and reference-modification ambiguity produce conservative kill sets. |
 | 2.4 | `PENDING` | Add fixed-point CFG propagation. | Entry/exit states converge deterministically or emit limit diagnostics. |
 | 2.5 | `PENDING` | Add transfer and kill rules. | Tests cover MOVE, COMPUTE, ACCEPT, READ, CALL, SQL, CICS, STRING, UNSTRING, INSPECT, INITIALIZE, and unknown statements. |
@@ -322,6 +322,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | Date | Status | What changed | Verification |
 |---|---|---|---|
 | 2026-05-12 | `DONE` | Added the first `static_analysis/dataflow.json` sidecar. It is intentionally a skeleton: every CFG node has an empty `entry_constants`, `exit_constants`, `kills`, and `diagnostics` container, while propagation, alias analysis, paragraph summaries, and path-sensitive targets remain disabled. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 24 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 36 tests, 2 skipped. Fixture metrics: 18 node states for 18 CFG nodes, 17 CFG edges recorded in the summary, 0 entry constants, 0 exit constants, 0 kills, 0 diagnostics, 0 alias sets, 0 paragraph summaries, 3,453 bytes for the pretty-printed sidecar, target suite wall-clock 20.078s. |
+| 2026-05-12 | `DONE` | Added paragraph summaries to the sidecar without starting propagation. Summaries now report contained CFG node IDs, direct read/write variables, called paragraphs, called programs, external side effects, and a conservative transitive status. When a paragraph performs another paragraph, transitive read/write lists remain empty and an explicit deferred diagnostic is stored under that paragraph's `unsupported_constructs`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 26 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 38 tests, 2 skipped. Fixture metrics: `constant-folding-phase1.cbl` has 1 paragraph summary, 15 contained node IDs, 1 direct read variable, 12 direct modified variables, 0 paragraph calls, 0 side effects, 5,239-byte pretty-printed sidecar, target suite wall-clock 13.467s. `metadata-features.cbl` has 4 paragraph summaries; `MAIN-PARA` records `LOOP-PARA`, called programs `DYNPROG` and `SUBPROG`, side effects `ACCEPT`, `CALL`, `CLOSE`, `OPEN`, `READ`, `WRITE`, and deferred transitive expansion. |
 
 ### Fool-Proof Execution Rules
 
@@ -350,23 +351,23 @@ Phase 1 includes:
 
 ### Phase 2: CFG-Based Constant Propagation
 
-Phase 2 now has a committed skeleton sidecar, but it does **not** yet perform constant propagation. The current artifact is useful because it pins the stable output location, top-level schema, per-node state shape, and conservative disabled-by-default flags before any solver logic exists.
+Phase 2 now has a committed sidecar with paragraph summaries, but it does **not** yet perform constant propagation. The current artifact is useful because it pins the stable output location, top-level schema, per-node state shape, paragraph summary shape, and conservative disabled-by-default flags before any solver logic exists.
 
-Current Phase 2.1 artifact shape:
+Current Phase 2.2 artifact shape:
 
 ```json
 {
   "program": "constant-folding-phase1.cbl",
   "schema_version": "1.0",
   "analysis": "static_value_dataflow",
-  "analysis_version": "0.1",
-  "status": "skeleton",
+  "analysis_version": "0.2",
+  "status": "paragraph_summary_skeleton",
   "config": {
     "constant_propagation_enabled": false,
     "path_sensitive_targets_enabled": false,
-    "paragraph_summaries_enabled": false,
+    "paragraph_summaries_enabled": true,
     "alias_analysis_enabled": false,
-    "mode": "skeleton"
+    "mode": "paragraph_summary_skeleton"
   },
   "summary": {
     "node_count": 18,
@@ -376,7 +377,7 @@ Current Phase 2.1 artifact shape:
     "kill_count": 0,
     "diagnostic_count": 0,
     "alias_set_count": 0,
-    "paragraph_summary_count": 0
+    "paragraph_summary_count": 1
   },
   "node_states": {
     "<cfg_node_id>": {
@@ -387,10 +388,29 @@ Current Phase 2.1 artifact shape:
     }
   },
   "alias_sets": {},
-  "paragraph_summaries": {},
+  "paragraph_summaries": {
+    "MAIN-PARA": {
+      "paragraph": "MAIN-PARA",
+      "paragraph_node_id": "<cfg_paragraph_node_id>",
+      "node_ids": ["<contained_cfg_node_id>"],
+      "variables_read_direct": ["WS-A"],
+      "variables_modified_direct": ["WS-A", "WS-B"],
+      "variables_read_transitive": ["WS-A"],
+      "variables_modified_transitive": ["WS-A", "WS-B"],
+      "calls_paragraphs": [],
+      "called_programs": [],
+      "external_side_effects": [],
+      "unsupported_constructs": [],
+      "cycle_detected": false,
+      "transitive_summary_status": "complete_no_paragraph_calls",
+      "summary_source": "java_static_value_dataflow"
+    }
+  },
   "diagnostics": []
 }
 ```
+
+For paragraphs that `PERFORM` another paragraph, Phase 2.2 does not compute a transitive closure yet. In that case `variables_read_transitive` and `variables_modified_transitive` stay empty, `transitive_summary_status` is `not_computed_perform_targets_present`, and `unsupported_constructs` contains a machine-readable `PARAGRAPH_TRANSITIVE_SUMMARY_NOT_COMPUTED` entry. This is deliberate: the analyzer records the risk instead of pretending the transitive summary is complete.
 
 Remaining Phase 2 work includes:
 
