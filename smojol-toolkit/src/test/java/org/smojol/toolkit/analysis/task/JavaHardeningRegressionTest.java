@@ -291,6 +291,8 @@ class JavaHardeningRegressionTest {
                 "0.25", "0.25", 2, 2, "POSITIVE");
         assertFoldedNumeric(nodes, "COMPUTE WS-K = 10 - 3", "WS-K", "10-3",
                 "7", "7", 0, 1, "POSITIVE");
+        assertFoldedNumeric(nodes, "COMPUTE WS-L = +4", "WS-L", "+4",
+                "4", "4", 0, 1, "POSITIVE");
     }
 
     @Test
@@ -307,6 +309,41 @@ class JavaHardeningRegressionTest {
                 "info", "unsupported", "ZERO", "Figurative constant ZERO is not folded in Phase 1.");
         assertFoldingDiagnostic(nodes, "COMPUTE WS-J = 2 ** 3", "FOLD_UNSUPPORTED_EXPONENTIATION",
                 "info", "unsupported", "2**3", "Exponentiation is not folded in Phase 1.");
+    }
+
+    @Test
+    void preservesStatementTextAndCfgShapeForPhaseOneFixture() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("constant-folding-phase1.cbl.report/cfg/cfg-constant-folding-phase1.cbl.json");
+        JsonArray nodes = cfg.getAsJsonArray("nodes");
+        JsonArray edges = cfg.getAsJsonArray("edges");
+
+        assertEquals(18, nodes.size());
+        assertEquals(17, edges.size());
+        assertEquals(List.of(
+                "COMPUTE WS-A = 1 + 2",
+                "COMPUTE WS-B = WS-A + 1",
+                "COMPUTE WS-C = 1 / 0",
+                "MOVE 7 TO WS-D",
+                "COMPUTE WS-E = (1 + 2) * -3",
+                "COMPUTE WS-F = 1.20 + 2.30",
+                "COMPUTE WS-G = 1 / 4",
+                "COMPUTE WS-H = 1 / 3",
+                "COMPUTE WS-I = ZERO + 1",
+                "COMPUTE WS-J = 2 ** 3",
+                "COMPUTE WS-K = 10 - 3",
+                "COMPUTE WS-L = +4"
+        ), executableStatementTexts(nodes));
+
+        long nonComputeFoldingMetadataCount = jsonObjects(nodes).stream()
+                .filter(node -> !"COMPUTE".equals(node.get("type").getAsString()))
+                .filter(node -> node.has("metadata"))
+                .map(node -> node.getAsJsonObject("metadata"))
+                .filter(metadata -> metadata.has("folded_value_facts") || metadata.has("folding_diagnostics"))
+                .count();
+        assertEquals(0, nonComputeFoldingMetadataCount);
     }
 
     @Test
@@ -701,6 +738,13 @@ class JavaHardeningRegressionTest {
         assertTrue(metadata.has("folding_diagnostics"));
         assertEquals(1, metadata.getAsJsonArray("folding_diagnostics").size());
         return metadata.getAsJsonArray("folding_diagnostics").get(0).getAsJsonObject();
+    }
+
+    private List<String> executableStatementTexts(JsonArray nodes) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> List.of("COMPUTE", "MOVE", "GOBACK").contains(node.get("type").getAsString()))
+                .map(node -> node.get("originalText").getAsString())
+                .toList();
     }
 
     private void assertFoldedNumeric(JsonArray nodes, String originalText, String targetVariable,

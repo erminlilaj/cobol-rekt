@@ -9,13 +9,18 @@ import java.util.List;
 
 public class StaticValueLiteralExtractor {
     public LiteralExtractionResult extractNumeric(CobolParser.LiteralContext literal) {
-        String text = literal.getText();
-        if (literal.figurativeConstant() != null || "ZERO".equalsIgnoreCase(text)
+        return extractNumericLiteral(literal.getText(), literal.numericLiteral() != null,
+                literal.figurativeConstant() != null);
+    }
+
+    LiteralExtractionResult extractNumericLiteral(String text, boolean hasNumericLiteral,
+                                                  boolean hasFigurativeConstant) {
+        if (hasFigurativeConstant || "ZERO".equalsIgnoreCase(text)
                 || "ZEROS".equalsIgnoreCase(text) || "ZEROES".equalsIgnoreCase(text)) {
             return unsupported(FoldingDiagnosticCode.FOLD_UNSUPPORTED_FIGURATIVE_CONSTANT,
                     "Figurative constant " + text + " is not folded in Phase 1.", text);
         }
-        if (literal.numericLiteral() == null) {
+        if (!hasNumericLiteral) {
             return unsupported(FoldingDiagnosticCode.FOLD_UNSUPPORTED_NON_NUMERIC_LITERAL,
                     "Phase 1 folds only numeric literals.", text);
         }

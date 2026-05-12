@@ -13,6 +13,7 @@
        01 WS-I PIC 9(4).
        01 WS-J PIC 9(4).
        01 WS-K PIC 9(4).
+       01 WS-L PIC 9(4).
        PROCEDURE DIVISION.
        MAIN-PARA.
            COMPUTE WS-A = 1 + 2
@@ -26,4 +27,5 @@
            COMPUTE WS-I = ZERO + 1
            COMPUTE WS-J = 2 ** 3
            COMPUTE WS-K = 10 - 3
+           COMPUTE WS-L = +4
            GOBACK.

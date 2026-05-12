@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-12 — Phase 1 constant folding completion checkpoint
+
+**File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/folding/StaticValueLiteralExtractor.java`, `smojol-core/src/test/java/org/smojol/common/staticanalysis/folding/StaticValueLiteralExtractorTest.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Completed Phase 1 coverage by adding direct literal-extractor tests, unary plus fixture coverage, preservation assertions for statement text and CFG shape, and fixture-level accuracy/size/runtime measurements. The living plan now marks Phase 1 steps 1.1 through 1.7 as done while keeping propagation pending, with broader Java verification recorded.
+**Why:** User asked to proceed with Phase 1 only, keep discussion 0006 and the committed documentation synchronized, commit after the important step, and stop before Phase 2.
+
+---
+
 ## 2026-05-11 — Phase 1 constant folding coverage checkpoint
 
 **File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/value/NumericStaticValue.java`, `smojol-core/src/test/java/org/smojol/common/staticanalysis/value/StaticValueTest.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
