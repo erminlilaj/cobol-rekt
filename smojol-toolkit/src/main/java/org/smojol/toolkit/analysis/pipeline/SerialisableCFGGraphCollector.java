@@ -25,6 +25,14 @@ public class SerialisableCFGGraphCollector implements FlowNodeVisitor {
         this.idProvider = idProvider;
     }
 
+    public List<SerialisableCFGFlowNode> nodes() {
+        return List.copyOf(nodes);
+    }
+
+    public List<SerialisableEdge> edges() {
+        return List.copyOf(edges);
+    }
+
     @Override
     public void visit(FlowNode node, List<FlowNode> outgoingNodes, List<FlowNode> incomingNodes, VisitContext context, FlowNodeService nodeService) {
         nodes.add(new SerialisableCFGFlowNode(node));

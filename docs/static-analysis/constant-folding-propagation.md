@@ -296,7 +296,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 1.5 | `DONE` | Emit `folding_diagnostics` for considered unsupported/unsafe `COMPUTE` statements. | Golden fixture emits exact diagnostics for variable reference, divide by zero, non-terminating division, figurative constant, and exponentiation. |
 | 1.6 | `DONE` | Preserve existing artifacts and behavior. | Tests prove `assignment_facts`, statement text, CFG node/edge count, and dynamic CALL/CICS legacy behavior are unchanged; no RAG/chunk code changed in Phase 1. |
 | 1.7 | `DONE` | Record Phase 1 accuracy/performance stats. | Report includes inspected/folded/skipped counts, diagnostic counts, Java target-suite wall-clock, and additive CFG size delta. |
-| 2.1 | `PENDING` | Add `static_analysis/dataflow.json` skeleton. | Artifact has schema version, analysis version, config, summary, diagnostics, and empty node state support. |
+| 2.1 | `DONE` | Add `static_analysis/dataflow.json` skeleton. | `WRITE_CFG` emits a sidecar artifact with schema version, analysis version, disabled propagation config, summary counts, empty diagnostics, empty alias/paragraph sections, and one empty node state per CFG node. |
 | 2.2 | `PENDING` | Add paragraph summaries. | Dataflow artifact records direct/transitive reads, writes, kills, side effects, cycles, and unsupported constructs. |
 | 2.3 | `PENDING` | Add alias-set builder. | `REDEFINES`, group/child, OCCURS, and reference-modification ambiguity produce conservative kill sets. |
 | 2.4 | `PENDING` | Add fixed-point CFG propagation. | Entry/exit states converge deterministically or emit limit diagnostics. |
@@ -316,6 +316,12 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2026-05-11 | `WORKING` | Added the sealed `StaticValue` model, closed numeric expression folder, additive `folded_value_facts`/`folding_diagnostics` emission from `ComputeFlowNode.metadata()`, and the first golden fixture. | `mvn -pl smojol-core install -Dcheckstyle.skip=true -DskipTests`; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest` passed, 19 tests. |
 | 2026-05-11 | `WORKING` | Added exact decimal payload tests, preserved BigDecimal scale in `StaticValue`, extended the fixture to cover parentheses, unary minus, decimal addition, exact division, subtraction, non-terminating division, figurative constants, and exponentiation. | Targeted checks passed: `StaticValueTest` 3 tests and `JavaHardeningRegressionTest` 21 tests. Broader checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true` 94 tests; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` 33 tests, 2 skipped. Code inspection found no `Double`, `double`, `Float`, `float`, or `TypedRecord` usage in the new static-analysis package. |
 | 2026-05-12 | `DONE` | Completed Phase 1 with literal-extractor unit tests, unary plus coverage, source/CFG preservation assertions, and fixture-level accuracy/size/runtime measurements. | Targeted checks passed: `StaticValueTest` + `StaticValueLiteralExtractorTest` 8 tests; `JavaHardeningRegressionTest` 22 tests. Broader checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true` 99 tests; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` 34 tests, 2 skipped. Metrics: 11 inspected `COMPUTE`s, 6 folded facts, 5 exact diagnostics, 18 CFG nodes, 17 edges, +4,387 minified bytes of additive folding metadata, target Java hardening suite wall-clock 13.723s. |
+
+### Phase 2 Checkpoints
+
+| Date | Status | What changed | Verification |
+|---|---|---|---|
+| 2026-05-12 | `DONE` | Added the first `static_analysis/dataflow.json` sidecar. It is intentionally a skeleton: every CFG node has an empty `entry_constants`, `exit_constants`, `kills`, and `diagnostics` container, while propagation, alias analysis, paragraph summaries, and path-sensitive targets remain disabled. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 24 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 36 tests, 2 skipped. Fixture metrics: 18 node states for 18 CFG nodes, 17 CFG edges recorded in the summary, 0 entry constants, 0 exit constants, 0 kills, 0 diagnostics, 0 alias sets, 0 paragraph summaries, 3,453 bytes for the pretty-printed sidecar, target suite wall-clock 20.078s. |
 
 ### Fool-Proof Execution Rules
 
@@ -344,9 +350,50 @@ Phase 1 includes:
 
 ### Phase 2: CFG-Based Constant Propagation
 
-Phase 2 includes:
+Phase 2 now has a committed skeleton sidecar, but it does **not** yet perform constant propagation. The current artifact is useful because it pins the stable output location, top-level schema, per-node state shape, and conservative disabled-by-default flags before any solver logic exists.
 
-- `static_analysis/dataflow.json`.
+Current Phase 2.1 artifact shape:
+
+```json
+{
+  "program": "constant-folding-phase1.cbl",
+  "schema_version": "1.0",
+  "analysis": "static_value_dataflow",
+  "analysis_version": "0.1",
+  "status": "skeleton",
+  "config": {
+    "constant_propagation_enabled": false,
+    "path_sensitive_targets_enabled": false,
+    "paragraph_summaries_enabled": false,
+    "alias_analysis_enabled": false,
+    "mode": "skeleton"
+  },
+  "summary": {
+    "node_count": 18,
+    "edge_count": 17,
+    "entry_constant_count": 0,
+    "exit_constant_count": 0,
+    "kill_count": 0,
+    "diagnostic_count": 0,
+    "alias_set_count": 0,
+    "paragraph_summary_count": 0
+  },
+  "node_states": {
+    "<cfg_node_id>": {
+      "entry_constants": {},
+      "exit_constants": {},
+      "kills": [],
+      "diagnostics": []
+    }
+  },
+  "alias_sets": {},
+  "paragraph_summaries": {},
+  "diagnostics": []
+}
+```
+
+Remaining Phase 2 work includes:
+
 - Node entry and exit constants.
 - Fixed-point worklist solver.
 - Conservative merge rules.

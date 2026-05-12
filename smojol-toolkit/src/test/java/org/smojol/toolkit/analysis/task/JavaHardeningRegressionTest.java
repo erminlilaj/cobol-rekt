@@ -347,6 +347,65 @@ class JavaHardeningRegressionTest {
     }
 
     @Test
+    void writeCfgEmitsStaticValueDataflowSkeletonSidecar() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject dataflow = readJson("constant-folding-phase1.cbl.report/static_analysis/dataflow.json");
+        assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
+        assertEquals("1.0", dataflow.get("schema_version").getAsString());
+        assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
+        assertEquals("0.1", dataflow.get("analysis_version").getAsString());
+        assertEquals("skeleton", dataflow.get("status").getAsString());
+
+        JsonObject config = dataflow.getAsJsonObject("config");
+        assertFalse(config.get("constant_propagation_enabled").getAsBoolean());
+        assertFalse(config.get("path_sensitive_targets_enabled").getAsBoolean());
+        assertFalse(config.get("paragraph_summaries_enabled").getAsBoolean());
+        assertFalse(config.get("alias_analysis_enabled").getAsBoolean());
+        assertEquals("skeleton", config.get("mode").getAsString());
+
+        JsonObject summary = dataflow.getAsJsonObject("summary");
+        assertEquals(18, summary.get("node_count").getAsInt());
+        assertEquals(17, summary.get("edge_count").getAsInt());
+        assertEquals(0, summary.get("entry_constant_count").getAsInt());
+        assertEquals(0, summary.get("exit_constant_count").getAsInt());
+        assertEquals(0, summary.get("kill_count").getAsInt());
+        assertEquals(0, summary.get("diagnostic_count").getAsInt());
+        assertEquals(0, summary.get("alias_set_count").getAsInt());
+        assertEquals(0, summary.get("paragraph_summary_count").getAsInt());
+
+        assertEquals(0, dataflow.getAsJsonArray("diagnostics").size());
+        assertEquals(0, dataflow.getAsJsonObject("alias_sets").size());
+        assertEquals(0, dataflow.getAsJsonObject("paragraph_summaries").size());
+        assertEquals(18, dataflow.getAsJsonObject("node_states").size());
+    }
+
+    @Test
+    void dataflowSkeletonReferencesCfgNodeIdsWithoutPropagatedFacts() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTask(CommandLineAnalysisTask.WRITE_CFG);
+
+        JsonObject cfg = readJson("constant-folding-phase1.cbl.report/cfg/cfg-constant-folding-phase1.cbl.json");
+        JsonObject dataflow = readJson("constant-folding-phase1.cbl.report/static_analysis/dataflow.json");
+        List<String> cfgNodeIds = jsonObjects(cfg.getAsJsonArray("nodes")).stream()
+                .map(node -> node.get("id").getAsString())
+                .toList();
+        List<String> dataflowNodeIds = dataflow.getAsJsonObject("node_states").entrySet().stream()
+                .map(Map.Entry::getKey)
+                .toList();
+        assertEquals(cfgNodeIds, dataflowNodeIds);
+
+        String computeNodeId = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "COMPUTE WS-A = 1 + 2", "COMPUTE").get("id").getAsString();
+        JsonObject computeState = dataflow.getAsJsonObject("node_states").getAsJsonObject(computeNodeId);
+        assertEquals(0, computeState.getAsJsonObject("entry_constants").size());
+        assertEquals(0, computeState.getAsJsonObject("exit_constants").size());
+        assertEquals(0, computeState.getAsJsonArray("kills").size());
+        assertEquals(0, computeState.getAsJsonArray("diagnostics").size());
+    }
+
+    @Test
     void leavesMoveAssignmentFactsUnchangedAndDoesNotEmitFoldingMetadata() throws IOException {
         new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
                 .runTask(CommandLineAnalysisTask.WRITE_CFG);

@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-12 — Phase 2.1 dataflow skeleton sidecar
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowAnalysisResult.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowNodeState.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/pipeline/SerialisableCFGGraphCollector.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/WriteControlFlowGraphTask.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added the source-preserving `static_analysis/dataflow.json` skeleton emitted alongside `WRITE_CFG`. The sidecar records schema/version/config/summary fields and one empty per-node state for each CFG node, with propagation, alias analysis, paragraph summaries, and path-sensitive target resolution explicitly disabled.
+**Why:** User approved starting Phase 2 and asked for human-readable documentation of what was done, while keeping the first step conservative and stopping before real propagation logic.
+
+---
+
 ## 2026-05-12 — Phase 1 constant folding completion checkpoint
 
 **File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/folding/StaticValueLiteralExtractor.java`, `smojol-core/src/test/java/org/smojol/common/staticanalysis/folding/StaticValueLiteralExtractorTest.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
