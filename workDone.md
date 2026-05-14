@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-14 — Phase 2.5 basic numeric constant propagation
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-propagation-phase2.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added the first safe fixed-point propagation solver in `static_analysis/dataflow.json`, with analysis version `0.5`, status `basic_constant_propagation`, and deterministic entry/exit constants for numeric literal `MOVE` facts and folded numeric `COMPUTE` facts. Branch joins now keep only constants proven equal on every predecessor, alias kills invalidate overlapping storage before direct writes, and modified variables without a safe numeric fact are removed from exit state. Variable-copy propagation, condition simplification, runtime-input modeling, dynamic CALL/CICS path-sensitive fields, and RAG changes remain out of scope.
+**Why:** User asked to proceed with the safe alternative and keep the human-readable documentation updated; this checkpoint adds useful propagation facts without overclaiming full COBOL constant propagation.
+
+---
+
 ## 2026-05-12 — Phase 2.4 alias kill facts in dataflow sidecar
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/alias-kills-phase2.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

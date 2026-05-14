@@ -4,9 +4,11 @@ import com.mojo.algorithms.domain.FlowNodeType;
 import org.antlr.v4.runtime.Token;
 import org.smojol.common.ast.SerialisableCFGFlowNode;
 import org.smojol.common.ast.SerialisableEdge;
+import org.smojol.common.staticanalysis.value.ConstantStaticValue;
 import org.smojol.common.vm.structure.CobolDataStructure;
 import org.smojol.common.vm.structure.Format1DataStructure;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -22,8 +24,9 @@ import java.util.TreeSet;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "0.4";
+    private static final String ANALYSIS_VERSION = "0.5";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
+    private static final int MAX_ITERATIONS = 1000;
 
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
                                                 List<SerialisableEdge> edges) {
@@ -35,7 +38,8 @@ public class StaticValueDataflowPass {
                                                 CobolDataStructure dataStructures) {
         Map<String, ParagraphSummary> paragraphSummaries = paragraphSummaries(nodes);
         Map<String, AliasSetSummary> aliasSets = aliasSets(dataStructures);
-        Map<String, DataflowNodeState> nodeStates = nodeStates(nodes, aliasSets);
+        PropagationResult propagationResult = propagate(nodes, edges, aliasSets);
+        Map<String, DataflowNodeState> nodeStates = propagationResult.nodeStates();
         int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
 
         return new DataflowAnalysisResult(
@@ -43,49 +47,219 @@ public class StaticValueDataflowPass {
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "alias_kill_skeleton",
+                "basic_constant_propagation",
                 config(),
-                summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount),
+                summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
+                        nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
                 nodeStates,
                 aliasSets,
                 paragraphSummaries,
-                List.of()
+                propagationResult.diagnostics()
         );
     }
 
     private Map<String, Object> config() {
         Map<String, Object> config = new LinkedHashMap<>();
-        config.put("constant_propagation_enabled", false);
+        config.put("constant_propagation_enabled", true);
         config.put("path_sensitive_targets_enabled", false);
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "alias_kill_skeleton");
+        config.put("mode", "basic_constant_propagation");
+        config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }
 
     private Map<String, Object> summary(int nodeCount, int edgeCount, int paragraphSummaryCount, int aliasSetCount,
-                                        int killCount) {
+                                        int killCount, Map<String, DataflowNodeState> nodeStates,
+                                        int iterationCount, boolean converged) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("node_count", nodeCount);
         summary.put("edge_count", edgeCount);
-        summary.put("entry_constant_count", 0);
-        summary.put("exit_constant_count", 0);
+        summary.put("entry_constant_count", nodeStates.values().stream()
+                .mapToInt(state -> state.entryConstants().size()).sum());
+        summary.put("exit_constant_count", nodeStates.values().stream()
+                .mapToInt(state -> state.exitConstants().size()).sum());
         summary.put("kill_count", killCount);
-        summary.put("diagnostic_count", 0);
+        summary.put("diagnostic_count", converged ? 0 : 1);
         summary.put("alias_set_count", aliasSetCount);
         summary.put("paragraph_summary_count", paragraphSummaryCount);
+        summary.put("iteration_count", iterationCount);
+        summary.put("max_iterations", MAX_ITERATIONS);
+        summary.put("converged", converged);
         return summary;
     }
 
-    private Map<String, DataflowNodeState> nodeStates(List<SerialisableCFGFlowNode> nodes,
-                                                      Map<String, AliasSetSummary> aliasSets) {
+    private PropagationResult propagate(List<SerialisableCFGFlowNode> nodes, List<SerialisableEdge> edges,
+                                        Map<String, AliasSetSummary> aliasSets) {
+        Map<String, List<Map<String, Object>>> killsByNode = killsByNode(nodes, aliasSets);
+        Map<String, List<String>> predecessors = predecessors(nodes, edges);
+        Map<String, Map<String, Map<String, Object>>> entryStates = emptyStates(nodes);
+        Map<String, Map<String, Map<String, Object>>> exitStates = emptyStates(nodes);
+        boolean converged = false;
+        int iterationCount = 0;
+
+        for (int iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+            iterationCount = iteration;
+            boolean changed = false;
+            for (SerialisableCFGFlowNode node : nodes) {
+                Map<String, Map<String, Object>> entry = joinedEntry(predecessors.get(node.getId()), exitStates);
+                Map<String, Map<String, Object>> exit = transfer(node, entry, killsByNode.get(node.getId()));
+                if (!entry.equals(entryStates.get(node.getId())) || !exit.equals(exitStates.get(node.getId()))) {
+                    changed = true;
+                    entryStates.put(node.getId(), entry);
+                    exitStates.put(node.getId(), exit);
+                }
+            }
+            if (!changed) {
+                converged = true;
+                break;
+            }
+        }
+
         Map<String, DataflowNodeState> nodeStates = new LinkedHashMap<>();
         for (SerialisableCFGFlowNode node : nodes) {
             nodeStates.put(node.getId(), new DataflowNodeState(
-                    new LinkedHashMap<>(), new LinkedHashMap<>(), aliasKills(node, aliasSets), List.of()));
+                    outputState(entryStates.get(node.getId())),
+                    outputState(exitStates.get(node.getId())),
+                    killsByNode.get(node.getId()),
+                    List.of()));
         }
-        return nodeStates;
+        return new PropagationResult(nodeStates, iterationCount, converged, diagnostics(converged));
+    }
+
+    private Map<String, List<Map<String, Object>>> killsByNode(List<SerialisableCFGFlowNode> nodes,
+                                                               Map<String, AliasSetSummary> aliasSets) {
+        Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) {
+            result.put(node.getId(), aliasKills(node, aliasSets));
+        }
+        return result;
+    }
+
+    private Map<String, Map<String, Map<String, Object>>> emptyStates(List<SerialisableCFGFlowNode> nodes) {
+        Map<String, Map<String, Map<String, Object>>> states = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) {
+            states.put(node.getId(), new TreeMap<>());
+        }
+        return states;
+    }
+
+    private Map<String, List<String>> predecessors(List<SerialisableCFGFlowNode> nodes, List<SerialisableEdge> edges) {
+        Set<String> nodeIds = new TreeSet<>();
+        Map<String, List<String>> predecessors = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) {
+            nodeIds.add(node.getId());
+            predecessors.put(node.getId(), new ArrayList<>());
+        }
+        for (SerialisableEdge edge : edges) {
+            if (!nodeIds.contains(edge.fromNodeID()) || !nodeIds.contains(edge.toNodeID())) continue;
+            predecessors.get(edge.toNodeID()).add(edge.fromNodeID());
+        }
+        return predecessors;
+    }
+
+    private Map<String, Map<String, Object>> joinedEntry(List<String> predecessorIds,
+            Map<String, Map<String, Map<String, Object>>> exitStates) {
+        if (predecessorIds == null || predecessorIds.isEmpty()) return new TreeMap<>();
+        Map<String, Map<String, Object>> joined = new TreeMap<>(exitStates.get(predecessorIds.getFirst()));
+        for (int i = 1; i < predecessorIds.size(); i++) {
+            Map<String, Map<String, Object>> predecessorState = exitStates.get(predecessorIds.get(i));
+            joined.entrySet().removeIf(entry -> !predecessorState.containsKey(entry.getKey())
+                    || !entry.getValue().equals(predecessorState.get(entry.getKey())));
+        }
+        return joined;
+    }
+
+    private Map<String, Map<String, Object>> transfer(SerialisableCFGFlowNode node,
+            Map<String, Map<String, Object>> entry, List<Map<String, Object>> kills) {
+        Map<String, Map<String, Object>> exit = new TreeMap<>(entry);
+        for (Map<String, Object> kill : kills) {
+            Object variable = kill.get("variable");
+            if (variable instanceof String variableName) exit.remove(canonicalVariable(variableName));
+        }
+
+        Map<String, Map<String, Object>> producedConstants = producedConstants(node);
+        Set<String> producedTargets = producedConstants.keySet();
+        for (String modifiedVariable : sortedStrings(node.getVariablesModified())) {
+            String canonicalModified = canonicalVariable(modifiedVariable);
+            if (!producedTargets.contains(canonicalModified)) exit.remove(canonicalModified);
+        }
+        producedConstants.forEach(exit::put);
+        return exit;
+    }
+
+    private Map<String, Map<String, Object>> producedConstants(SerialisableCFGFlowNode node) {
+        Map<String, Map<String, Object>> constants = new TreeMap<>();
+        Object foldedFacts = node.getMetadata().get("folded_value_facts");
+        if (foldedFacts instanceof List<?> foldedFactList) {
+            for (Object fact : foldedFactList) addFoldedConstant(constants, fact);
+        }
+
+        Object assignmentFacts = node.getMetadata().get("assignment_facts");
+        if (assignmentFacts instanceof List<?> assignmentFactList) {
+            for (Object fact : assignmentFactList) addAssignmentConstant(constants, fact);
+        }
+        return constants;
+    }
+
+    private void addFoldedConstant(Map<String, Map<String, Object>> constants, Object fact) {
+        if (!(fact instanceof Map<?, ?> rawFact)) return;
+        Map<String, Object> foldedFact = stringKeyMap(rawFact);
+        Object target = foldedFact.get("target_variable");
+        Object value = foldedFact.get("value");
+        if (!(target instanceof String targetVariable) || !(value instanceof Map<?, ?> rawValue)) return;
+        Map<String, Object> valueMap = stringKeyMap(rawValue);
+        if (!isNumericConstant(valueMap)) return;
+        constants.put(canonicalVariable(targetVariable), valueMap);
+    }
+
+    private void addAssignmentConstant(Map<String, Map<String, Object>> constants, Object fact) {
+        if (!(fact instanceof Map<?, ?> rawFact)) return;
+        Map<String, Object> assignmentFact = stringKeyMap(rawFact);
+        Object target = assignmentFact.get("target_variable");
+        Object sourceValue = assignmentFact.get("source_value");
+        if (!(target instanceof String targetVariable) || !(sourceValue instanceof String literal)) return;
+        numericLiteralValue(literal).ifPresent(value ->
+                constants.put(canonicalVariable(targetVariable), value));
+    }
+
+    private java.util.Optional<Map<String, Object>> numericLiteralValue(String literal) {
+        if (literal == null || !literal.matches("[+-]?\\d+(\\.\\d+)?")) return java.util.Optional.empty();
+        try {
+            return java.util.Optional.of(ConstantStaticValue.numeric(new BigDecimal(literal), literal).toJsonMap());
+        } catch (NumberFormatException ignored) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    private boolean isNumericConstant(Map<String, Object> value) {
+        return "CONSTANT".equals(value.get("state")) && "NUMERIC".equals(value.get("kind"));
+    }
+
+    private Map<String, Object> stringKeyMap(Map<?, ?> rawMap) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            result.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return result;
+    }
+
+    private Map<String, Object> outputState(Map<String, Map<String, Object>> state) {
+        Map<String, Object> output = new LinkedHashMap<>();
+        state.forEach(output::put);
+        return output;
+    }
+
+    private List<Map<String, Object>> diagnostics(boolean converged) {
+        if (converged) return List.of();
+        Map<String, Object> diagnostic = new LinkedHashMap<>();
+        diagnostic.put("code", "DATAFLOW_MAX_ITERATIONS_REACHED");
+        diagnostic.put("severity", "warning");
+        diagnostic.put("category", "limit");
+        diagnostic.put("message", "Static value propagation stopped before convergence.");
+        diagnostic.put("max_iterations", MAX_ITERATIONS);
+        return List.of(diagnostic);
     }
 
     private List<Map<String, Object>> aliasKills(SerialisableCFGFlowNode node,
@@ -464,5 +638,9 @@ public class StaticValueDataflowPass {
         private DataItem(String missingName) {
             this(missingName, null, 0, false, "", "UNKNOWN", null, null, null, null, null);
         }
+    }
+
+    private record PropagationResult(Map<String, DataflowNodeState> nodeStates, int iterationCount,
+                                     boolean converged, List<Map<String, Object>> diagnostics) {
     }
 }

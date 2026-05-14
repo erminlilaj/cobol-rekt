@@ -300,9 +300,9 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2.2 | `DONE` | Add paragraph summaries. | Dataflow artifact records one summary per CFG `PARAGRAPH`: contained node IDs, direct read/write sets, paragraph calls, called programs, external side effects, unsupported/deferred constructs, cycle flag, and conservative transitive summary status. |
 | 2.3 | `DONE` | Add syntax-derived alias-set builder. | `static_analysis/dataflow.json` records deterministic conservative alias sets for `REDEFINES`, group/child storage, and `OCCURS` storage. |
 | 2.4 | `DONE` | Apply alias sets as conservative per-node kill facts. | Direct executable writes emit deterministic `ALIAS_CONSERVATIVE_KILL` entries for overlapping group, `REDEFINES`, and `OCCURS` members; entry/exit constants remain empty. |
-| 2.5 | `PENDING` | Add fixed-point CFG propagation. | Entry/exit states converge deterministically or emit limit diagnostics. |
-| 2.6 | `PENDING` | Add transfer and runtime-input kill rules. | Tests cover MOVE, COMPUTE, ACCEPT, READ, CALL, SQL, CICS, STRING, UNSTRING, INSPECT, INITIALIZE, and unknown statements. |
-| 2.7 | `PENDING` | Record Phase 2 accuracy/performance stats. | Report includes node count, variable count, iteration count, proven constants, unknown merges, kills by reason, runtime, and memory. |
+| 2.5 | `DONE` | Add basic fixed-point numeric CFG propagation. | Entry/exit states converge deterministically for numeric literal `MOVE` facts and folded numeric `COMPUTE` facts; branch joins keep only constants proven equal on every incoming path; alias kills invalidate overlapping storage before new facts are written. |
+| 2.6 | `PENDING` | Add broader transfer and runtime-input kill rules. | Tests cover variable-copy propagation, expression propagation from known variables, ACCEPT, READ, CALL, SQL, CICS, STRING, UNSTRING, INSPECT, INITIALIZE, and unknown statements. |
+| 2.7 | `WORKING` | Record Phase 2 accuracy/performance stats. | Checkpoint stats are recorded after each propagation step; final Phase 2 report must include node count, variable count, iteration count, proven constants, unknown merges, kills by reason, runtime, and memory. |
 | 3.1 | `PENDING` | Add path-sensitive dynamic CALL facts. | New `path_sensitive_*` fields coexist with unchanged legacy fields. |
 | 3.2 | `PENDING` | Add path-sensitive CICS target facts. | New CICS path-sensitive fields coexist with unchanged legacy fields. |
 | 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures report precision/recall or exact expected-target pass/fail counts versus legacy behavior. |
@@ -326,6 +326,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2026-05-12 | `DONE` | Added paragraph summaries to the sidecar without starting propagation. Summaries now report contained CFG node IDs, direct read/write variables, called paragraphs, called programs, external side effects, and a conservative transitive status. When a paragraph performs another paragraph, transitive read/write lists remain empty and an explicit deferred diagnostic is stored under that paragraph's `unsupported_constructs`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 26 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 38 tests, 2 skipped. Fixture metrics: `constant-folding-phase1.cbl` has 1 paragraph summary, 15 contained node IDs, 1 direct read variable, 12 direct modified variables, 0 paragraph calls, 0 side effects, 5,239-byte pretty-printed sidecar, target suite wall-clock 13.467s. `metadata-features.cbl` has 4 paragraph summaries; `MAIN-PARA` records `LOOP-PARA`, called programs `DYNPROG` and `SUBPROG`, side effects `ACCEPT`, `CALL`, `CLOSE`, `OPEN`, `READ`, `WRITE`, and deferred transitive expansion. |
 | 2026-05-12 | `DONE` | Added conservative alias-set summaries to the sidecar without starting propagation. The builder records `group_child:*`, `occurs:*`, and `redefines:*` entries using the Java data-structure model, collapses duplicate table expansions deterministically, and stores syntax-derived evidence such as level number, parent, redefines target, occurs count, data type, and source line. Byte-offset/byte-size layout evidence is deliberately deferred because the expanded table/redefinition model can recurse through layout sizing on the stress fixture. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 28 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 40 tests, 2 skipped. Fixture metrics: `data-structures.cbl` has 16 alias sets, 0 entry constants, 0 exit constants, 0 kills, 0 diagnostics, 19,394-byte pretty-printed sidecar. `constant-folding-phase1.cbl` remains at 0 alias sets and a 5,230-byte pretty-printed sidecar. Target suite wall-clock: 14.059s; broader suite wall-clock: 15.582s. |
 | 2026-05-12 | `DONE` | Applied alias sets as conservative kill facts without starting propagation. Direct executable writes now populate per-node `kills` arrays with `ALIAS_CONSERVATIVE_KILL` entries; paragraph/container nodes do not emit duplicate aggregate kills. The checkpoint covers group-child writes, group writes, `REDEFINES` writes, and subscripted `OCCURS` writes. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 30 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 42 tests, 2 skipped. Fixture metrics: `alias-kills-phase2.cbl` has 10 node states, 9 edges, 4 alias sets, 12 kill facts, 0 entry constants, 0 exit constants, 0 diagnostics, and a 14,449-byte pretty-printed sidecar. `constant-folding-phase1.cbl` remains at 0 alias sets, 0 kills, and a 5,257-byte pretty-printed sidecar. Target suite wall-clock: 13.957s; broader suite wall-clock: 16.618s. |
+| 2026-05-14 | `DONE` | Added the first safe propagation solver. It is deliberately narrow: a deterministic fixed-point pass propagates numeric literal `MOVE` facts and folded numeric `COMPUTE` facts, joins branches by keeping only exactly equal constants from every predecessor, applies alias kills before writing new facts, and drops constants for modified variables that do not produce a safe numeric fact. It does not propagate `MOVE WS-A TO WS-C`, does not simplify `IF` or `EVALUATE`, does not infer values from known variables inside expressions, and does not affect dynamic CALL/CICS or RAG behavior. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 32 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 44 tests, 2 skipped, total time 21.228s. Fixture metrics: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 24 entry constants, 30 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 26,014-byte pretty-printed sidecar. `constant-folding-phase1.cbl` has 18 node states, 17 edges, 45 entry constants, 52 exit constants, 0 kills, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, and a 38,038-byte pretty-printed sidecar. |
 
 ### Fool-Proof Execution Rules
 
@@ -334,7 +335,7 @@ If implementation discovers that this document is wrong, the documentation must 
 3. Do not silently expand scope. New supported COBOL constructs require this document to be updated first.
 4. Do not silently drop scope. Skipped work must be marked `SKIPPED` with a reason.
 5. Do not merge implementation if this ledger says `WORKING`, `PENDING`, or `BLOCKED` for the same deliverable.
-6. Do not claim constant propagation until `static_analysis/dataflow.json`, fixed-point CFG propagation, conservative merge rules, loop handling, alias kills, and runtime-input kill rules are all `DONE`.
+6. Do not claim full production-ready constant propagation until `static_analysis/dataflow.json`, fixed-point CFG propagation, conservative merge rules, loop handling, alias kills, and runtime-input kill rules are all `DONE`. Until then, describe the current solver as a scoped checkpoint and list its exact supported transfer rules.
 7. Do not claim dynamic CALL/CICS improvement until path-sensitive fields and accuracy measurements are `DONE`.
 8. Do not claim RAG improvement until retrieval and token metrics are `DONE`.
 
@@ -354,39 +355,94 @@ Phase 1 includes:
 
 ### Phase 2: CFG-Based Constant Propagation
 
-Phase 2 now has a committed sidecar with paragraph summaries, conservative alias-set summaries, and conservative alias kill facts, but it does **not** yet perform constant propagation. The current artifact is useful because it pins the stable output location, top-level schema, per-node state shape, paragraph summary shape, alias summary shape, kill-fact shape, and conservative disabled-by-default flags before any solver logic exists.
+Phase 2 now has a committed sidecar with paragraph summaries, conservative alias-set summaries, conservative alias kill facts, and a first narrow propagation solver. This is not full COBOL constant propagation. It is a safe checkpoint that proves the artifact can carry node entry/exit constants without changing CFG text, `assignment_facts`, dynamic CALL/CICS behavior, or RAG chunks.
 
-Representative Phase 2.4 artifact shape, shortened from fixture outputs. The paragraph-summary, alias-summary, and kill examples may come from different fixtures because the checkpoints verify these shapes independently.
+The current Phase 2.5 solver supports only these value-producing rules:
+
+- `MOVE <numeric-literal> TO <variable>` produces a numeric constant for the target.
+- A folded numeric `COMPUTE` fact from Phase 1 produces a numeric constant for the target.
+- Any modified variable that does not produce one of those safe constants is removed from the exit state.
+- Alias kills from Phase 2.4 are applied before the node writes new constants.
+- A join keeps a constant only when every predecessor exit has the same JSON value for that variable.
+
+The current solver intentionally does not support variable-copy propagation, expression propagation from known variables, condition simplification, branch reachability, runtime-input modeling, interprocedural effects, dynamic CALL/CICS path-sensitive fields, or RAG chunk generation.
+
+Representative Phase 2.5 artifact shape, shortened from fixture outputs. The paragraph-summary, alias-summary, kill, and propagated-constant examples may come from different fixtures because the checkpoints verify these shapes independently.
 
 ```json
 {
   "program": "<program>.cbl",
   "schema_version": "1.0",
   "analysis": "static_value_dataflow",
-  "analysis_version": "0.4",
-  "status": "alias_kill_skeleton",
+  "analysis_version": "0.5",
+  "status": "basic_constant_propagation",
   "config": {
-    "constant_propagation_enabled": false,
+    "constant_propagation_enabled": true,
     "path_sensitive_targets_enabled": false,
     "paragraph_summaries_enabled": true,
     "alias_analysis_enabled": true,
     "alias_kills_enabled": true,
-    "mode": "alias_kill_skeleton"
+    "mode": "basic_constant_propagation",
+    "max_iterations": 1000
   },
   "summary": {
-    "node_count": 18,
-    "edge_count": 17,
-    "entry_constant_count": 0,
-    "exit_constant_count": 0,
-    "kill_count": 12,
+    "node_count": 17,
+    "edge_count": 16,
+    "entry_constant_count": 24,
+    "exit_constant_count": 30,
+    "kill_count": 3,
     "diagnostic_count": 0,
-    "alias_set_count": 16,
-    "paragraph_summary_count": 1
+    "alias_set_count": 1,
+    "paragraph_summary_count": 1,
+    "iteration_count": 2,
+    "max_iterations": 1000,
+    "converged": true
   },
   "node_states": {
     "<cfg_node_id>": {
-      "entry_constants": {},
-      "exit_constants": {},
+      "entry_constants": {
+        "WS-A": {
+          "state": "CONSTANT",
+          "kind": "NUMERIC",
+          "raw_lexeme": "10",
+          "normalized_value": "10",
+          "display_value": "10",
+          "numeric": {
+            "decimal": "10",
+            "scale": 0,
+            "precision": 2,
+            "sign": "POSITIVE"
+          }
+        }
+      },
+      "exit_constants": {
+        "WS-A": {
+          "state": "CONSTANT",
+          "kind": "NUMERIC",
+          "raw_lexeme": "10",
+          "normalized_value": "10",
+          "display_value": "10",
+          "numeric": {
+            "decimal": "10",
+            "scale": 0,
+            "precision": 2,
+            "sign": "POSITIVE"
+          }
+        },
+        "WS-B": {
+          "state": "CONSTANT",
+          "kind": "NUMERIC",
+          "raw_lexeme": "3",
+          "normalized_value": "3",
+          "display_value": "3",
+          "numeric": {
+            "decimal": "3",
+            "scale": 0,
+            "precision": 1,
+            "sign": "POSITIVE"
+          }
+        }
+      },
       "kills": [
         {
           "code": "ALIAS_CONSERVATIVE_KILL",
@@ -454,7 +510,7 @@ Representative Phase 2.4 artifact shape, shortened from fixture outputs. The par
 
 For paragraphs that `PERFORM` another paragraph, Phase 2.2 does not compute a transitive closure yet. In that case `variables_read_transitive` and `variables_modified_transitive` stay empty, `transitive_summary_status` is `not_computed_perform_targets_present`, and `unsupported_constructs` contains a machine-readable `PARAGRAPH_TRANSITIVE_SUMMARY_NOT_COMPUTED` entry. This is deliberate: the analyzer records the risk instead of pretending the transitive summary is complete.
 
-Alias sets are analysis facts. Phase 2.4 also emits kill facts from them, but those kills are still not a propagation result; they are safety facts that tell the later solver which stored constants must be invalidated before it can make any value claim.
+Alias sets are analysis facts. Phase 2.4 emits kill facts from them, and Phase 2.5 now uses those kills to remove stale constants before writing new facts.
 
 - `GROUP_CHILD_STORAGE`: writing a group or child may invalidate the group and its descendants.
 - `OCCURS_STORAGE`: writing a table or indexed occurrence may invalidate all occurrences and descendants.
@@ -464,12 +520,10 @@ The Phase 2.3/2.4 builder is syntax-derived and deterministic. It intentionally 
 
 Remaining Phase 2 work includes:
 
-- Node entry and exit constants.
-- Fixed-point worklist solver.
-- Conservative merge rules.
 - Runtime-input and interprocedural kill rules.
-- Loop handling.
-- Diagnostics.
+- Transfer rules for variable-copy propagation and expressions that use known variables.
+- Diagnostics explaining constants lost at joins.
+- Loop-specific diagnostics and limit tests beyond the current fixed-point convergence guard.
 
 ### Phase 3: Path-Sensitive Dynamic CALL/CICS Resolution
 
@@ -602,7 +656,7 @@ Examples:
 | `COMPUTE WS-A = 1 + 2` | no folded fact | folded value `3` | same |
 | `COMPUTE WS-B = WS-A + 1` | no explanation | diagnostic: variable reference unsupported | may fold if `WS-A` proven constant |
 | `COMPUTE WS-C = 1 / 0` | no explanation | diagnostic: divide by zero | same |
-| `MOVE 7 TO WS-D` | assignment fact exists | unchanged | may become propagated entry/exit fact |
+| `MOVE 7 TO WS-D` | assignment fact exists | unchanged | Phase 2.5 propagates numeric literal entry/exit facts |
 | dynamic `CALL WS-PGM` | legacy resolution only | unchanged | may get `path_sensitive_call_target` if `WS-PGM` proven |
 
 ## 13. How We Evaluate Whether Constant Folding Is Included
@@ -623,12 +677,19 @@ The tool includes constant folding only if all of these are true:
 
 ## 14. How We Evaluate Whether Constant Propagation Is Included
 
-The tool includes constant propagation only if all of these are true:
+The tool includes a basic constant-propagation checkpoint when all of these are true:
 
 - A `static_analysis/dataflow.json` artifact is emitted.
 - The artifact has schema version and analysis version.
 - Each CFG node can have entry and exit constants.
-- A simple program works:
+- Numeric literal `MOVE` facts enter and exit the CFG state.
+- Folded numeric `COMPUTE` facts enter and exit the CFG state.
+- Branch merges keep only constants proven equal on every incoming path.
+- Alias kills remove stale constants before new facts are written.
+- The solver converges deterministically or emits a limit diagnostic.
+- Existing CFG, source, assignment facts, dynamic CALL/CICS fields, and RAG chunks remain unchanged.
+
+The tool includes full Phase 2 constant propagation only when the basic checkpoint is extended so a simple variable-based program works:
 
 ```cobol
 MOVE 10 TO WS-A
@@ -645,7 +706,7 @@ exit from COMPUTE: WS-B = 15
 Additional criteria:
 
 - Branch merges are conservative.
-- Different values on different branches produce `UNKNOWN` with merge diagnostic.
+- Different values on different branches produce no constant at the join and, in the full phase, a merge diagnostic.
 - Runtime inputs like `ACCEPT`, `READ`, CICS, and SQL kill affected values.
 - `CALL USING` kills arguments unless safe parameter mode is proven.
 - Loops converge safely or emit limit diagnostics.
@@ -816,6 +877,28 @@ Phase 2 propagation stats should include:
 - Number of values degraded to `UNKNOWN` at joins.
 - Number of kills by reason.
 - Runtime and memory overhead.
+
+Current Phase 2.5 basic-propagation stats:
+
+| Fixture | Node states | CFG edges | Entry constants | Exit constants | Kill facts | Diagnostics | Alias sets | Paragraph summaries | Iterations | Converged | Sidecar bytes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| `constant-propagation-phase2.cbl` | 17 | 16 | 24 | 30 | 3 | 0 | 1 | 1 | 2 | yes | 26,014 |
+| `constant-folding-phase1.cbl` | 18 | 17 | 45 | 52 | 0 | 0 | 0 | 1 | 2 | yes | 38,038 |
+
+The `constant-propagation-phase2.cbl` fixture proves the deliberately narrow behavior:
+
+- `MOVE 10 TO WS-A` produces `WS-A = 10` at node exit.
+- `COMPUTE WS-B = 1 + 2` produces `WS-B = 3` from the existing folded fact.
+- `MOVE WS-A TO WS-C` does not produce `WS-C = 10`; variable-copy propagation is still pending.
+- A branch that assigns `WS-D = 20` on one path and `WS-D = 30` on another path drops `WS-D` at the join.
+- Writing `CHILD-A` applies `group_child:SOME-GROUP` alias kills before writing the direct `CHILD-A = 99` fact.
+
+Verification for this checkpoint:
+
+| Command | Result |
+|---|---|
+| `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest` | 32 tests, build success |
+| `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` | 44 tests, 2 skipped, build success, 21.228s |
 
 Accuracy evaluation should report:
 
