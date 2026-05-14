@@ -26,11 +26,20 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "0.6";
+    private static final String ANALYSIS_VERSION = "0.7";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
             "^\\s*ACCEPT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern READ_INTO_TARGET = Pattern.compile(
+            "\\bINTO\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern STRING_INTO_TARGET = Pattern.compile(
+            "\\bINTO\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern UNSTRING_INTO_TARGET = Pattern.compile(
+            "\\bINTO\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern INSPECT_TARGET = Pattern.compile(
+            "^\\s*INSPECT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Set<String> CICS_OUTPUT_ARGUMENTS = Set.of("INTO", "SET", "RESP", "RESP2");
 
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
                                                 List<SerialisableEdge> edges) {
@@ -51,7 +60,7 @@ public class StaticValueDataflowPass {
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "runtime_kill_constant_propagation",
+                "output_kill_constant_propagation",
                 config(),
                 summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
                         nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
@@ -69,7 +78,7 @@ public class StaticValueDataflowPass {
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "runtime_kill_constant_propagation");
+        config.put("mode", "output_kill_constant_propagation");
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }
@@ -278,7 +287,12 @@ public class StaticValueDataflowPass {
         return switch (node.getType()) {
             case ACCEPT -> acceptKills(node);
             case CALL -> callUsingKills(node);
+            case DIALECT -> dialectOutputKills(node);
             case INITIALIZE -> targetKills(node, "INITIALIZE_TARGET_KILL", "initialize_target");
+            case INSPECT -> originalTextTargetKills(node, INSPECT_TARGET, "INSPECT_TARGET_KILL", "inspect_target");
+            case READ -> originalTextTargetKills(node, READ_INTO_TARGET, "READ_INTO_KILL", "read_into");
+            case STRING -> originalTextTargetKills(node, STRING_INTO_TARGET, "STRING_OUTPUT_KILL", "string_into");
+            case UNSTRING -> originalTextTargetKills(node, UNSTRING_INTO_TARGET, "UNSTRING_OUTPUT_KILL", "unstring_into");
             default -> List.of();
         };
     }
@@ -288,6 +302,14 @@ public class StaticValueDataflowPass {
         Matcher matcher = ACCEPT_TARGET.matcher(node.getOriginalText());
         if (!matcher.find()) return List.of();
         return List.of(dataflowKill(node, matcher.group(1), "RUNTIME_INPUT_KILL", "runtime_accept"));
+    }
+
+    private List<Map<String, Object>> originalTextTargetKills(SerialisableCFGFlowNode node, Pattern pattern,
+                                                              String code, String reason) {
+        if (node.getOriginalText() == null) return List.of();
+        Matcher matcher = pattern.matcher(node.getOriginalText());
+        if (!matcher.find()) return List.of();
+        return List.of(dataflowKill(node, matcher.group(1), code, reason));
     }
 
     private List<Map<String, Object>> callUsingKills(SerialisableCFGFlowNode node) {
@@ -305,6 +327,48 @@ public class StaticValueDataflowPass {
             if (!"REFERENCE".equals(parameterMode)) continue;
             Map<String, Object> kill = dataflowKill(node, variableName,
                     "CALL_USING_REFERENCE_KILL", "call_using_reference");
+            kills.put(killKey(kill), kill);
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private List<Map<String, Object>> dialectOutputKills(SerialisableCFGFlowNode node) {
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (Map<String, Object> kill : cicsOutputKills(node)) kills.put(killKey(kill), kill);
+        for (Map<String, Object> kill : sqlOutputKills(node)) kills.put(killKey(kill), kill);
+        return new ArrayList<>(kills.values());
+    }
+
+    private List<Map<String, Object>> cicsOutputKills(SerialisableCFGFlowNode node) {
+        Object cicsArguments = node.getMetadata().get("cics_arguments");
+        if (!(cicsArguments instanceof List<?> argumentList)) return List.of();
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (Object argument : argumentList) {
+            if (!(argument instanceof Map<?, ?> rawArgument)) continue;
+            Map<String, Object> cicsArgument = stringKeyMap(rawArgument);
+            Object name = cicsArgument.get("name");
+            Object value = cicsArgument.get("value");
+            if (!(name instanceof String argumentName) || !(value instanceof String variableName)) continue;
+            if (!CICS_OUTPUT_ARGUMENTS.contains(argumentName.toUpperCase(Locale.ROOT))) continue;
+            Map<String, Object> kill = dataflowKill(node, variableName, "CICS_OUTPUT_KILL", "cics_output_argument");
+            kills.put(killKey(kill), kill);
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private List<Map<String, Object>> sqlOutputKills(SerialisableCFGFlowNode node) {
+        Object operation = node.getMetadata().get("sql_operation");
+        if (!(operation instanceof String sqlOperation)) return List.of();
+        if (!Set.of("SELECT", "FETCH").contains(sqlOperation.toUpperCase(Locale.ROOT))) return List.of();
+        if (node.getOriginalText() == null
+                || !node.getOriginalText().toUpperCase(Locale.ROOT).contains(" INTO ")) return List.of();
+
+        Object hostVariables = node.getMetadata().get("host_variables");
+        if (!(hostVariables instanceof List<?> hostVariableList)) return List.of();
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (Object hostVariable : hostVariableList) {
+            if (!(hostVariable instanceof String variableName)) continue;
+            Map<String, Object> kill = dataflowKill(node, variableName, "SQL_OUTPUT_KILL", "sql_output_host_variable");
             kills.put(killKey(kill), kill);
         }
         return new ArrayList<>(kills.values());
@@ -362,7 +426,8 @@ public class StaticValueDataflowPass {
     }
 
     private String killKey(Map<String, Object> kill) {
-        return kill.get("variable") + "\u0000" + kill.get("alias_set_id") + "\u0000" + kill.get("written_variable");
+        return kill.get("variable") + "\u0000" + kill.get("code") + "\u0000" + kill.get("alias_set_id")
+                + "\u0000" + kill.get("written_variable");
     }
 
     private Map<String, Object> aliasKill(SerialisableCFGFlowNode node, String writtenVariable, String killedVariable,

@@ -356,8 +356,8 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("0.6", dataflow.get("analysis_version").getAsString());
-        assertEquals("runtime_kill_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("0.7", dataflow.get("analysis_version").getAsString());
+        assertEquals("output_kill_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
         assertTrue(config.get("constant_propagation_enabled").getAsBoolean());
@@ -365,7 +365,7 @@ class JavaHardeningRegressionTest {
         assertTrue(config.get("paragraph_summaries_enabled").getAsBoolean());
         assertTrue(config.get("alias_analysis_enabled").getAsBoolean());
         assertTrue(config.get("alias_kills_enabled").getAsBoolean());
-        assertEquals("runtime_kill_constant_propagation", config.get("mode").getAsString());
+        assertEquals("output_kill_constant_propagation", config.get("mode").getAsString());
         assertEquals(1000, config.get("max_iterations").getAsInt());
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
@@ -505,8 +505,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
         JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("0.6", dataflow.get("analysis_version").getAsString());
-        assertEquals("runtime_kill_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("0.7", dataflow.get("analysis_version").getAsString());
+        assertEquals("output_kill_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject childWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "MOVE \"A\" TO CHILD-A", "MOVE");
@@ -597,8 +597,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("constant-propagation-phase2.cbl.report/cfg/cfg-constant-propagation-phase2.cbl.json");
         JsonObject dataflow = readJson("constant-propagation-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("0.6", dataflow.get("analysis_version").getAsString());
-        assertEquals("runtime_kill_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("0.7", dataflow.get("analysis_version").getAsString());
+        assertEquals("output_kill_constant_propagation", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("constant_propagation_enabled").getAsBoolean());
         assertFalse(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
 
@@ -625,8 +625,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("runtime-kills-phase26a.cbl.report/cfg/cfg-runtime-kills-phase26a.cbl.json");
         JsonObject dataflow = readJson("runtime-kills-phase26a.cbl.report/static_analysis/dataflow.json");
-        assertEquals("0.6", dataflow.get("analysis_version").getAsString());
-        assertEquals("runtime_kill_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("0.7", dataflow.get("analysis_version").getAsString());
+        assertEquals("output_kill_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject acceptA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "ACCEPT WS-A FROM DATE", "ACCEPT"));
@@ -688,6 +688,75 @@ class JavaHardeningRegressionTest {
                 "CALL_USING_REFERENCE_KILL", "WS-REF", "call_using_reference", "CALL");
 
         assertEquals(3, dataflow.getAsJsonObject("summary").get("kill_count").getAsInt());
+    }
+
+    @Test
+    void dataflowKillsReadStringUnstringAndInspectOutputs() throws IOException {
+        new TestTaskRunner("output-kills-phase26b.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("output-kills-phase26b.cbl.report/cfg/cfg-output-kills-phase26b.cbl.json");
+        JsonObject dataflow = readJson("output-kills-phase26b.cbl.report/static_analysis/dataflow.json");
+        assertEquals("0.7", dataflow.get("analysis_version").getAsString());
+        assertEquals("output_kill_constant_propagation", dataflow.get("status").getAsString());
+
+        JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "READ IN-FILE INTO WS-READ", "READ"));
+        assertNumericConstant(read.getAsJsonObject("entry_constants"), "WS-READ",
+                "10", "10", 0, 2, "POSITIVE");
+        assertFalse(read.getAsJsonObject("exit_constants").has("WS-READ"));
+        assertEquals(List.of("READ_INTO_KILL@WS-READ"), killCodesAndVariables(read.getAsJsonArray("kills")));
+        assertDataflowKill(read.getAsJsonArray("kills").get(0).getAsJsonObject(),
+                "READ_INTO_KILL", "WS-READ", "read_into", "READ");
+
+        JsonObject string = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "STRING \"12\" DELIMITED BY SIZE", "STRING"));
+        assertNumericConstant(string.getAsJsonObject("entry_constants"), "WS-STRING",
+                "20", "20", 0, 2, "POSITIVE");
+        assertFalse(string.getAsJsonObject("exit_constants").has("WS-STRING"));
+        assertEquals(List.of("STRING_OUTPUT_KILL@WS-STRING"), killCodesAndVariables(string.getAsJsonArray("kills")));
+
+        JsonObject unstring = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "UNSTRING WS-SOURCE DELIMITED BY SPACE", "UNSTRING"));
+        assertNumericConstant(unstring.getAsJsonObject("entry_constants"), "WS-UNSTRING",
+                "30", "30", 0, 2, "POSITIVE");
+        assertFalse(unstring.getAsJsonObject("exit_constants").has("WS-UNSTRING"));
+        assertEquals(List.of("UNSTRING_OUTPUT_KILL@WS-UNSTRING"),
+                killCodesAndVariables(unstring.getAsJsonArray("kills")));
+
+        JsonObject inspect = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "INSPECT WS-INSPECT REPLACING", "INSPECT"));
+        assertNumericConstant(inspect.getAsJsonObject("entry_constants"), "WS-INSPECT",
+                "40", "40", 0, 2, "POSITIVE");
+        assertFalse(inspect.getAsJsonObject("exit_constants").has("WS-INSPECT"));
+        assertEquals(List.of("INSPECT_TARGET_KILL@WS-INSPECT"), killCodesAndVariables(inspect.getAsJsonArray("kills")));
+    }
+
+    @Test
+    void dataflowKillsCicsAndSqlOutputTargets() throws IOException {
+        new TestTaskRunner("output-kills-phase26b.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("output-kills-phase26b.cbl.report/cfg/cfg-output-kills-phase26b.cbl.json");
+        JsonObject dataflow = readJson("output-kills-phase26b.cbl.report/static_analysis/dataflow.json");
+
+        JsonObject cics = nodeStateFor(dataflow, findNodeByOriginalTextTypeAndLocation(cfg.getAsJsonArray("nodes"),
+                "EXEC CICS RECEIVE INTO(WS-CICS)", "DIALECT", 36, 11));
+        assertNumericConstant(cics.getAsJsonObject("entry_constants"), "WS-CICS",
+                "50", "50", 0, 2, "POSITIVE");
+        assertFalse(cics.getAsJsonObject("exit_constants").has("WS-CICS"));
+        assertEquals(List.of("CICS_OUTPUT_KILL@WS-CICS"), killCodesAndVariables(cics.getAsJsonArray("kills")));
+        assertDataflowKill(cics.getAsJsonArray("kills").get(0).getAsJsonObject(),
+                "CICS_OUTPUT_KILL", "WS-CICS", "cics_output_argument", "DIALECT");
+
+        JsonObject sql = nodeStateFor(dataflow, findNodeByOriginalTextTypeAndLocation(cfg.getAsJsonArray("nodes"),
+                "EXEC SQL SELECT AMOUNT INTO :WS-SQL", "DIALECT", 38, 11));
+        assertNumericConstant(sql.getAsJsonObject("entry_constants"), "WS-SQL",
+                "60", "60", 0, 2, "POSITIVE");
+        assertFalse(sql.getAsJsonObject("exit_constants").has("WS-SQL"));
+        assertEquals(List.of("SQL_OUTPUT_KILL@WS-SQL"), killCodesAndVariables(sql.getAsJsonArray("kills")));
+        assertDataflowKill(sql.getAsJsonArray("kills").get(0).getAsJsonObject(),
+                "SQL_OUTPUT_KILL", "WS-SQL", "sql_output_host_variable", "DIALECT");
     }
 
     @Test
@@ -1097,6 +1166,17 @@ class JavaHardeningRegressionTest {
         return jsonObjects(nodes).stream()
                 .filter(node -> node.has("type") && type.equals(node.get("type").getAsString()))
                 .filter(node -> node.has("originalText") && node.get("originalText").getAsString().contains(text))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private JsonObject findNodeByOriginalTextTypeAndLocation(JsonArray nodes, String text, String type,
+                                                             int sourceLine, int sourceColumn) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("type") && type.equals(node.get("type").getAsString()))
+                .filter(node -> node.has("originalText") && node.get("originalText").getAsString().contains(text))
+                .filter(node -> node.has("sourceLine") && node.get("sourceLine").getAsInt() == sourceLine)
+                .filter(node -> node.has("sourceColumn") && node.get("sourceColumn").getAsInt() == sourceColumn)
                 .findFirst()
                 .orElse(null);
     }

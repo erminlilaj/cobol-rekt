@@ -302,7 +302,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2.4 | `DONE` | Apply alias sets as conservative per-node kill facts. | Direct executable writes emit deterministic `ALIAS_CONSERVATIVE_KILL` entries for overlapping group, `REDEFINES`, and `OCCURS` members; entry/exit constants remain empty. |
 | 2.5 | `DONE` | Add basic fixed-point numeric CFG propagation. | Entry/exit states converge deterministically for numeric literal `MOVE` facts and folded numeric `COMPUTE` facts; branch joins keep only constants proven equal on every incoming path; alias kills invalidate overlapping storage before new facts are written. |
 | 2.6a | `DONE` | Add first dataflow-local runtime/input kill rules. | Tests prove `ACCEPT` targets, `CALL USING` reference arguments, and `INITIALIZE` targets remove prior constants; `BY CONTENT` and `BY VALUE` call arguments remain unchanged; `MOVE WS-A TO WS-C` is still not propagated. |
-| 2.6b | `PENDING` | Add remaining runtime-output kills. | Tests cover READ/READ INTO, SQL host-variable outputs, CICS output arguments such as RECEIVE INTO, STRING INTO, UNSTRING INTO, INSPECT, and unknown statements. |
+| 2.6b | `DONE` | Add remaining runtime-output kills. | Tests cover `READ INTO`, `STRING INTO`, `UNSTRING INTO`, `INSPECT`, CICS output arguments such as `RECEIVE INTO`, and SQL `SELECT/FETCH ... INTO` host-variable outputs. |
 | 2.6c | `PENDING` | Add broader transfer rules. | Tests cover variable-copy propagation and expression propagation from known variables only after runtime-output kill rules are in place. |
 | 2.7 | `WORKING` | Record Phase 2 accuracy/performance stats. | Checkpoint stats are recorded after each propagation step; final Phase 2 report must include node count, variable count, iteration count, proven constants, unknown merges, kills by reason, runtime, and memory. |
 | 3.1 | `PENDING` | Add path-sensitive dynamic CALL facts. | New `path_sensitive_*` fields coexist with unchanged legacy fields. |
@@ -330,6 +330,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2026-05-12 | `DONE` | Applied alias sets as conservative kill facts without starting propagation. Direct executable writes now populate per-node `kills` arrays with `ALIAS_CONSERVATIVE_KILL` entries; paragraph/container nodes do not emit duplicate aggregate kills. The checkpoint covers group-child writes, group writes, `REDEFINES` writes, and subscripted `OCCURS` writes. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 30 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 42 tests, 2 skipped. Fixture metrics: `alias-kills-phase2.cbl` has 10 node states, 9 edges, 4 alias sets, 12 kill facts, 0 entry constants, 0 exit constants, 0 diagnostics, and a 14,449-byte pretty-printed sidecar. `constant-folding-phase1.cbl` remains at 0 alias sets, 0 kills, and a 5,257-byte pretty-printed sidecar. Target suite wall-clock: 13.957s; broader suite wall-clock: 16.618s. |
 | 2026-05-14 | `DONE` | Added the first safe propagation solver. It is deliberately narrow: a deterministic fixed-point pass propagates numeric literal `MOVE` facts and folded numeric `COMPUTE` facts, joins branches by keeping only exactly equal constants from every predecessor, applies alias kills before writing new facts, and drops constants for modified variables that do not produce a safe numeric fact. It does not propagate `MOVE WS-A TO WS-C`, does not simplify `IF` or `EVALUATE`, does not infer values from known variables inside expressions, and does not affect dynamic CALL/CICS or RAG behavior. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 32 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 44 tests, 2 skipped, total time 21.228s. Fixture metrics: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 24 entry constants, 30 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 26,014-byte pretty-printed sidecar. `constant-folding-phase1.cbl` has 18 node states, 17 edges, 45 entry constants, 52 exit constants, 0 kills, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, and a 38,038-byte pretty-printed sidecar. |
 | 2026-05-14 | `DONE` | Added the first runtime/input kill checkpoint without changing CFG node `variablesModified()`. The dataflow sidecar now emits direct kill facts for `ACCEPT` targets parsed from statement text, `CALL USING` arguments in `REFERENCE` mode, and `INITIALIZE` targets from existing node metadata. The transfer step consumes those kills before producing constants, so runtime-overwritten values do not survive into later nodes. `BY CONTENT` and `BY VALUE` call arguments are preserved, and variable-copy propagation remains disabled. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 35 tests, total time 14.312s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 47 tests, 2 skipped, total time 14.340s. Fixture metrics: `runtime-kills-phase26a.cbl` has 16 node states, 15 edges, 13 entry constants, 16 exit constants, 3 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, and a 16,235-byte pretty-printed sidecar. |
+| 2026-05-14 | `DONE` | Added runtime-output kill facts without enabling variable-copy propagation. The dataflow sidecar now emits `READ_INTO_KILL`, `STRING_OUTPUT_KILL`, `UNSTRING_OUTPUT_KILL`, `INSPECT_TARGET_KILL`, `CICS_OUTPUT_KILL`, and `SQL_OUTPUT_KILL` on the relevant CFG nodes. CICS kills are extracted from existing `cics_arguments` metadata; SQL kills are limited to `SELECT`/`FETCH` statements with `INTO` host variables. The exact node-level tests assert that prior constants are present at node entry and absent at node exit. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 37 tests, total time 13.650s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 49 tests, 2 skipped, total time 13.875s. Fixture metrics: `output-kills-phase26b.cbl` has 49 node states, 48 edges, 6 entry constants, 6 exit constants, 15 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, and a 22,252-byte pretty-printed sidecar. SQL dialect parsing currently emits several CFG dialect nodes for the same SQL statement, so this checkpoint treats the exact source-location node behavior as the contract instead of using aggregate `kill_count` as a correctness assertion. |
 
 ### Fool-Proof Execution Rules
 
@@ -358,7 +359,7 @@ Phase 1 includes:
 
 ### Phase 2: CFG-Based Constant Propagation
 
-Phase 2 now has a committed sidecar with paragraph summaries, conservative alias-set summaries, conservative alias kill facts, a first narrow propagation solver, and first runtime/input kill facts. This is not full COBOL constant propagation. It is a safe checkpoint that proves the artifact can carry node entry/exit constants and remove stale runtime-overwritten constants without changing CFG text, `assignment_facts`, dynamic CALL/CICS behavior, or RAG chunks.
+Phase 2 now has a committed sidecar with paragraph summaries, conservative alias-set summaries, conservative alias kill facts, a first narrow propagation solver, and runtime/input/output kill facts. This is not full COBOL constant propagation. It is a safe checkpoint that proves the artifact can carry node entry/exit constants and remove stale runtime-overwritten constants without changing CFG text, `assignment_facts`, dynamic CALL/CICS behavior, or RAG chunks.
 
 The current Phase 2.5 solver supports only these value-producing rules:
 
@@ -375,24 +376,33 @@ Phase 2.6a adds these kill rules:
 - `CALL ... USING BY CONTENT <identifier>` and `CALL ... USING BY VALUE <identifier>` do not kill the caller variable.
 - `INITIALIZE <identifier>` emits `INITIALIZE_TARGET_KILL`.
 
-The current solver intentionally does not support variable-copy propagation, expression propagation from known variables, condition simplification, branch reachability, READ/SQL/CICS/STRING/UNSTRING/INSPECT runtime-output modeling, interprocedural summaries, dynamic CALL/CICS path-sensitive fields, or RAG chunk generation.
+Phase 2.6b adds these kill rules:
 
-Representative Phase 2.6a artifact shape, shortened from fixture outputs. The paragraph-summary, alias-summary, kill, and propagated-constant examples may come from different fixtures because the checkpoints verify these shapes independently.
+- `READ <file> INTO <identifier>` emits `READ_INTO_KILL`.
+- `STRING ... INTO <identifier>` emits `STRING_OUTPUT_KILL`.
+- `UNSTRING ... INTO <identifier>` emits `UNSTRING_OUTPUT_KILL`.
+- `INSPECT <identifier> ...` emits `INSPECT_TARGET_KILL`.
+- `EXEC CICS ... INTO(<identifier>)` and other known CICS output arguments emit `CICS_OUTPUT_KILL`.
+- `EXEC SQL SELECT/FETCH ... INTO :<host-variable>` emits `SQL_OUTPUT_KILL`.
+
+The current solver intentionally does not support variable-copy propagation, expression propagation from known variables, condition simplification, branch reachability pruning, interprocedural summaries, dynamic CALL/CICS path-sensitive fields, or RAG chunk generation.
+
+Representative Phase 2.6b artifact shape, shortened from fixture outputs. The paragraph-summary, alias-summary, kill, and propagated-constant examples may come from different fixtures because the checkpoints verify these shapes independently.
 
 ```json
 {
   "program": "<program>.cbl",
   "schema_version": "1.0",
   "analysis": "static_value_dataflow",
-  "analysis_version": "0.6",
-  "status": "runtime_kill_constant_propagation",
+  "analysis_version": "0.7",
+  "status": "output_kill_constant_propagation",
   "config": {
     "constant_propagation_enabled": true,
     "path_sensitive_targets_enabled": false,
     "paragraph_summaries_enabled": true,
     "alias_analysis_enabled": true,
     "alias_kills_enabled": true,
-    "mode": "runtime_kill_constant_propagation",
+    "mode": "output_kill_constant_propagation",
     "max_iterations": 1000
   },
   "summary": {
@@ -527,7 +537,7 @@ The Phase 2.3/2.4 builder is syntax-derived and deterministic. It intentionally 
 
 Remaining Phase 2 work includes:
 
-- Runtime-input and interprocedural kill rules.
+- Interprocedural paragraph/call summaries beyond direct `CALL USING` reference kills.
 - Transfer rules for variable-copy propagation and expressions that use known variables.
 - Diagnostics explaining constants lost at joins.
 - Loop-specific diagnostics and limit tests beyond the current fixed-point convergence guard.
@@ -653,7 +663,7 @@ Examples:
 - Decimal comma without `DECIMAL-POINT IS COMMA` support: unsupported.
 - Figurative constants in Phase 1: unsupported.
 - `CALL USING` argument in propagation: killed unless safe parameter mode is proven.
-- `READ`, `ACCEPT`, CICS, and SQL outputs: runtime-dependent, killed or marked unknown.
+- `READ`, `ACCEPT`, CICS, SQL, `STRING`, `UNSTRING`, and `INSPECT` outputs: runtime-dependent, killed or marked unknown.
 - `REDEFINES`, group, OCCURS, and reference-modification ambiguity: conservative kill.
 
 ## 12. Before/After Improvement Table
@@ -885,13 +895,25 @@ Phase 2 propagation stats should include:
 - Number of kills by reason.
 - Runtime and memory overhead.
 
-Current Phase 2.6a dataflow stats:
+Current Phase 2.6b dataflow stats:
 
 | Fixture | Node states | CFG edges | Entry constants | Exit constants | Kill facts | Diagnostics | Alias sets | Paragraph summaries | Iterations | Converged | Sidecar bytes |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| `output-kills-phase26b.cbl` | 49 | 48 | 6 | 6 | 15 | 0 | 0 | 1 | 2 | yes | 22,252 |
 | `runtime-kills-phase26a.cbl` | 16 | 15 | 13 | 16 | 3 | 0 | 0 | 1 | 2 | yes | 16,235 |
 | `constant-propagation-phase2.cbl` | 17 | 16 | 24 | 30 | 3 | 0 | 1 | 1 | 2 | yes | 26,028 |
 | `constant-folding-phase1.cbl` | 18 | 17 | 45 | 52 | 0 | 0 | 0 | 1 | 2 | yes | 38,052 |
+
+The `output-kills-phase26b.cbl` fixture proves the remaining runtime-output safety rules:
+
+- `READ IN-FILE INTO WS-READ` kills the prior `WS-READ = 10` fact.
+- `STRING "12" ... INTO WS-STRING` kills the prior `WS-STRING = 20` fact.
+- `UNSTRING WS-SOURCE ... INTO WS-UNSTRING` kills the prior `WS-UNSTRING = 30` fact.
+- `INSPECT WS-INSPECT ...` kills the prior `WS-INSPECT = 40` fact.
+- `EXEC CICS RECEIVE INTO(WS-CICS)` kills the prior `WS-CICS = 50` fact using existing CICS argument metadata.
+- `EXEC SQL SELECT ... INTO :WS-SQL` kills the prior `WS-SQL = 60` fact using existing SQL host-variable metadata.
+
+SQL dialect parsing currently emits several CFG `DIALECT` nodes for the same SQL source statement. The correctness contract for Phase 2.6b is therefore node-local: the exact source-location node that follows `MOVE 60 TO WS-SQL` must show `WS-SQL = 60` at entry and no `WS-SQL` at exit. The aggregate `summary.kill_count` includes duplicate SQL dialect nodes and is recorded as a metric, not used as the pass/fail criterion for SQL correctness.
 
 The `constant-propagation-phase2.cbl` fixture proves the deliberately narrow behavior:
 
@@ -913,8 +935,8 @@ Verification for this checkpoint:
 
 | Command | Result |
 |---|---|
-| `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest` | 35 tests, build success, 14.312s |
-| `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` | 47 tests, 2 skipped, build success, 14.340s |
+| `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest` | 37 tests, build success, 13.650s |
+| `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` | 49 tests, 2 skipped, build success, 13.875s |
 
 Accuracy evaluation should report:
 

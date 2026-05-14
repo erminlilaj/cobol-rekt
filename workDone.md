@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-14 — Phase 2.6b runtime-output kill facts
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/output-kills-phase26b.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added dataflow-local runtime-output kill facts without enabling variable-copy propagation. The sidecar now uses analysis version `0.7` and status `output_kill_constant_propagation`; `READ INTO`, `STRING INTO`, `UNSTRING INTO`, `INSPECT`, CICS output arguments, and SQL `SELECT/FETCH ... INTO` host variables remove prior constants at node exit.
+**Why:** This completes the kill-rule safety checkpoint required before propagating constants from known variables. It prevents stale runtime-output values from being reused while keeping CFG text, `assignment_facts`, legacy dynamic CALL/CICS fields, and RAG behavior unchanged.
+
+---
+
 ## 2026-05-14 — Phase 2.6a runtime/input kill facts
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/runtime-kills-phase26a.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
