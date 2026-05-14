@@ -356,15 +356,16 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("0.3", dataflow.get("analysis_version").getAsString());
-        assertEquals("alias_summary_skeleton", dataflow.get("status").getAsString());
+        assertEquals("0.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("alias_kill_skeleton", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
         assertFalse(config.get("constant_propagation_enabled").getAsBoolean());
         assertFalse(config.get("path_sensitive_targets_enabled").getAsBoolean());
         assertTrue(config.get("paragraph_summaries_enabled").getAsBoolean());
         assertTrue(config.get("alias_analysis_enabled").getAsBoolean());
-        assertEquals("alias_summary_skeleton", config.get("mode").getAsString());
+        assertTrue(config.get("alias_kills_enabled").getAsBoolean());
+        assertEquals("alias_kill_skeleton", config.get("mode").getAsString());
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
         assertEquals(18, summary.get("node_count").getAsInt());
@@ -492,6 +493,74 @@ class JavaHardeningRegressionTest {
         JsonObject level10BEvidence = level10B.getAsJsonArray("evidence").get(0).getAsJsonObject();
         assertEquals("LEVEL-10-B", level10BEvidence.get("variable").getAsString());
         assertEquals(2, level10BEvidence.get("occurs_count").getAsInt());
+    }
+
+    @Test
+    void dataflowAliasKillsRecordGroupAndRedefinesInvalidation() throws IOException {
+        new TestTaskRunner("alias-kills-phase2.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
+        JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
+        assertEquals("0.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("alias_kill_skeleton", dataflow.get("status").getAsString());
+
+        JsonObject childWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE \"A\" TO CHILD-A", "MOVE");
+        JsonObject childState = nodeStateFor(dataflow, childWrite);
+        assertEquals(0, childState.getAsJsonObject("entry_constants").size());
+        assertEquals(0, childState.getAsJsonObject("exit_constants").size());
+        assertEquals(List.of(
+                        "CHILD-A@group_child:SOME-GROUP",
+                        "CHILD-B@group_child:SOME-GROUP",
+                        "SOME-GROUP@group_child:SOME-GROUP"),
+                killVariablesWithAliases(childState.getAsJsonArray("kills")));
+        assertAliasKill(childState.getAsJsonArray("kills").get(0).getAsJsonObject(),
+                "CHILD-A", "CHILD-A", "group_child:SOME-GROUP", "GROUP_CHILD_STORAGE", "all_members", "MOVE");
+
+        JsonObject redefineWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE \"C\" TO REDEF-SOMETEXT", "MOVE");
+        JsonObject redefineState = nodeStateFor(dataflow, redefineWrite);
+        assertEquals(List.of(
+                        "NUMERIC-SOMETEXT@redefines:SOMETEXT",
+                        "REDEF-SOMETEXT@redefines:SOMETEXT",
+                        "SOMETEXT@redefines:SOMETEXT"),
+                killVariablesWithAliases(redefineState.getAsJsonArray("kills")));
+        assertAliasKill(redefineState.getAsJsonArray("kills").get(1).getAsJsonObject(),
+                "REDEF-SOMETEXT", "REDEF-SOMETEXT", "redefines:SOMETEXT",
+                "REDEFINES_OVERLAP", "all_overlapping_members", "MOVE");
+    }
+
+    @Test
+    void dataflowAliasKillsRecordGroupAndOccursInvalidation() throws IOException {
+        new TestTaskRunner("alias-kills-phase2.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
+        JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
+
+        JsonObject groupWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE \"B\" TO SOME-GROUP", "MOVE");
+        JsonObject groupState = nodeStateFor(dataflow, groupWrite);
+        assertEquals(List.of(
+                        "CHILD-A@group_child:SOME-GROUP",
+                        "CHILD-B@group_child:SOME-GROUP",
+                        "SOME-GROUP@group_child:SOME-GROUP"),
+                killVariablesWithAliases(groupState.getAsJsonArray("kills")));
+
+        JsonObject occursWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE \"D\" TO TABLE-ITEM(1)", "MOVE");
+        JsonObject occursState = nodeStateFor(dataflow, occursWrite);
+        assertEquals(List.of(
+                        "SOME-TABLE@group_child:SOME-TABLE",
+                        "TABLE-ITEM@group_child:SOME-TABLE",
+                        "TABLE-ITEM@occurs:TABLE-ITEM"),
+                killVariablesWithAliases(occursState.getAsJsonArray("kills")));
+        assertAliasKill(occursState.getAsJsonArray("kills").get(2).getAsJsonObject(),
+                "TABLE-ITEM", "TABLE-ITEM", "occurs:TABLE-ITEM",
+                "OCCURS_STORAGE", "all_occurrences_and_children", "MOVE");
+
+        assertEquals(12, dataflow.getAsJsonObject("summary").get("kill_count").getAsInt());
     }
 
     @Test
@@ -915,6 +984,33 @@ class JavaHardeningRegressionTest {
         List<String> values = new ArrayList<>();
         array.forEach(element -> values.add(element.getAsString()));
         return values;
+    }
+
+    private JsonObject nodeStateFor(JsonObject dataflow, JsonObject cfgNode) {
+        assertNotNull(cfgNode);
+        String nodeId = cfgNode.get("id").getAsString();
+        JsonObject nodeStates = dataflow.getAsJsonObject("node_states");
+        assertTrue(nodeStates.has(nodeId), "Missing dataflow node state for CFG node " + nodeId);
+        return nodeStates.getAsJsonObject(nodeId);
+    }
+
+    private List<String> killVariablesWithAliases(JsonArray kills) {
+        return jsonObjects(kills).stream()
+                .map(kill -> kill.get("variable").getAsString() + "@" + kill.get("alias_set_id").getAsString())
+                .toList();
+    }
+
+    private void assertAliasKill(JsonObject kill, String variable, String writtenVariable, String aliasSetId,
+                                 String aliasKind, String killScope, String statementType) {
+        assertEquals("ALIAS_CONSERVATIVE_KILL", kill.get("code").getAsString());
+        assertEquals(variable, kill.get("variable").getAsString());
+        assertEquals(writtenVariable, kill.get("written_variable").getAsString());
+        assertEquals(aliasSetId, kill.get("alias_set_id").getAsString());
+        assertEquals(aliasKind, kill.get("alias_kind").getAsString());
+        assertEquals(killScope, kill.get("kill_scope").getAsString());
+        assertEquals("conservative", kill.get("confidence").getAsString());
+        assertEquals(statementType, kill.get("statement_type").getAsString());
+        assertEquals("java_static_value_dataflow", kill.get("provenance_source").getAsString());
     }
 
     private JsonObject firstFoldedValueFact(JsonObject node) {

@@ -298,10 +298,11 @@ If implementation discovers that this document is wrong, the documentation must 
 | 1.7 | `DONE` | Record Phase 1 accuracy/performance stats. | Report includes inspected/folded/skipped counts, diagnostic counts, Java target-suite wall-clock, and additive CFG size delta. |
 | 2.1 | `DONE` | Add `static_analysis/dataflow.json` skeleton. | `WRITE_CFG` emits a sidecar artifact with schema version, analysis version, disabled propagation config, summary counts, empty diagnostics, empty alias/paragraph sections, and one empty node state per CFG node. |
 | 2.2 | `DONE` | Add paragraph summaries. | Dataflow artifact records one summary per CFG `PARAGRAPH`: contained node IDs, direct read/write sets, paragraph calls, called programs, external side effects, unsupported/deferred constructs, cycle flag, and conservative transitive summary status. |
-| 2.3 | `DONE` | Add syntax-derived alias-set builder. | `static_analysis/dataflow.json` records deterministic conservative alias sets for `REDEFINES`, group/child storage, and `OCCURS` storage; no propagation kills are applied yet. |
-| 2.4 | `PENDING` | Add fixed-point CFG propagation. | Entry/exit states converge deterministically or emit limit diagnostics. |
-| 2.5 | `PENDING` | Add transfer and kill rules. | Tests cover MOVE, COMPUTE, ACCEPT, READ, CALL, SQL, CICS, STRING, UNSTRING, INSPECT, INITIALIZE, and unknown statements. |
-| 2.6 | `PENDING` | Record Phase 2 accuracy/performance stats. | Report includes node count, variable count, iteration count, proven constants, unknown merges, kills by reason, runtime, and memory. |
+| 2.3 | `DONE` | Add syntax-derived alias-set builder. | `static_analysis/dataflow.json` records deterministic conservative alias sets for `REDEFINES`, group/child storage, and `OCCURS` storage. |
+| 2.4 | `DONE` | Apply alias sets as conservative per-node kill facts. | Direct executable writes emit deterministic `ALIAS_CONSERVATIVE_KILL` entries for overlapping group, `REDEFINES`, and `OCCURS` members; entry/exit constants remain empty. |
+| 2.5 | `PENDING` | Add fixed-point CFG propagation. | Entry/exit states converge deterministically or emit limit diagnostics. |
+| 2.6 | `PENDING` | Add transfer and runtime-input kill rules. | Tests cover MOVE, COMPUTE, ACCEPT, READ, CALL, SQL, CICS, STRING, UNSTRING, INSPECT, INITIALIZE, and unknown statements. |
+| 2.7 | `PENDING` | Record Phase 2 accuracy/performance stats. | Report includes node count, variable count, iteration count, proven constants, unknown merges, kills by reason, runtime, and memory. |
 | 3.1 | `PENDING` | Add path-sensitive dynamic CALL facts. | New `path_sensitive_*` fields coexist with unchanged legacy fields. |
 | 3.2 | `PENDING` | Add path-sensitive CICS target facts. | New CICS path-sensitive fields coexist with unchanged legacy fields. |
 | 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures report precision/recall or exact expected-target pass/fail counts versus legacy behavior. |
@@ -324,6 +325,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2026-05-12 | `DONE` | Added the first `static_analysis/dataflow.json` sidecar. It is intentionally a skeleton: every CFG node has an empty `entry_constants`, `exit_constants`, `kills`, and `diagnostics` container, while propagation, alias analysis, paragraph summaries, and path-sensitive targets remain disabled. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 24 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 36 tests, 2 skipped. Fixture metrics: 18 node states for 18 CFG nodes, 17 CFG edges recorded in the summary, 0 entry constants, 0 exit constants, 0 kills, 0 diagnostics, 0 alias sets, 0 paragraph summaries, 3,453 bytes for the pretty-printed sidecar, target suite wall-clock 20.078s. |
 | 2026-05-12 | `DONE` | Added paragraph summaries to the sidecar without starting propagation. Summaries now report contained CFG node IDs, direct read/write variables, called paragraphs, called programs, external side effects, and a conservative transitive status. When a paragraph performs another paragraph, transitive read/write lists remain empty and an explicit deferred diagnostic is stored under that paragraph's `unsupported_constructs`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 26 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 38 tests, 2 skipped. Fixture metrics: `constant-folding-phase1.cbl` has 1 paragraph summary, 15 contained node IDs, 1 direct read variable, 12 direct modified variables, 0 paragraph calls, 0 side effects, 5,239-byte pretty-printed sidecar, target suite wall-clock 13.467s. `metadata-features.cbl` has 4 paragraph summaries; `MAIN-PARA` records `LOOP-PARA`, called programs `DYNPROG` and `SUBPROG`, side effects `ACCEPT`, `CALL`, `CLOSE`, `OPEN`, `READ`, `WRITE`, and deferred transitive expansion. |
 | 2026-05-12 | `DONE` | Added conservative alias-set summaries to the sidecar without starting propagation. The builder records `group_child:*`, `occurs:*`, and `redefines:*` entries using the Java data-structure model, collapses duplicate table expansions deterministically, and stores syntax-derived evidence such as level number, parent, redefines target, occurs count, data type, and source line. Byte-offset/byte-size layout evidence is deliberately deferred because the expanded table/redefinition model can recurse through layout sizing on the stress fixture. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 28 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 40 tests, 2 skipped. Fixture metrics: `data-structures.cbl` has 16 alias sets, 0 entry constants, 0 exit constants, 0 kills, 0 diagnostics, 19,394-byte pretty-printed sidecar. `constant-folding-phase1.cbl` remains at 0 alias sets and a 5,230-byte pretty-printed sidecar. Target suite wall-clock: 14.059s; broader suite wall-clock: 15.582s. |
+| 2026-05-12 | `DONE` | Applied alias sets as conservative kill facts without starting propagation. Direct executable writes now populate per-node `kills` arrays with `ALIAS_CONSERVATIVE_KILL` entries; paragraph/container nodes do not emit duplicate aggregate kills. The checkpoint covers group-child writes, group writes, `REDEFINES` writes, and subscripted `OCCURS` writes. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 30 tests. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 42 tests, 2 skipped. Fixture metrics: `alias-kills-phase2.cbl` has 10 node states, 9 edges, 4 alias sets, 12 kill facts, 0 entry constants, 0 exit constants, 0 diagnostics, and a 14,449-byte pretty-printed sidecar. `constant-folding-phase1.cbl` remains at 0 alias sets, 0 kills, and a 5,257-byte pretty-printed sidecar. Target suite wall-clock: 13.957s; broader suite wall-clock: 16.618s. |
 
 ### Fool-Proof Execution Rules
 
@@ -352,30 +354,31 @@ Phase 1 includes:
 
 ### Phase 2: CFG-Based Constant Propagation
 
-Phase 2 now has a committed sidecar with paragraph summaries and conservative alias-set summaries, but it does **not** yet perform constant propagation. The current artifact is useful because it pins the stable output location, top-level schema, per-node state shape, paragraph summary shape, alias summary shape, and conservative disabled-by-default flags before any solver logic exists.
+Phase 2 now has a committed sidecar with paragraph summaries, conservative alias-set summaries, and conservative alias kill facts, but it does **not** yet perform constant propagation. The current artifact is useful because it pins the stable output location, top-level schema, per-node state shape, paragraph summary shape, alias summary shape, kill-fact shape, and conservative disabled-by-default flags before any solver logic exists.
 
-Representative Phase 2.3 artifact shape, shortened from fixture outputs. The paragraph-summary and alias-summary examples may come from different fixtures because the Phase 2.3 checkpoint verifies both shapes independently.
+Representative Phase 2.4 artifact shape, shortened from fixture outputs. The paragraph-summary, alias-summary, and kill examples may come from different fixtures because the checkpoints verify these shapes independently.
 
 ```json
 {
   "program": "<program>.cbl",
   "schema_version": "1.0",
   "analysis": "static_value_dataflow",
-  "analysis_version": "0.3",
-  "status": "alias_summary_skeleton",
+  "analysis_version": "0.4",
+  "status": "alias_kill_skeleton",
   "config": {
     "constant_propagation_enabled": false,
     "path_sensitive_targets_enabled": false,
     "paragraph_summaries_enabled": true,
     "alias_analysis_enabled": true,
-    "mode": "alias_summary_skeleton"
+    "alias_kills_enabled": true,
+    "mode": "alias_kill_skeleton"
   },
   "summary": {
     "node_count": 18,
     "edge_count": 17,
     "entry_constant_count": 0,
     "exit_constant_count": 0,
-    "kill_count": 0,
+    "kill_count": 12,
     "diagnostic_count": 0,
     "alias_set_count": 16,
     "paragraph_summary_count": 1
@@ -384,7 +387,23 @@ Representative Phase 2.3 artifact shape, shortened from fixture outputs. The par
     "<cfg_node_id>": {
       "entry_constants": {},
       "exit_constants": {},
-      "kills": [],
+      "kills": [
+        {
+          "code": "ALIAS_CONSERVATIVE_KILL",
+          "variable": "REDEF-SOMETEXT",
+          "written_variable": "REDEF-SOMETEXT",
+          "reason": "redefines_overlap",
+          "alias_set_id": "redefines:SOMETEXT",
+          "alias_kind": "REDEFINES_OVERLAP",
+          "kill_scope": "all_overlapping_members",
+          "confidence": "conservative",
+          "statement_type": "MOVE",
+          "statement_text": "MOVE \"C\" TO REDEF-SOMETEXT",
+          "source_line": 17,
+          "source_column": 11,
+          "provenance_source": "java_static_value_dataflow"
+        }
+      ],
       "diagnostics": []
     }
   },
@@ -435,22 +454,21 @@ Representative Phase 2.3 artifact shape, shortened from fixture outputs. The par
 
 For paragraphs that `PERFORM` another paragraph, Phase 2.2 does not compute a transitive closure yet. In that case `variables_read_transitive` and `variables_modified_transitive` stay empty, `transitive_summary_status` is `not_computed_perform_targets_present`, and `unsupported_constructs` contains a machine-readable `PARAGRAPH_TRANSITIVE_SUMMARY_NOT_COMPUTED` entry. This is deliberate: the analyzer records the risk instead of pretending the transitive summary is complete.
 
-Alias sets in Phase 2.3 are analysis facts, not active propagation rules. They describe conservative kill scopes for later transfer functions:
+Alias sets are analysis facts. Phase 2.4 also emits kill facts from them, but those kills are still not a propagation result; they are safety facts that tell the later solver which stored constants must be invalidated before it can make any value claim.
 
 - `GROUP_CHILD_STORAGE`: writing a group or child may invalidate the group and its descendants.
 - `OCCURS_STORAGE`: writing a table or indexed occurrence may invalidate all occurrences and descendants.
 - `REDEFINES_OVERLAP`: writing any redefined view may invalidate all overlapping members.
 
-The Phase 2.3 builder is syntax-derived and deterministic. It intentionally does not yet use byte-offset/byte-size layout evidence because the existing expanded table/redefinition model can recurse through layout sizing on `data-structures.cbl`; using names, parent relationships, `REDEFINES`, and `OCCURS` clauses is the reliable checkpoint. Offset-based overlap refinement remains future work.
+The Phase 2.3/2.4 builder is syntax-derived and deterministic. It intentionally does not yet use byte-offset/byte-size layout evidence because the existing expanded table/redefinition model can recurse through layout sizing on `data-structures.cbl`; using names, parent relationships, `REDEFINES`, and `OCCURS` clauses is the reliable checkpoint. Offset-based overlap refinement remains future work.
 
 Remaining Phase 2 work includes:
 
 - Node entry and exit constants.
 - Fixed-point worklist solver.
 - Conservative merge rules.
-- Conservative kill rules.
+- Runtime-input and interprocedural kill rules.
 - Loop handling.
-- Applying alias sets as kills.
 - Diagnostics.
 
 ### Phase 3: Path-Sensitive Dynamic CALL/CICS Resolution

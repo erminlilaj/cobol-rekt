@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -21,7 +22,7 @@ import java.util.TreeSet;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "0.3";
+    private static final String ANALYSIS_VERSION = "0.4";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
 
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
@@ -32,21 +33,19 @@ public class StaticValueDataflowPass {
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
                                                 List<SerialisableEdge> edges,
                                                 CobolDataStructure dataStructures) {
-        Map<String, DataflowNodeState> nodeStates = new LinkedHashMap<>();
-        for (SerialisableCFGFlowNode node : nodes) {
-            nodeStates.put(node.getId(), DataflowNodeState.empty());
-        }
         Map<String, ParagraphSummary> paragraphSummaries = paragraphSummaries(nodes);
         Map<String, AliasSetSummary> aliasSets = aliasSets(dataStructures);
+        Map<String, DataflowNodeState> nodeStates = nodeStates(nodes, aliasSets);
+        int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
 
         return new DataflowAnalysisResult(
                 program,
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "alias_summary_skeleton",
+                "alias_kill_skeleton",
                 config(),
-                summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size()),
+                summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount),
                 nodeStates,
                 aliasSets,
                 paragraphSummaries,
@@ -60,21 +59,92 @@ public class StaticValueDataflowPass {
         config.put("path_sensitive_targets_enabled", false);
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
-        config.put("mode", "alias_summary_skeleton");
+        config.put("alias_kills_enabled", true);
+        config.put("mode", "alias_kill_skeleton");
         return config;
     }
 
-    private Map<String, Object> summary(int nodeCount, int edgeCount, int paragraphSummaryCount, int aliasSetCount) {
+    private Map<String, Object> summary(int nodeCount, int edgeCount, int paragraphSummaryCount, int aliasSetCount,
+                                        int killCount) {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("node_count", nodeCount);
         summary.put("edge_count", edgeCount);
         summary.put("entry_constant_count", 0);
         summary.put("exit_constant_count", 0);
-        summary.put("kill_count", 0);
+        summary.put("kill_count", killCount);
         summary.put("diagnostic_count", 0);
         summary.put("alias_set_count", aliasSetCount);
         summary.put("paragraph_summary_count", paragraphSummaryCount);
         return summary;
+    }
+
+    private Map<String, DataflowNodeState> nodeStates(List<SerialisableCFGFlowNode> nodes,
+                                                      Map<String, AliasSetSummary> aliasSets) {
+        Map<String, DataflowNodeState> nodeStates = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) {
+            nodeStates.put(node.getId(), new DataflowNodeState(
+                    new LinkedHashMap<>(), new LinkedHashMap<>(), aliasKills(node, aliasSets), List.of()));
+        }
+        return nodeStates;
+    }
+
+    private List<Map<String, Object>> aliasKills(SerialisableCFGFlowNode node,
+                                                 Map<String, AliasSetSummary> aliasSets) {
+        if (!canEmitAliasKills(node) || node.getVariablesModified() == null
+                || node.getVariablesModified().isEmpty() || aliasSets.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (String writtenVariable : sortedStrings(node.getVariablesModified())) {
+            String canonicalWritten = canonicalVariable(writtenVariable);
+            for (AliasSetSummary aliasSet : aliasSets.values()) {
+                if (!aliasSet.members().contains(canonicalWritten)) continue;
+                for (String killedVariable : aliasSet.members()) {
+                    Map<String, Object> kill = aliasKill(node, canonicalWritten, killedVariable, aliasSet);
+                    kills.put(killKey(kill), kill);
+                }
+            }
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private boolean canEmitAliasKills(SerialisableCFGFlowNode node) {
+        return switch (node.getType()) {
+            case ACCEPT, ADD, COMPUTE, DIVIDE, INITIALIZE, INSPECT, MOVE, MULTIPLY, READ, REWRITE, RETURN,
+                 SET, STRING, SUBTRACT, UNSTRING, WRITE -> true;
+            default -> false;
+        };
+    }
+
+    private String killKey(Map<String, Object> kill) {
+        return kill.get("variable") + "\u0000" + kill.get("alias_set_id") + "\u0000" + kill.get("written_variable");
+    }
+
+    private Map<String, Object> aliasKill(SerialisableCFGFlowNode node, String writtenVariable, String killedVariable,
+                                          AliasSetSummary aliasSet) {
+        Map<String, Object> kill = new LinkedHashMap<>();
+        kill.put("code", "ALIAS_CONSERVATIVE_KILL");
+        kill.put("variable", killedVariable);
+        kill.put("written_variable", writtenVariable);
+        kill.put("reason", aliasSet.aliasKind().toLowerCase(Locale.ROOT));
+        kill.put("alias_set_id", aliasSet.aliasSetId());
+        kill.put("alias_kind", aliasSet.aliasKind());
+        kill.put("kill_scope", aliasSet.killScope());
+        kill.put("confidence", "conservative");
+        kill.put("statement_type", node.getType().name());
+        putIfPresent(kill, "statement_text", node.getOriginalText());
+        putIfPresent(kill, "source_line", node.getSourceLine());
+        putIfPresent(kill, "source_column", node.getSourceColumn());
+        kill.put("provenance_source", SUMMARY_SOURCE);
+        return kill;
+    }
+
+    private String canonicalVariable(String variable) {
+        if (variable == null) return "";
+        String canonical = variable.trim().toUpperCase(Locale.ROOT);
+        int subscriptStart = canonical.indexOf('(');
+        return subscriptStart < 0 ? canonical : canonical.substring(0, subscriptStart);
     }
 
     private Map<String, AliasSetSummary> aliasSets(CobolDataStructure dataStructures) {

@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-12 — Phase 2.4 alias kill facts in dataflow sidecar
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/alias-kills-phase2.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Applied alias sets as conservative per-node kill facts in `static_analysis/dataflow.json`, with analysis version `0.4`, status `alias_kill_skeleton`, and deterministic `ALIAS_CONSERVATIVE_KILL` entries for group/child, `REDEFINES`, and `OCCURS` writes. Entry and exit constants remain empty, and fixed-point propagation is still not implemented.
+**Why:** User asked to proceed safely; this checkpoint adds the alias invalidation safety layer required before propagation can make reliable constant claims.
+
+---
+
 ## 2026-05-12 — Phase 2.3 alias-set summaries in dataflow sidecar
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/AliasSetSummary.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowAnalysisResult.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/WriteControlFlowGraphTask.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/task/SmojolTasks.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
