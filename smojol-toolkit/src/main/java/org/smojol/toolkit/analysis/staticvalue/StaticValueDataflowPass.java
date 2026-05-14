@@ -21,12 +21,16 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "0.5";
+    private static final String ANALYSIS_VERSION = "0.6";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
+    private static final Pattern ACCEPT_TARGET = Pattern.compile(
+            "^\\s*ACCEPT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
 
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
                                                 List<SerialisableEdge> edges) {
@@ -47,7 +51,7 @@ public class StaticValueDataflowPass {
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "basic_constant_propagation",
+                "runtime_kill_constant_propagation",
                 config(),
                 summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
                         nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
@@ -65,7 +69,7 @@ public class StaticValueDataflowPass {
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "basic_constant_propagation");
+        config.put("mode", "runtime_kill_constant_propagation");
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }
@@ -132,9 +136,17 @@ public class StaticValueDataflowPass {
                                                                Map<String, AliasSetSummary> aliasSets) {
         Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
         for (SerialisableCFGFlowNode node : nodes) {
-            result.put(node.getId(), aliasKills(node, aliasSets));
+            result.put(node.getId(), killFacts(node, aliasSets));
         }
         return result;
+    }
+
+    private List<Map<String, Object>> killFacts(SerialisableCFGFlowNode node,
+                                                Map<String, AliasSetSummary> aliasSets) {
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (Map<String, Object> kill : aliasKills(node, aliasSets)) kills.put(killKey(kill), kill);
+        for (Map<String, Object> kill : dataflowKills(node)) kills.put(killKey(kill), kill);
+        return new ArrayList<>(kills.values());
     }
 
     private Map<String, Map<String, Map<String, Object>>> emptyStates(List<SerialisableCFGFlowNode> nodes) {
@@ -260,6 +272,64 @@ public class StaticValueDataflowPass {
         diagnostic.put("message", "Static value propagation stopped before convergence.");
         diagnostic.put("max_iterations", MAX_ITERATIONS);
         return List.of(diagnostic);
+    }
+
+    private List<Map<String, Object>> dataflowKills(SerialisableCFGFlowNode node) {
+        return switch (node.getType()) {
+            case ACCEPT -> acceptKills(node);
+            case CALL -> callUsingKills(node);
+            case INITIALIZE -> targetKills(node, "INITIALIZE_TARGET_KILL", "initialize_target");
+            default -> List.of();
+        };
+    }
+
+    private List<Map<String, Object>> acceptKills(SerialisableCFGFlowNode node) {
+        if (node.getOriginalText() == null) return List.of();
+        Matcher matcher = ACCEPT_TARGET.matcher(node.getOriginalText());
+        if (!matcher.find()) return List.of();
+        return List.of(dataflowKill(node, matcher.group(1), "RUNTIME_INPUT_KILL", "runtime_accept"));
+    }
+
+    private List<Map<String, Object>> callUsingKills(SerialisableCFGFlowNode node) {
+        Object usingParameters = node.getMetadata().get("using_parameters");
+        if (!(usingParameters instanceof List<?> parameterList)) return List.of();
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (Object parameter : parameterList) {
+            if (!(parameter instanceof Map<?, ?> rawParameter)) continue;
+            Map<String, Object> usingParameter = stringKeyMap(rawParameter);
+            Object name = usingParameter.get("name");
+            Object mode = usingParameter.get("mode");
+            if (!(name instanceof String variableName)) continue;
+            String parameterMode = mode instanceof String modeName
+                    ? modeName.toUpperCase(Locale.ROOT) : "REFERENCE";
+            if (!"REFERENCE".equals(parameterMode)) continue;
+            Map<String, Object> kill = dataflowKill(node, variableName,
+                    "CALL_USING_REFERENCE_KILL", "call_using_reference");
+            kills.put(killKey(kill), kill);
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private List<Map<String, Object>> targetKills(SerialisableCFGFlowNode node, String code, String reason) {
+        return sortedStrings(node.getVariablesModified()).stream()
+                .map(variable -> dataflowKill(node, variable, code, reason))
+                .toList();
+    }
+
+    private Map<String, Object> dataflowKill(SerialisableCFGFlowNode node, String variable, String code,
+                                             String reason) {
+        Map<String, Object> kill = new LinkedHashMap<>();
+        kill.put("code", code);
+        kill.put("variable", canonicalVariable(variable));
+        kill.put("reason", reason);
+        kill.put("kill_scope", "direct_variable");
+        kill.put("confidence", "conservative");
+        kill.put("statement_type", node.getType().name());
+        putIfPresent(kill, "statement_text", node.getOriginalText());
+        putIfPresent(kill, "source_line", node.getSourceLine());
+        putIfPresent(kill, "source_column", node.getSourceColumn());
+        kill.put("provenance_source", SUMMARY_SOURCE);
+        return kill;
     }
 
     private List<Map<String, Object>> aliasKills(SerialisableCFGFlowNode node,

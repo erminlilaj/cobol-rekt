@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-14 — Phase 2.6a runtime/input kill facts
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/runtime-kills-phase26a.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added dataflow-local kill facts for runtime/input overwrites without changing CFG node `variablesModified()`: `ACCEPT` targets emit `RUNTIME_INPUT_KILL`, `CALL USING` reference arguments emit `CALL_USING_REFERENCE_KILL`, and `INITIALIZE` targets emit `INITIALIZE_TARGET_KILL`. The dataflow sidecar now uses analysis version `0.6` and status `runtime_kill_constant_propagation`; variable-copy propagation remains disabled.
+**Why:** Claude's pre-coding audit confirmed runtime/input kills are required before any propagation that reads entry constants. This checkpoint prevents stale constants from surviving runtime overwrites while preserving source/CFG artifacts.
+
+---
+
 ## 2026-05-14 — Phase 2.5 basic numeric constant propagation
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-propagation-phase2.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
