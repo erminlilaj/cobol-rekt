@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-15 — Phase 3 path-sensitive target resolution plan
+
+**File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added a detailed Phase 3 implementation plan covering alphanumeric dataflow prerequisites, additive path-sensitive dynamic `CALL` fields, additive CICS target and argument fields, fixture design, tests, metrics, invariants, and stop points.
+**Why:** User asked for a super detailed Phase 3 plan and requested that it be written into the tracking documentation before implementation.
+
+---
+
 ## 2026-05-15 — Phase 2.7 propagation evaluation documentation
 
 **File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
