@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-15 — Phase 2.7 propagation evaluation documentation
+
+**File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Marked Phase 2.7 as done and consolidated the Phase 2 constant-propagation evaluation in human-readable form. The documentation now includes examples for literal propagation, variable-copy propagation, expression propagation, runtime kills, conflicting joins, loop-carried values, and alias kills, plus the supported scope, remaining limitations, current fixture metrics, and reproducibility commands.
+**Why:** User asked to proceed with the safe plan and include examples in the documentation before moving toward later path-sensitive dynamic CALL/CICS work.
+
+---
+
 ## 2026-05-15 — Phase 2.6f loop-carried constant diagnostics
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

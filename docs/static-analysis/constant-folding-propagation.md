@@ -307,7 +307,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2.6d | `DONE` | Add safe numeric expression transfer rule. | Tests prove `COMPUTE <target> = <known-variable> + <numeric-literal>` produces a target constant when all referenced variables are proven numeric at node entry; unsupported or unsafe expressions still produce no propagation fact. |
 | 2.6e | `DONE` | Add join diagnostics for conflicting predecessor constants. | Solver-level tests prove a real multi-predecessor join drops `WS-D` when incoming predecessors prove `20` and `30`, and emits exact `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` evidence without changing the joined entry state. |
 | 2.6f | `DONE` | Add loop-carried constant diagnostics for CFG cycles. | Solver-level tests prove a variable modified inside a CFG cycle is not propagated after the loop and emits exact `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` evidence while the solver still converges. |
-| 2.7 | `WORKING` | Record Phase 2 accuracy/performance stats. | Checkpoint stats are recorded after each propagation step; final Phase 2 report must include node count, variable count, iteration count, proven constants, unknown merges, kills by reason, runtime, and memory. |
+| 2.7 | `DONE` | Record Phase 2 accuracy/performance stats. | This document now consolidates the Phase 2 examples, fixture metrics, supported transfer rules, diagnostics, limitations, and reproducibility commands. Memory profiling remains deferred to a corpus benchmark because the current Java hardening tests do not expose stable per-fixture heap measurements. |
 | 3.1 | `PENDING` | Add path-sensitive dynamic CALL facts. | New `path_sensitive_*` fields coexist with unchanged legacy fields. |
 | 3.2 | `PENDING` | Add path-sensitive CICS target facts. | New CICS path-sensitive fields coexist with unchanged legacy fields. |
 | 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures report precision/recall or exact expected-target pass/fail counts versus legacy behavior. |
@@ -338,6 +338,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2026-05-15 | `DONE` | Added safe numeric expression propagation for `COMPUTE` nodes. The sidecar now evaluates only a small arithmetic subset from source text: proven numeric variables from node entry, numeric literals, parentheses, unary signs, addition, subtraction, multiplication, and exact division. The evaluator refuses missing variables, unsupported syntax, divide by zero, and non-terminating division by emitting no constant. No CFG metadata, `assignment_facts`, source text, dynamic CALL/CICS fields, or RAG chunks are changed. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 37 tests, total time 13.497s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 49 tests, 2 skipped, total time 14.660s. Fixture metrics: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 33 entry constants, 40 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 32,401-byte pretty-printed sidecar. `constant-folding-phase1.cbl` now has 56 entry constants and 64 exit constants because `COMPUTE WS-B = WS-A + 1` can use the earlier proven `WS-A = 3`. |
 | 2026-05-15 | `DONE` | Added join diagnostics after fixed-point convergence. The solver still drops conflicting constants at joins, but now emits a node-level `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` diagnostic when real CFG predecessors prove different constants for the same variable. This checkpoint also bumps the dataflow analysis version to `1.0` and mode to `join_diagnostics_constant_propagation`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 38 tests, total time 15.119s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 50 tests, 2 skipped, total time 14.806s. Solver-level metrics: the synthetic join test has 3 node states, 2 edges, 1 join diagnostic, `WS-D` absent at join entry, and incoming values `20` and `30` recorded. Fixture metrics remain source-preserving: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 33 entry constants, 40 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 32,413-byte pretty-printed sidecar. |
 | 2026-05-15 | `DONE` | Added loop-carried constant diagnostics for CFG cycles. The solver now detects strongly connected components after fixed-point convergence and emits `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` when a variable is modified inside a cycle. This is explanatory only: the variable remains absent after the loop unless another safe transfer rule proves it. The dataflow analysis version is now `1.1` and mode is `loop_diagnostics_constant_propagation`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 39 tests, total time 13.351s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 51 tests, 2 skipped, total time 14.507s. Solver-level metrics: the synthetic loop test has 3 node states, 3 edges, 1 loop diagnostic, `WS-A` absent inside and after the loop, `WS-B` not propagated from stale `WS-A`, convergence true, and `max_iterations` 1000 recorded. Fixture metrics remain source-preserving: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 33 entry constants, 40 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 32,413-byte pretty-printed sidecar. |
+| 2026-05-15 | `DONE` | Completed the Phase 2.7 evaluation cleanup. The implementation scope is now described in plain language with examples for literal propagation, variable-copy propagation, expression propagation, runtime kills, joins, loops, and alias kills. The document also records what the tool still does not support, so the project does not overclaim full compiler-style constant propagation. | Documentation-only checkpoint. It reuses the last passed implementation verification: targeted `JavaHardeningRegressionTest`, 39 tests, 13.351s; broader `smojol-toolkit` suite, 51 tests, 2 skipped, 14.507s. Reproducibility commands are listed in Section 20. |
 
 ### Fool-Proof Execution Rules
 
@@ -1029,6 +1030,109 @@ Verification for this checkpoint:
 |---|---|
 | `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest` | 39 tests, build success, 13.351s |
 | `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true` | 51 tests, 2 skipped, build success, 14.507s |
+
+### Phase 2.7 Evaluation Summary
+
+At this point the tool has a scoped, source-preserving constant propagation sidecar. It does not have full compiler-style COBOL constant propagation. The honest claim is narrower: `static_analysis/dataflow.json` can now carry proven numeric constants through selected safe transfer rules, can erase those constants at known unsafe runtime or alias boundaries, and can explain some conservative drops through diagnostics.
+
+Implemented Phase 2 behavior:
+
+- `static_analysis/dataflow.json` is emitted as a separate artifact, not as rewritten COBOL or rewritten CFG text.
+- Every analyzed CFG node can have deterministic `entry_constants`, `exit_constants`, `kills`, and `diagnostics`.
+- Numeric literal `MOVE` can prove a target constant.
+- Folded numeric `COMPUTE` facts from Phase 1 can seed the dataflow state.
+- `MOVE <known-variable> TO <target>` can copy a proven numeric constant if the source survives all prior kills.
+- Narrow numeric `COMPUTE` expressions can use proven numeric entry constants, numeric literals, parentheses, unary signs, addition, subtraction, multiplication, and exact division.
+- `ACCEPT`, `CALL USING` by reference, `INITIALIZE`, `READ INTO`, `STRING INTO`, `UNSTRING INTO`, `INSPECT`, CICS output arguments, SQL `SELECT/FETCH ... INTO`, and alias-overlapping writes kill affected constants.
+- Real branch joins drop conflicting constants and emit `DATAFLOW_CONSTANT_DROPPED_AT_JOIN`.
+- CFG cycles with modified variables emit `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` instead of inventing final loop values.
+
+Still not implemented:
+
+- Full COBOL loop trip-count reasoning or final loop-value inference.
+- `IF`/`EVALUATE` condition simplification or branch reachability pruning.
+- Alphanumeric/string constant propagation.
+- Group move expansion into child fields.
+- Target `PIC`, edited numeric, `COMP`, or `COMP-3` storage semantics.
+- Interprocedural propagation through called programs.
+- Path-sensitive dynamic `CALL` or CICS target fields.
+- RAG chunks that summarize propagated constants.
+- Corpus-level precision/recall or heap-memory benchmarking.
+
+Example: proven literal and variable-copy propagation:
+
+```cobol
+MOVE 10 TO WS-A
+MOVE WS-A TO WS-C
+```
+
+After Phase 2.6c, the first node proves `WS-A = 10` at exit. The second node sees `WS-A = 10` at entry and emits `WS-C = 10` at exit. This fact exists only in `static_analysis/dataflow.json`; the source statement and existing `assignment_facts` remain unchanged.
+
+Example: expression propagation from a proven variable:
+
+```cobol
+MOVE 10 TO WS-A
+COMPUTE WS-E = WS-A + 5
+```
+
+After Phase 2.6d, the `COMPUTE` node can prove `WS-E = 15` because every variable in the expression is known at node entry and the arithmetic subset is supported. If any variable is missing, the solver emits no propagated constant.
+
+Example: runtime input prevents stale propagation:
+
+```cobol
+MOVE 10 TO WS-A
+ACCEPT WS-A FROM DATE
+MOVE WS-A TO WS-C
+```
+
+`ACCEPT WS-A` kills the old `WS-A = 10` fact because runtime input overwrites the field. The later `MOVE WS-A TO WS-C` therefore does not infer `WS-C = 10`. This is a deliberate false-negative preference: missing a possible value is safer than emitting a stale one.
+
+Example: conflicting branch values are explained, not guessed:
+
+```cobol
+IF WS-FLAG = 1
+    MOVE 20 TO WS-D
+ELSE
+    MOVE 30 TO WS-D
+END-IF
+```
+
+At a real multi-predecessor join, `WS-D` is absent because incoming paths disagree. The join diagnostic records the predecessor values `20` and `30` so humans can see why the constant was dropped.
+
+Example: loop-carried values are not inferred:
+
+```cobol
+MOVE 1 TO WS-A
+PERFORM UNTIL WS-A > 5
+    ADD 1 TO WS-A
+END-PERFORM
+MOVE WS-A TO WS-B
+```
+
+The solver does not claim `WS-A = 6`, because that would require full COBOL loop semantics. It records `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` for the cycle and does not propagate a stale `WS-A` into `WS-B`.
+
+Example: alias kills protect overlapping storage:
+
+```cobol
+01 SOME-GROUP.
+   05 CHILD-A PIC 9(2).
+   05 CHILD-B PIC 9(2).
+
+MOVE 99 TO CHILD-A
+```
+
+The write to `CHILD-A` emits alias kill facts for overlapping group-child relationships before writing the direct `CHILD-A = 99` fact. This keeps older facts about `SOME-GROUP` or sibling storage from surviving incorrectly.
+
+Repeatable metric commands:
+
+```bash
+mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest
+mvn -pl smojol-toolkit test -Dcheckstyle.skip=true
+jq '{node_states:(.node_states|length), edges:.summary.edge_count, entry:.summary.entry_constant_count, exit:.summary.exit_constant_count, kills:.summary.kill_count, diagnostics:.summary.diagnostic_count, aliases:.summary.alias_set_count, paragraphs:.summary.paragraph_summary_count, iterations:.summary.iteration_count, converged:.summary.converged}' smojol-toolkit/test-code/out/constant-propagation-phase2.cbl.report/static_analysis/dataflow.json
+wc -c smojol-toolkit/test-code/out/constant-propagation-phase2.cbl.report/static_analysis/dataflow.json
+```
+
+Phase 2.7 conclusion: the implementation is useful for documented numeric facts and for explaining why unsafe facts are not propagated. It improves analysis transparency and some value precision, but it is not yet enough to claim improved dynamic target resolution or RAG accuracy. Those claims require Phase 3 path-sensitive fields and Phase 4 retrieval evaluation.
 
 Accuracy evaluation should report:
 
