@@ -21,5 +21,5 @@
                MOVE 30 TO WS-D
            END-IF
            MOVE 99 TO CHILD-A
-           MOVE 7 TO WS-E
+           COMPUTE WS-E = WS-A + 5
            GOBACK.

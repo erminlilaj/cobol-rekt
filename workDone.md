@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-15 — Phase 2.6d numeric expression constant propagation
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-propagation-phase2.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added source-preserving numeric expression propagation for `COMPUTE` nodes when every variable reference is already proven numeric at node entry. The sidecar now uses analysis version `0.9` and status `expression_constant_propagation`; the evaluator is intentionally limited to numeric literals, proven numeric variables, parentheses, unary signs, addition, subtraction, multiplication, and exact division.
+**Why:** This is the next safe transfer rule after runtime/input/output kills and variable-copy propagation. It proves useful facts like `COMPUTE WS-E = WS-A + 5 -> WS-E = 15` without rewriting CFG text, source text, `assignment_facts`, dynamic CALL/CICS fields, or RAG chunks.
+
+---
+
 ## 2026-05-14 — Phase 2.6c variable-copy constant propagation
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
