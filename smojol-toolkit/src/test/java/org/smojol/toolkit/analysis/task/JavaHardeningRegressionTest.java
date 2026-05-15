@@ -4,15 +4,21 @@ import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.mojo.algorithms.domain.FlowNodeType;
 import com.mojo.algorithms.id.UUIDProvider;
 import com.mojo.algorithms.task.AnalysisTaskResult;
 import com.mojo.algorithms.task.AnalysisTaskResultError;
 import com.mojo.algorithms.task.CommandLineAnalysisTask;
 import com.mojo.algorithms.visualisation.FlowchartOutputFormat;
+import org.smojol.common.ast.SerialisableCFGFlowNode;
+import org.smojol.common.ast.SerialisableEdge;
 import org.junit.jupiter.api.Test;
 import org.smojol.common.dialect.LanguageDialect;
 import org.smojol.common.logging.LoggingConfig;
 import org.smojol.common.resource.LocalFilesystemOperations;
+import org.smojol.toolkit.analysis.staticvalue.DataflowAnalysisResult;
+import org.smojol.toolkit.analysis.staticvalue.DataflowNodeState;
+import org.smojol.toolkit.analysis.staticvalue.StaticValueDataflowPass;
 import org.smojol.toolkit.analysis.pipeline.ProgramSearch;
 import org.smojol.toolkit.analysis.task.analysis.CodeTaskRunner;
 import org.smojol.toolkit.interpreter.FullProgram;
@@ -356,8 +362,8 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("0.9", dataflow.get("analysis_version").getAsString());
-        assertEquals("expression_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
+        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
         assertTrue(config.get("constant_propagation_enabled").getAsBoolean());
@@ -365,7 +371,7 @@ class JavaHardeningRegressionTest {
         assertTrue(config.get("paragraph_summaries_enabled").getAsBoolean());
         assertTrue(config.get("alias_analysis_enabled").getAsBoolean());
         assertTrue(config.get("alias_kills_enabled").getAsBoolean());
-        assertEquals("expression_constant_propagation", config.get("mode").getAsString());
+        assertEquals("join_diagnostics_constant_propagation", config.get("mode").getAsString());
         assertEquals(1000, config.get("max_iterations").getAsInt());
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
@@ -505,8 +511,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
         JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("0.9", dataflow.get("analysis_version").getAsString());
-        assertEquals("expression_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
+        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject childWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "MOVE \"A\" TO CHILD-A", "MOVE");
@@ -597,10 +603,12 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("constant-propagation-phase2.cbl.report/cfg/cfg-constant-propagation-phase2.cbl.json");
         JsonObject dataflow = readJson("constant-propagation-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("0.9", dataflow.get("analysis_version").getAsString());
-        assertEquals("expression_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
+        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("constant_propagation_enabled").getAsBoolean());
         assertFalse(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
+        assertEquals("join_diagnostics_constant_propagation",
+                dataflow.getAsJsonObject("config").get("mode").getAsString());
 
         JsonObject moveA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "MOVE 10 TO WS-A", "MOVE"));
@@ -630,8 +638,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("runtime-kills-phase26a.cbl.report/cfg/cfg-runtime-kills-phase26a.cbl.json");
         JsonObject dataflow = readJson("runtime-kills-phase26a.cbl.report/static_analysis/dataflow.json");
-        assertEquals("0.9", dataflow.get("analysis_version").getAsString());
-        assertEquals("expression_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
+        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject acceptA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "ACCEPT WS-A FROM DATE", "ACCEPT"));
@@ -702,8 +710,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("output-kills-phase26b.cbl.report/cfg/cfg-output-kills-phase26b.cbl.json");
         JsonObject dataflow = readJson("output-kills-phase26b.cbl.report/static_analysis/dataflow.json");
-        assertEquals("0.9", dataflow.get("analysis_version").getAsString());
-        assertEquals("expression_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
+        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "READ IN-FILE INTO WS-READ", "READ"));
@@ -795,7 +803,33 @@ class JavaHardeningRegressionTest {
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
         assertEquals(3, summary.get("kill_count").getAsInt());
+        assertEquals(0, summary.get("diagnostic_count").getAsInt());
         assertTrue(summary.get("converged").getAsBoolean());
+    }
+
+    @Test
+    void dataflowReportsJoinDiagnosticWhenPredecessorsDisagreeOnConstant() {
+        TestCFGNode move20 = new TestCFGNode("move-20", "MOVE 20 TO WS-D", FlowNodeType.MOVE,
+                List.of(), List.of("WS-D"), moveAssignmentFact("WS-D", "20"));
+        TestCFGNode move30 = new TestCFGNode("move-30", "MOVE 30 TO WS-D", FlowNodeType.MOVE,
+                List.of(), List.of("WS-D"), moveAssignmentFact("WS-D", "30"));
+        TestCFGNode join = new TestCFGNode("join-node", "CONTINUE", FlowNodeType.CONTINUE,
+                List.of(), List.of(), Map.of());
+
+        DataflowAnalysisResult result = new StaticValueDataflowPass().buildSkeleton("join-diagnostic-test.cbl",
+                List.of(move20, move30, join),
+                List.of(
+                        new SerialisableEdge("edge-20", "move-20", "join-node", "FOLLOWED_BY"),
+                        new SerialisableEdge("edge-30", "move-30", "join-node", "FOLLOWED_BY")));
+
+        DataflowNodeState joinState = result.nodeStates().get("join-node");
+        assertFalse(joinState.entryConstants().containsKey("WS-D"));
+        assertEquals(1, joinState.diagnostics().size());
+        JsonObject diagnostic = GSON.toJsonTree(joinState.diagnostics().get(0)).getAsJsonObject();
+        JsonArray diagnostics = new JsonArray();
+        diagnostics.add(diagnostic);
+        assertJoinDiagnosticForDroppedConstant(diagnostics, "WS-D", List.of("20", "30"));
+        assertEquals(1, result.summary().get("diagnostic_count"));
     }
 
     @Test
@@ -1252,6 +1286,29 @@ class JavaHardeningRegressionTest {
         assertEquals("java_static_value_dataflow", kill.get("provenance_source").getAsString());
     }
 
+    private void assertJoinDiagnosticForDroppedConstant(JsonArray diagnostics, String variable,
+                                                        List<String> expectedIncomingValues) {
+        assertEquals(1, diagnostics.size());
+        JsonObject diagnostic = diagnostics.get(0).getAsJsonObject();
+        assertEquals("DATAFLOW_CONSTANT_DROPPED_AT_JOIN", diagnostic.get("code").getAsString());
+        assertEquals("info", diagnostic.get("severity").getAsString());
+        assertEquals("merge", diagnostic.get("category").getAsString());
+        assertEquals(variable, diagnostic.get("variable").getAsString());
+        assertEquals("conflicting_predecessor_constants", diagnostic.get("reason").getAsString());
+        assertEquals("java_static_value_dataflow", diagnostic.get("provenance_source").getAsString());
+        assertEquals(2, diagnostic.getAsJsonArray("predecessor_node_ids").size());
+        assertEquals(expectedIncomingValues,
+                incomingNormalizedValues(diagnostic.getAsJsonArray("incoming_values")));
+    }
+
+    private List<String> incomingNormalizedValues(JsonArray incomingValues) {
+        return jsonObjects(incomingValues).stream()
+                .filter(value -> value.get("present").getAsBoolean())
+                .map(value -> value.get("normalized_value").getAsString())
+                .sorted()
+                .toList();
+    }
+
     private void assertNumericConstant(JsonObject constants, String variable, String rawLexeme, String decimal,
                                        int scale, int precision, String sign) {
         assertTrue(constants.has(variable), "Missing constant for " + variable);
@@ -1352,6 +1409,24 @@ class JavaHardeningRegressionTest {
         if (array == null) return objects;
         array.forEach(element -> objects.add(element.getAsJsonObject()));
         return objects;
+    }
+
+    private static Map<String, Object> moveAssignmentFact(String targetVariable, String sourceValue) {
+        Map<String, Object> fact = new java.util.LinkedHashMap<>();
+        fact.put("target_variable", targetVariable);
+        fact.put("source_value", sourceValue);
+        fact.put("source_kind", "literal");
+        fact.put("statement_type", "MOVE");
+        fact.put("provenance_source", "test_static_value_dataflow");
+        return Map.of("assignment_facts", List.of(fact));
+    }
+
+    private static final class TestCFGNode extends SerialisableCFGFlowNode {
+        private TestCFGNode(String id, String originalText, FlowNodeType type, List<String> variablesRead,
+                            List<String> variablesModified, Map<String, Object> metadata) {
+            super(id, originalText, originalText, originalText, type, List.of(), metadata,
+                    variablesRead, variablesModified, "test_static_value_dataflow");
+        }
     }
 
     private Map<String, List<AnalysisTaskResult>> runTasks(TaskRunnerMode mode,

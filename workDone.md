@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-15 — Phase 2.6e join diagnostics for dropped constants
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added source-preserving node-level diagnostics for real multi-predecessor joins where all incoming paths prove a variable constant but disagree on the value. The sidecar now uses analysis version `1.0` and status `join_diagnostics_constant_propagation`; `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` records predecessor IDs and incoming values without changing entry/exit constants.
+**Why:** The propagation solver already dropped conflicting constants safely; this checkpoint makes that conservative decision auditable for humans and downstream tools without rewriting source, CFG text, assignment facts, dynamic CALL/CICS fields, or RAG chunks.
+
+---
+
 ## 2026-05-15 — Phase 2.6d numeric expression constant propagation
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/constant-propagation-phase2.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

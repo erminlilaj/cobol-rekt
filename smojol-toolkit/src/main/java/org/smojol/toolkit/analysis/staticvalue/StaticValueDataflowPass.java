@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "0.9";
+    private static final String ANALYSIS_VERSION = "1.0";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -60,7 +60,7 @@ public class StaticValueDataflowPass {
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "expression_constant_propagation",
+                "join_diagnostics_constant_propagation",
                 config(),
                 summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
                         nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
@@ -78,7 +78,7 @@ public class StaticValueDataflowPass {
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "expression_constant_propagation");
+        config.put("mode", "join_diagnostics_constant_propagation");
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }
@@ -94,7 +94,9 @@ public class StaticValueDataflowPass {
         summary.put("exit_constant_count", nodeStates.values().stream()
                 .mapToInt(state -> state.exitConstants().size()).sum());
         summary.put("kill_count", killCount);
-        summary.put("diagnostic_count", converged ? 0 : 1);
+        int nodeDiagnosticCount = nodeStates.values().stream()
+                .mapToInt(state -> state.diagnostics().size()).sum();
+        summary.put("diagnostic_count", nodeDiagnosticCount + (converged ? 0 : 1));
         summary.put("alias_set_count", aliasSetCount);
         summary.put("paragraph_summary_count", paragraphSummaryCount);
         summary.put("iteration_count", iterationCount);
@@ -130,15 +132,97 @@ public class StaticValueDataflowPass {
             }
         }
 
+        Map<String, List<Map<String, Object>>> mergeDiagnosticsByNode =
+                mergeDiagnosticsByNode(nodes, predecessors, exitStates);
         Map<String, DataflowNodeState> nodeStates = new LinkedHashMap<>();
         for (SerialisableCFGFlowNode node : nodes) {
             nodeStates.put(node.getId(), new DataflowNodeState(
                     outputState(entryStates.get(node.getId())),
                     outputState(exitStates.get(node.getId())),
                     killsByNode.get(node.getId()),
-                    List.of()));
+                    mergeDiagnosticsByNode.get(node.getId())));
         }
         return new PropagationResult(nodeStates, iterationCount, converged, diagnostics(converged));
+    }
+
+    private Map<String, List<Map<String, Object>>> mergeDiagnosticsByNode(List<SerialisableCFGFlowNode> nodes,
+            Map<String, List<String>> predecessors,
+            Map<String, Map<String, Map<String, Object>>> exitStates) {
+        Map<String, List<Map<String, Object>>> diagnosticsByNode = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) diagnosticsByNode.put(node.getId(), List.of());
+
+        for (SerialisableCFGFlowNode node : nodes) {
+            List<String> predecessorIds = sortedStrings(predecessors.get(node.getId()));
+            if (predecessorIds.size() < 2) continue;
+
+            Set<String> variables = new TreeSet<>();
+            for (String predecessorId : predecessorIds) variables.addAll(exitStates.get(predecessorId).keySet());
+
+            List<Map<String, Object>> diagnostics = new ArrayList<>();
+            for (String variable : variables) {
+                List<Map<String, Object>> incomingValues = incomingValues(variable, predecessorIds, exitStates);
+                List<Map<String, Object>> presentValues = incomingValues.stream()
+                        .filter(incoming -> Boolean.TRUE.equals(incoming.get("present")))
+                        .map(this::compactIncomingValue)
+                        .toList();
+                if (presentValues.size() != predecessorIds.size() || allValuesEqual(presentValues)) continue;
+                diagnostics.add(mergeDiagnostic(variable, predecessorIds, incomingValues));
+            }
+            if (!diagnostics.isEmpty()) diagnosticsByNode.put(node.getId(), diagnostics);
+        }
+        return diagnosticsByNode;
+    }
+
+    private List<Map<String, Object>> incomingValues(String variable, List<String> predecessorIds,
+            Map<String, Map<String, Map<String, Object>>> exitStates) {
+        List<Map<String, Object>> values = new ArrayList<>();
+        for (String predecessorId : predecessorIds) {
+            Map<String, Object> value = exitStates.get(predecessorId).get(variable);
+            Map<String, Object> incoming = new LinkedHashMap<>();
+            incoming.put("predecessor_node_id", predecessorId);
+            incoming.put("present", value != null);
+            if (value != null) incoming.putAll(compactValue(value));
+            values.add(incoming);
+        }
+        return values;
+    }
+
+    private Map<String, Object> compactIncomingValue(Map<String, Object> incomingValue) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        for (String key : List.of("state", "kind", "normalized_value", "display_value")) {
+            compact.put(key, incomingValue.get(key));
+        }
+        return compact;
+    }
+
+    private Map<String, Object> compactValue(Map<String, Object> value) {
+        Map<String, Object> compact = new LinkedHashMap<>();
+        for (String key : List.of("state", "kind", "normalized_value", "display_value")) {
+            if (value.containsKey(key)) compact.put(key, value.get(key));
+        }
+        return compact;
+    }
+
+    private boolean allValuesEqual(List<Map<String, Object>> values) {
+        if (values.isEmpty()) return true;
+        Map<String, Object> first = values.getFirst();
+        return values.stream().allMatch(first::equals);
+    }
+
+    private Map<String, Object> mergeDiagnostic(String variable, List<String> predecessorIds,
+                                                List<Map<String, Object>> incomingValues) {
+        Map<String, Object> diagnostic = new LinkedHashMap<>();
+        diagnostic.put("code", "DATAFLOW_CONSTANT_DROPPED_AT_JOIN");
+        diagnostic.put("severity", "info");
+        diagnostic.put("category", "merge");
+        diagnostic.put("variable", variable);
+        diagnostic.put("reason", "conflicting_predecessor_constants");
+        diagnostic.put("predecessor_node_ids", predecessorIds);
+        diagnostic.put("incoming_values", incomingValues);
+        diagnostic.put("message", "Constant for " + variable
+                + " was dropped at CFG join because predecessor paths prove different values.");
+        diagnostic.put("provenance_source", SUMMARY_SOURCE);
+        return diagnostic;
     }
 
     private Map<String, List<Map<String, Object>>> killsByNode(List<SerialisableCFGFlowNode> nodes,
