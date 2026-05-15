@@ -362,8 +362,8 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
-        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.1", dataflow.get("analysis_version").getAsString());
+        assertEquals("loop_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
         assertTrue(config.get("constant_propagation_enabled").getAsBoolean());
@@ -371,7 +371,7 @@ class JavaHardeningRegressionTest {
         assertTrue(config.get("paragraph_summaries_enabled").getAsBoolean());
         assertTrue(config.get("alias_analysis_enabled").getAsBoolean());
         assertTrue(config.get("alias_kills_enabled").getAsBoolean());
-        assertEquals("join_diagnostics_constant_propagation", config.get("mode").getAsString());
+        assertEquals("loop_diagnostics_constant_propagation", config.get("mode").getAsString());
         assertEquals(1000, config.get("max_iterations").getAsInt());
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
@@ -511,8 +511,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
         JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
-        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.1", dataflow.get("analysis_version").getAsString());
+        assertEquals("loop_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject childWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "MOVE \"A\" TO CHILD-A", "MOVE");
@@ -603,11 +603,11 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("constant-propagation-phase2.cbl.report/cfg/cfg-constant-propagation-phase2.cbl.json");
         JsonObject dataflow = readJson("constant-propagation-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
-        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.1", dataflow.get("analysis_version").getAsString());
+        assertEquals("loop_diagnostics_constant_propagation", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("constant_propagation_enabled").getAsBoolean());
         assertFalse(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
-        assertEquals("join_diagnostics_constant_propagation",
+        assertEquals("loop_diagnostics_constant_propagation",
                 dataflow.getAsJsonObject("config").get("mode").getAsString());
 
         JsonObject moveA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -638,8 +638,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("runtime-kills-phase26a.cbl.report/cfg/cfg-runtime-kills-phase26a.cbl.json");
         JsonObject dataflow = readJson("runtime-kills-phase26a.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
-        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.1", dataflow.get("analysis_version").getAsString());
+        assertEquals("loop_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject acceptA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "ACCEPT WS-A FROM DATE", "ACCEPT"));
@@ -710,8 +710,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("output-kills-phase26b.cbl.report/cfg/cfg-output-kills-phase26b.cbl.json");
         JsonObject dataflow = readJson("output-kills-phase26b.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.0", dataflow.get("analysis_version").getAsString());
-        assertEquals("join_diagnostics_constant_propagation", dataflow.get("status").getAsString());
+        assertEquals("1.1", dataflow.get("analysis_version").getAsString());
+        assertEquals("loop_diagnostics_constant_propagation", dataflow.get("status").getAsString());
 
         JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "READ IN-FILE INTO WS-READ", "READ"));
@@ -829,6 +829,36 @@ class JavaHardeningRegressionTest {
         JsonArray diagnostics = new JsonArray();
         diagnostics.add(diagnostic);
         assertJoinDiagnosticForDroppedConstant(diagnostics, "WS-D", List.of("20", "30"));
+        assertEquals(1, result.summary().get("diagnostic_count"));
+    }
+
+    @Test
+    void dataflowReportsLoopDiagnosticForModifiedVariableInCycle() {
+        TestCFGNode move1 = new TestCFGNode("move-1", "MOVE 1 TO WS-A", FlowNodeType.MOVE,
+                List.of(), List.of("WS-A"), moveAssignmentFact("WS-A", "1"));
+        TestCFGNode addInLoop = new TestCFGNode("add-in-loop", "ADD 1 TO WS-A", FlowNodeType.ADD,
+                List.of("WS-A"), List.of("WS-A"), Map.of());
+        TestCFGNode afterLoop = new TestCFGNode("after-loop", "MOVE WS-A TO WS-B", FlowNodeType.MOVE,
+                List.of("WS-A"), List.of("WS-B"), Map.of());
+
+        DataflowAnalysisResult result = new StaticValueDataflowPass().buildSkeleton("loop-diagnostic-test.cbl",
+                List.of(move1, addInLoop, afterLoop),
+                List.of(
+                        new SerialisableEdge("edge-entry", "move-1", "add-in-loop", "FOLLOWED_BY"),
+                        new SerialisableEdge("edge-cycle", "add-in-loop", "add-in-loop", "FOLLOWED_BY"),
+                        new SerialisableEdge("edge-exit", "add-in-loop", "after-loop", "FOLLOWED_BY")));
+
+        DataflowNodeState loopState = result.nodeStates().get("add-in-loop");
+        assertFalse(loopState.entryConstants().containsKey("WS-A"));
+        assertFalse(loopState.exitConstants().containsKey("WS-A"));
+        assertEquals(1, loopState.diagnostics().size());
+        assertLoopDiagnostic(loopState.diagnostics().get(0), "WS-A", List.of("add-in-loop"), "ADD");
+
+        DataflowNodeState afterLoopState = result.nodeStates().get("after-loop");
+        assertFalse(afterLoopState.entryConstants().containsKey("WS-A"));
+        assertFalse(afterLoopState.exitConstants().containsKey("WS-B"));
+        assertTrue((Boolean) result.summary().get("converged"));
+        assertEquals(1000, result.summary().get("max_iterations"));
         assertEquals(1, result.summary().get("diagnostic_count"));
     }
 
@@ -1307,6 +1337,19 @@ class JavaHardeningRegressionTest {
                 .map(value -> value.get("normalized_value").getAsString())
                 .sorted()
                 .toList();
+    }
+
+    private void assertLoopDiagnostic(Map<String, Object> rawDiagnostic, String variable,
+                                      List<String> componentNodeIds, String statementType) {
+        JsonObject diagnostic = GSON.toJsonTree(rawDiagnostic).getAsJsonObject();
+        assertEquals("DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED", diagnostic.get("code").getAsString());
+        assertEquals("info", diagnostic.get("severity").getAsString());
+        assertEquals("loop", diagnostic.get("category").getAsString());
+        assertEquals(variable, diagnostic.get("variable").getAsString());
+        assertEquals("modified_inside_cfg_cycle", diagnostic.get("reason").getAsString());
+        assertEquals(componentNodeIds, jsonArrayStrings(diagnostic.getAsJsonArray("component_node_ids")));
+        assertEquals(statementType, diagnostic.get("statement_type").getAsString());
+        assertEquals("java_static_value_dataflow", diagnostic.get("provenance_source").getAsString());
     }
 
     private void assertNumericConstant(JsonObject constants, String variable, String rawLexeme, String decimal,

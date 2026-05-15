@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.0";
+    private static final String ANALYSIS_VERSION = "1.1";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -60,7 +60,7 @@ public class StaticValueDataflowPass {
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "join_diagnostics_constant_propagation",
+                "loop_diagnostics_constant_propagation",
                 config(),
                 summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
                         nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
@@ -78,7 +78,7 @@ public class StaticValueDataflowPass {
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "join_diagnostics_constant_propagation");
+        config.put("mode", "loop_diagnostics_constant_propagation");
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }
@@ -134,15 +134,29 @@ public class StaticValueDataflowPass {
 
         Map<String, List<Map<String, Object>>> mergeDiagnosticsByNode =
                 mergeDiagnosticsByNode(nodes, predecessors, exitStates);
+        Map<String, List<Map<String, Object>>> nodeDiagnostics =
+                appendDiagnostics(mergeDiagnosticsByNode, loopDiagnosticsByNode(nodes, edges));
         Map<String, DataflowNodeState> nodeStates = new LinkedHashMap<>();
         for (SerialisableCFGFlowNode node : nodes) {
             nodeStates.put(node.getId(), new DataflowNodeState(
                     outputState(entryStates.get(node.getId())),
                     outputState(exitStates.get(node.getId())),
                     killsByNode.get(node.getId()),
-                    mergeDiagnosticsByNode.get(node.getId())));
+                    nodeDiagnostics.get(node.getId())));
         }
         return new PropagationResult(nodeStates, iterationCount, converged, diagnostics(converged));
+    }
+
+    private Map<String, List<Map<String, Object>>> appendDiagnostics(
+            Map<String, List<Map<String, Object>>> primary,
+            Map<String, List<Map<String, Object>>> additional) {
+        Map<String, List<Map<String, Object>>> combined = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Map<String, Object>>> entry : primary.entrySet()) {
+            List<Map<String, Object>> diagnostics = new ArrayList<>(entry.getValue());
+            diagnostics.addAll(additional.getOrDefault(entry.getKey(), List.of()));
+            combined.put(entry.getKey(), diagnostics);
+        }
+        return combined;
     }
 
     private Map<String, List<Map<String, Object>>> mergeDiagnosticsByNode(List<SerialisableCFGFlowNode> nodes,
@@ -221,6 +235,119 @@ public class StaticValueDataflowPass {
         diagnostic.put("incoming_values", incomingValues);
         diagnostic.put("message", "Constant for " + variable
                 + " was dropped at CFG join because predecessor paths prove different values.");
+        diagnostic.put("provenance_source", SUMMARY_SOURCE);
+        return diagnostic;
+    }
+
+    private Map<String, List<Map<String, Object>>> loopDiagnosticsByNode(List<SerialisableCFGFlowNode> nodes,
+                                                                         List<SerialisableEdge> edges) {
+        Map<String, List<Map<String, Object>>> diagnosticsByNode = new LinkedHashMap<>();
+        Map<String, SerialisableCFGFlowNode> nodesById = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) {
+            diagnosticsByNode.put(node.getId(), List.of());
+            nodesById.put(node.getId(), node);
+        }
+
+        for (Set<String> component : stronglyConnectedComponents(nodes, edges)) {
+            if (!isCycleComponent(component, edges)) continue;
+            List<String> componentNodeIds = component.stream().sorted().toList();
+            for (String nodeId : componentNodeIds) {
+                SerialisableCFGFlowNode node = nodesById.get(nodeId);
+                if (node == null) continue;
+                List<Map<String, Object>> diagnostics = new ArrayList<>();
+                for (String variable : sortedStrings(node.getVariablesModified())) {
+                    diagnostics.add(loopDiagnostic(node, variable, componentNodeIds));
+                }
+                if (!diagnostics.isEmpty()) diagnosticsByNode.put(nodeId, diagnostics);
+            }
+        }
+        return diagnosticsByNode;
+    }
+
+    private List<Set<String>> stronglyConnectedComponents(List<SerialisableCFGFlowNode> nodes,
+                                                          List<SerialisableEdge> edges) {
+        Map<String, List<String>> successors = successors(nodes, edges);
+        Map<String, Integer> indexes = new TreeMap<>();
+        Map<String, Integer> lowlinks = new TreeMap<>();
+        List<String> stack = new ArrayList<>();
+        Set<String> onStack = new TreeSet<>();
+        List<Set<String>> components = new ArrayList<>();
+        int[] nextIndex = {0};
+
+        for (String nodeId : successors.keySet()) {
+            if (!indexes.containsKey(nodeId)) {
+                strongConnect(nodeId, successors, indexes, lowlinks, stack, onStack, components, nextIndex);
+            }
+        }
+        return components;
+    }
+
+    private void strongConnect(String nodeId, Map<String, List<String>> successors, Map<String, Integer> indexes,
+                               Map<String, Integer> lowlinks, List<String> stack, Set<String> onStack,
+                               List<Set<String>> components, int[] nextIndex) {
+        indexes.put(nodeId, nextIndex[0]);
+        lowlinks.put(nodeId, nextIndex[0]);
+        nextIndex[0]++;
+        stack.add(nodeId);
+        onStack.add(nodeId);
+
+        for (String successorId : successors.getOrDefault(nodeId, List.of())) {
+            if (!indexes.containsKey(successorId)) {
+                strongConnect(successorId, successors, indexes, lowlinks, stack, onStack, components, nextIndex);
+                lowlinks.put(nodeId, Math.min(lowlinks.get(nodeId), lowlinks.get(successorId)));
+            } else if (onStack.contains(successorId)) {
+                lowlinks.put(nodeId, Math.min(lowlinks.get(nodeId), indexes.get(successorId)));
+            }
+        }
+
+        if (!Objects.equals(lowlinks.get(nodeId), indexes.get(nodeId))) return;
+        Set<String> component = new TreeSet<>();
+        while (!stack.isEmpty()) {
+            String member = stack.removeLast();
+            onStack.remove(member);
+            component.add(member);
+            if (member.equals(nodeId)) break;
+        }
+        components.add(component);
+    }
+
+    private Map<String, List<String>> successors(List<SerialisableCFGFlowNode> nodes, List<SerialisableEdge> edges) {
+        Set<String> nodeIds = new TreeSet<>();
+        Map<String, List<String>> successors = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) {
+            nodeIds.add(node.getId());
+            successors.put(node.getId(), new ArrayList<>());
+        }
+        for (SerialisableEdge edge : edges) {
+            if (!nodeIds.contains(edge.fromNodeID()) || !nodeIds.contains(edge.toNodeID())) continue;
+            successors.get(edge.fromNodeID()).add(edge.toNodeID());
+        }
+        successors.replaceAll((ignored, values) -> sortedStrings(values));
+        return successors;
+    }
+
+    private boolean isCycleComponent(Set<String> component, List<SerialisableEdge> edges) {
+        if (component.size() > 1) return true;
+        String onlyNode = component.stream().findFirst().orElse(null);
+        if (onlyNode == null) return false;
+        return edges.stream().anyMatch(edge -> onlyNode.equals(edge.fromNodeID()) && onlyNode.equals(edge.toNodeID()));
+    }
+
+    private Map<String, Object> loopDiagnostic(SerialisableCFGFlowNode node, String variable,
+                                               List<String> componentNodeIds) {
+        Map<String, Object> diagnostic = new LinkedHashMap<>();
+        diagnostic.put("code", "DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED");
+        diagnostic.put("severity", "info");
+        diagnostic.put("category", "loop");
+        diagnostic.put("variable", canonicalVariable(variable));
+        diagnostic.put("reason", "modified_inside_cfg_cycle");
+        diagnostic.put("component_node_ids", componentNodeIds);
+        diagnostic.put("statement_type", node.getType().name());
+        putIfPresent(diagnostic, "statement_text", node.getOriginalText());
+        putIfPresent(diagnostic, "source_line", node.getSourceLine());
+        putIfPresent(diagnostic, "source_column", node.getSourceColumn());
+        diagnostic.put("message", "Loop-carried constant for " + canonicalVariable(variable)
+                + " is not inferred because the variable is modified inside a CFG cycle.");
         diagnostic.put("provenance_source", SUMMARY_SOURCE);
         return diagnostic;
     }

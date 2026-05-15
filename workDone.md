@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-15 — Phase 2.6f loop-carried constant diagnostics
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added source-preserving diagnostics for variables modified inside CFG cycles. The sidecar now uses analysis version `1.1` and status `loop_diagnostics_constant_propagation`; `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` records the modified variable, cycle component node IDs, and statement evidence while leaving entry/exit constants conservative.
+**Why:** Loop-carried values are unsafe to infer without full COBOL loop semantics. This checkpoint prevents stale constants from being mistaken for final loop values and documents the limitation directly in the dataflow artifact.
+
+---
+
 ## 2026-05-15 — Phase 2.6e join diagnostics for dropped constants
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
