@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-15 — Phase 3.1a alphanumeric dataflow constants
+
+**File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/value/ConstantStaticValue.java`, `smojol-core/src/test/java/org/smojol/common/staticanalysis/value/StaticValueTest.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added source-preserving alphanumeric constants to the dataflow sidecar. Quoted `MOVE` literals now produce `ALPHANUMERIC` constants, `MOVE <known-var> TO <target>` copies proven numeric or alphanumeric constants, and runtime/alias kills still remove stale values. The dataflow analysis version is now `1.2` with status/mode `alphanumeric_constant_propagation`; path-sensitive CALL/CICS fields remain disabled.
+**Why:** Phase 3 path-sensitive dynamic target resolution needs proven program/resource name strings at CALL/CICS node entry. This checkpoint adds only that prerequisite and documents the examples before implementing target annotations.
+
+---
+
 ## 2026-05-15 — Phase 3 path-sensitive target resolution plan
 
 **File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

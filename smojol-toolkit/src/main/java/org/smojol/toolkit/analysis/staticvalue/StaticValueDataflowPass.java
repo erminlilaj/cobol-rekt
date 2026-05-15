@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.1";
+    private static final String ANALYSIS_VERSION = "1.2";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -60,7 +60,7 @@ public class StaticValueDataflowPass {
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "loop_diagnostics_constant_propagation",
+                "alphanumeric_constant_propagation",
                 config(),
                 summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
                         nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
@@ -78,7 +78,7 @@ public class StaticValueDataflowPass {
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "loop_diagnostics_constant_propagation");
+        config.put("mode", "alphanumeric_constant_propagation");
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }
@@ -471,7 +471,7 @@ public class StaticValueDataflowPass {
         List<String> sourceVariables = sortedStrings(node.getVariablesRead());
         if (sourceVariables.size() != 1) return;
         Map<String, Object> sourceValue = entry.get(canonicalVariable(sourceVariables.get(0)));
-        if (sourceValue == null || !isNumericConstant(sourceValue)) return;
+        if (sourceValue == null || !isSupportedCopyConstant(sourceValue)) return;
         for (String targetVariable : sortedStrings(node.getVariablesModified())) {
             constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(sourceValue));
         }
@@ -497,6 +497,8 @@ public class StaticValueDataflowPass {
         if (!(target instanceof String targetVariable) || !(sourceValue instanceof String literal)) return;
         numericLiteralValue(literal).ifPresent(value ->
                 constants.put(canonicalVariable(targetVariable), value));
+        alphanumericLiteralValue(literal).ifPresent(value ->
+                constants.put(canonicalVariable(targetVariable), value));
         String canonicalSource = canonicalVariable(literal);
         if (!entry.containsKey(canonicalSource)) return;
         constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(entry.get(canonicalSource)));
@@ -509,6 +511,25 @@ public class StaticValueDataflowPass {
         } catch (NumberFormatException ignored) {
             return java.util.Optional.empty();
         }
+    }
+
+    private java.util.Optional<Map<String, Object>> alphanumericLiteralValue(String literal) {
+        if (!isQuotedLiteral(literal)) return java.util.Optional.empty();
+        String normalized = literal.substring(1, literal.length() - 1).toUpperCase(Locale.ROOT);
+        return java.util.Optional.of(ConstantStaticValue.alphanumeric(literal, normalized).toJsonMap());
+    }
+
+    private boolean isQuotedLiteral(String literal) {
+        if (literal == null || literal.length() < 2) return false;
+        char first = literal.charAt(0);
+        char last = literal.charAt(literal.length() - 1);
+        return (first == '\'' && last == '\'') || (first == '"' && last == '"');
+    }
+
+    private boolean isSupportedCopyConstant(Map<String, Object> value) {
+        if (!"CONSTANT".equals(value.get("state"))) return false;
+        Object kind = value.get("kind");
+        return "NUMERIC".equals(kind) || "ALPHANUMERIC".equals(kind);
     }
 
     private boolean isNumericConstant(Map<String, Object> value) {

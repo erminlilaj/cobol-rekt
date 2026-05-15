@@ -309,7 +309,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2.6f | `DONE` | Add loop-carried constant diagnostics for CFG cycles. | Solver-level tests prove a variable modified inside a CFG cycle is not propagated after the loop and emits exact `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` evidence while the solver still converges. |
 | 2.7 | `DONE` | Record Phase 2 accuracy/performance stats. | This document now consolidates the Phase 2 examples, fixture metrics, supported transfer rules, diagnostics, limitations, and reproducibility commands. Memory profiling remains deferred to a corpus benchmark because the current Java hardening tests do not expose stable per-fixture heap measurements. |
 | 3.0 | `DONE` | Write detailed Phase 3 pre-coding plan. | This document now defines the exact ordering, schemas, fixtures, tests, invariants, and risk controls for path-sensitive dynamic `CALL`/CICS facts. |
-| 3.1a | `PENDING` | Add quoted alphanumeric constants to the dataflow sidecar. | `MOVE "PROG-A" TO WS-PGM` and `MOVE WS-PGM TO WS-OTHER` can carry `ALPHANUMERIC` constants through the same fixed-point solver; runtime, alias, and join kills still apply. |
+| 3.1a | `DONE` | Add quoted alphanumeric constants to the dataflow sidecar. | `MOVE "PROG-A" TO WS-PGM` and `MOVE WS-PGM TO WS-COPY` now carry `ALPHANUMERIC` constants through the same fixed-point solver; runtime, alias, and join kills still apply. Path-sensitive target fields remain disabled. |
 | 3.1b | `PENDING` | Add path-sensitive dynamic `CALL` metadata fields. | Dynamic `CALL WS-PGM` reads `WS-PGM` from node `entry_constants` and emits new `path_sensitive_call_*` fields without changing `resolved_call_target`, `call_target_source`, or `dynamic_call_resolution_confidence`. |
 | 3.2a | `PENDING` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-PGM)` and `QUEUE(WS-QUEUE)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`. |
 | 3.2b | `PENDING` | Add path-sensitive CICS argument facts. | Multiple CICS identifier arguments can be reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged. |
@@ -342,6 +342,12 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2026-05-15 | `DONE` | Added join diagnostics after fixed-point convergence. The solver still drops conflicting constants at joins, but now emits a node-level `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` diagnostic when real CFG predecessors prove different constants for the same variable. This checkpoint also bumps the dataflow analysis version to `1.0` and mode to `join_diagnostics_constant_propagation`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 38 tests, total time 15.119s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 50 tests, 2 skipped, total time 14.806s. Solver-level metrics: the synthetic join test has 3 node states, 2 edges, 1 join diagnostic, `WS-D` absent at join entry, and incoming values `20` and `30` recorded. Fixture metrics remain source-preserving: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 33 entry constants, 40 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 32,413-byte pretty-printed sidecar. |
 | 2026-05-15 | `DONE` | Added loop-carried constant diagnostics for CFG cycles. The solver now detects strongly connected components after fixed-point convergence and emits `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` when a variable is modified inside a cycle. This is explanatory only: the variable remains absent after the loop unless another safe transfer rule proves it. The dataflow analysis version is now `1.1` and mode is `loop_diagnostics_constant_propagation`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 39 tests, total time 13.351s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 51 tests, 2 skipped, total time 14.507s. Solver-level metrics: the synthetic loop test has 3 node states, 3 edges, 1 loop diagnostic, `WS-A` absent inside and after the loop, `WS-B` not propagated from stale `WS-A`, convergence true, and `max_iterations` 1000 recorded. Fixture metrics remain source-preserving: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 33 entry constants, 40 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 32,413-byte pretty-printed sidecar. |
 | 2026-05-15 | `DONE` | Completed the Phase 2.7 evaluation cleanup. The implementation scope is now described in plain language with examples for literal propagation, variable-copy propagation, expression propagation, runtime kills, joins, loops, and alias kills. The document also records what the tool still does not support, so the project does not overclaim full compiler-style constant propagation. | Documentation-only checkpoint. It reuses the last passed implementation verification: targeted `JavaHardeningRegressionTest`, 39 tests, 13.351s; broader `smojol-toolkit` suite, 51 tests, 2 skipped, 14.507s. Reproducibility commands are listed in Section 20. |
+
+### Phase 3 Checkpoints
+
+| Date | Status | What changed | Verification |
+|---|---|---|---|
+| 2026-05-15 | `DONE` | Added Phase 3.1a alphanumeric constant propagation as a prerequisite for path-sensitive targets. The sidecar now represents quoted `MOVE` literals as `ALPHANUMERIC` constants, copies proven alphanumeric values through `MOVE <known-var> TO <target>`, and keeps runtime/input/output/alias kills kind-agnostic. It also bumps the dataflow analysis version to `1.2` and mode/status to `alphanumeric_constant_propagation`. No `path_sensitive_call_*` or `path_sensitive_cics_*` fields are emitted yet. | Targeted checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true -Dtest=StaticValueTest`, 4 tests; `mvn -pl smojol-core install -Dcheckstyle.skip=true -DskipTests`; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 41 tests, total time 15.902s. Broader checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true`, 100 tests, total time 5.258s; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 53 tests, 2 skipped, total time 15.828s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 13 node states, 12 edges, 17 entry constants, 20 exit constants, 1 kill fact, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, and a 12,731-byte pretty-printed sidecar. |
 
 ### Fool-Proof Execution Rules
 
@@ -686,12 +692,11 @@ Planned alphanumeric JSON payload:
   "kind": "ALPHANUMERIC",
   "raw_lexeme": "\"SUBPROG\"",
   "normalized_value": "SUBPROG",
-  "display_value": "SUBPROG",
-  "numeric": null,
-  "figurative": null,
-  "type_context": null
+  "display_value": "SUBPROG"
 }
 ```
+
+`ConstantStaticValue.toJsonMap()` still has nullable payload slots internally, but the current Gson writer omits null map values in emitted artifacts. The committed `dataflow.json` shape therefore omits `numeric`, `figurative`, and `type_context` for alphanumeric constants.
 
 Normalization rule for Phase 3.1a: strip one matching pair of single or double quotes and uppercase the value for target resolution. Preserve the unquoted value in `display_value`. COBOL-specific quote escaping, national literals, hex literals, figurative constants, and case-sensitive external names remain out of scope until tested.
 
@@ -721,6 +726,27 @@ Acceptance tests:
 - `ACCEPT WS-PGM` kills the alphanumeric constant.
 - Conflicting branch values such as `"PROG-A"` and `"PROG-B"` are dropped at a real join.
 - Existing numeric propagation tests still pass unchanged.
+
+Committed Phase 3.1a example:
+
+```cobol
+MOVE "PROG-A" TO WS-PGM
+CALL WS-PGM
+MOVE WS-PGM TO WS-COPY
+MOVE 'PROG-C' TO WS-SINGLE
+MOVE "PROG-D" TO WS-KILLED
+ACCEPT WS-KILLED
+MOVE WS-KILLED TO WS-AFTER-KILL
+```
+
+Expected and tested behavior:
+
+- `MOVE "PROG-A" TO WS-PGM` emits `WS-PGM` as an `ALPHANUMERIC` exit constant.
+- `CALL WS-PGM` sees `WS-PGM = "PROG-A"` in `entry_constants`, but no `path_sensitive_call_target` is emitted yet.
+- `MOVE WS-PGM TO WS-COPY` copies the proven alphanumeric constant.
+- Single-quoted `MOVE 'PROG-C' TO WS-SINGLE` produces the same kind of alphanumeric fact.
+- `ACCEPT WS-KILLED` removes the prior `WS-KILLED = "PROG-D"` fact.
+- `MOVE WS-KILLED TO WS-AFTER-KILL` does not emit a stale `WS-AFTER-KILL` constant after the runtime kill.
 
 #### Phase 3.1b: Path-Sensitive Dynamic CALL Facts
 

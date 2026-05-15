@@ -1,0 +1,19 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. PTHSENS.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-PGM PIC X(8).
+       01 WS-COPY PIC X(8).
+       01 WS-SINGLE PIC X(8).
+       01 WS-KILLED PIC X(8).
+       01 WS-AFTER-KILL PIC X(8).
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           MOVE "PROG-A" TO WS-PGM
+           CALL WS-PGM
+           MOVE WS-PGM TO WS-COPY
+           MOVE 'PROG-C' TO WS-SINGLE
+           MOVE "PROG-D" TO WS-KILLED
+           ACCEPT WS-KILLED
+           MOVE WS-KILLED TO WS-AFTER-KILL
+           GOBACK.

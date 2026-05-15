@@ -20,6 +20,18 @@ public record ConstantStaticValue(StaticValueKind kind, String rawLexeme, String
         );
     }
 
+    public static ConstantStaticValue alphanumeric(String rawLexeme, String normalizedValue) {
+        return new ConstantStaticValue(
+                StaticValueKind.ALPHANUMERIC,
+                rawLexeme,
+                normalizedValue,
+                normalizedValue,
+                null,
+                null,
+                null
+        );
+    }
+
     @Override
     public StaticValueState state() {
         return StaticValueState.CONSTANT;

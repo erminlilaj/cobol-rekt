@@ -50,4 +50,18 @@ class StaticValueTest {
         assertEquals(2, numeric.get("precision"));
         assertEquals("POSITIVE", numeric.get("sign"));
     }
+
+    @Test
+    void alphanumericValueJsonUsesSnakeCaseFieldsAndNoNumericPayload() {
+        Map<String, Object> json = ConstantStaticValue.alphanumeric("\"PROG-A\"", "PROG-A").toJsonMap();
+
+        assertEquals("CONSTANT", json.get("state"));
+        assertEquals("ALPHANUMERIC", json.get("kind"));
+        assertEquals("\"PROG-A\"", json.get("raw_lexeme"));
+        assertEquals("PROG-A", json.get("normalized_value"));
+        assertEquals("PROG-A", json.get("display_value"));
+        assertEquals(null, json.get("numeric"));
+        assertEquals(null, json.get("figurative"));
+        assertEquals(null, json.get("type_context"));
+    }
 }
