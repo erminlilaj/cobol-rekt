@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "0.7";
+    private static final String ANALYSIS_VERSION = "0.8";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -60,7 +60,7 @@ public class StaticValueDataflowPass {
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "output_kill_constant_propagation",
+                "variable_copy_constant_propagation",
                 config(),
                 summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
                         nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
@@ -78,7 +78,7 @@ public class StaticValueDataflowPass {
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "output_kill_constant_propagation");
+        config.put("mode", "variable_copy_constant_propagation");
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }
@@ -200,7 +200,7 @@ public class StaticValueDataflowPass {
             if (variable instanceof String variableName) exit.remove(canonicalVariable(variableName));
         }
 
-        Map<String, Map<String, Object>> producedConstants = producedConstants(node);
+        Map<String, Map<String, Object>> producedConstants = producedConstants(node, entry);
         Set<String> producedTargets = producedConstants.keySet();
         for (String modifiedVariable : sortedStrings(node.getVariablesModified())) {
             String canonicalModified = canonicalVariable(modifiedVariable);
@@ -210,7 +210,8 @@ public class StaticValueDataflowPass {
         return exit;
     }
 
-    private Map<String, Map<String, Object>> producedConstants(SerialisableCFGFlowNode node) {
+    private Map<String, Map<String, Object>> producedConstants(SerialisableCFGFlowNode node,
+                                                               Map<String, Map<String, Object>> entry) {
         Map<String, Map<String, Object>> constants = new TreeMap<>();
         Object foldedFacts = node.getMetadata().get("folded_value_facts");
         if (foldedFacts instanceof List<?> foldedFactList) {
@@ -219,9 +220,22 @@ public class StaticValueDataflowPass {
 
         Object assignmentFacts = node.getMetadata().get("assignment_facts");
         if (assignmentFacts instanceof List<?> assignmentFactList) {
-            for (Object fact : assignmentFactList) addAssignmentConstant(constants, fact);
+            for (Object fact : assignmentFactList) addAssignmentConstant(constants, fact, entry);
         }
+        addMoveCopyConstants(constants, node, entry);
         return constants;
+    }
+
+    private void addMoveCopyConstants(Map<String, Map<String, Object>> constants, SerialisableCFGFlowNode node,
+                                      Map<String, Map<String, Object>> entry) {
+        if (node.getType() != FlowNodeType.MOVE) return;
+        List<String> sourceVariables = sortedStrings(node.getVariablesRead());
+        if (sourceVariables.size() != 1) return;
+        Map<String, Object> sourceValue = entry.get(canonicalVariable(sourceVariables.get(0)));
+        if (sourceValue == null || !isNumericConstant(sourceValue)) return;
+        for (String targetVariable : sortedStrings(node.getVariablesModified())) {
+            constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(sourceValue));
+        }
     }
 
     private void addFoldedConstant(Map<String, Map<String, Object>> constants, Object fact) {
@@ -235,7 +249,8 @@ public class StaticValueDataflowPass {
         constants.put(canonicalVariable(targetVariable), valueMap);
     }
 
-    private void addAssignmentConstant(Map<String, Map<String, Object>> constants, Object fact) {
+    private void addAssignmentConstant(Map<String, Map<String, Object>> constants, Object fact,
+                                       Map<String, Map<String, Object>> entry) {
         if (!(fact instanceof Map<?, ?> rawFact)) return;
         Map<String, Object> assignmentFact = stringKeyMap(rawFact);
         Object target = assignmentFact.get("target_variable");
@@ -243,6 +258,9 @@ public class StaticValueDataflowPass {
         if (!(target instanceof String targetVariable) || !(sourceValue instanceof String literal)) return;
         numericLiteralValue(literal).ifPresent(value ->
                 constants.put(canonicalVariable(targetVariable), value));
+        String canonicalSource = canonicalVariable(literal);
+        if (!entry.containsKey(canonicalSource)) return;
+        constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(entry.get(canonicalSource)));
     }
 
     private java.util.Optional<Map<String, Object>> numericLiteralValue(String literal) {

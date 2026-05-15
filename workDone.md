@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-14 — Phase 2.6c variable-copy constant propagation
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added source-preserving variable-copy propagation for `MOVE <known-variable> TO <target>` using proven numeric entry constants plus existing CFG `variablesRead()`/`variablesModified()` evidence. The sidecar now uses analysis version `0.8` and status `variable_copy_constant_propagation`; expression inference from known variables remains pending, and `assignment_facts` are unchanged.
+**Why:** Runtime/input/output kill rules are now in place, so this safe checkpoint can copy constants only when the source value survived those kills. It proves useful propagation without rewriting source, CFG text, legacy dynamic CALL/CICS fields, or RAG chunks.
+
+---
+
 ## 2026-05-14 — Phase 2.6b runtime-output kill facts
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/output-kills-phase26b.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
