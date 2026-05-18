@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.5";
+    private static final String ANALYSIS_VERSION = "1.6";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -40,6 +40,8 @@ public class StaticValueDataflowPass {
     private static final Pattern INSPECT_TARGET = Pattern.compile(
             "^\\s*INSPECT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern PICTURE_X_RUN = Pattern.compile("X(?:\\((\\d+)\\))?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PICTURE_NUMERIC_TOKEN = Pattern.compile("([S9V])(?:\\((\\d+)\\))?",
+            Pattern.CASE_INSENSITIVE);
     private static final Set<String> CICS_OUTPUT_ARGUMENTS = Set.of("INTO", "SET", "RESP", "RESP2");
 
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
@@ -60,7 +62,9 @@ public class StaticValueDataflowPass {
         Map<String, ParagraphSummary> paragraphSummaries = paragraphSummaries(nodes);
         Map<String, AliasSetSummary> aliasSets = aliasSets(dataStructures);
         Map<String, Integer> alphanumericLengths = alphanumericLengths(dataStructures);
-        PropagationResult propagationResult = propagate(nodes, edges, aliasSets, alphanumericLengths);
+        Map<String, NumericPicture> numericPictures = numericPictures(dataStructures);
+        PropagationResult propagationResult = propagate(nodes, edges, aliasSets, alphanumericLengths,
+                numericPictures, dataStructures != null);
         Map<String, DataflowNodeState> nodeStates = propagationResult.nodeStates();
         int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
         String status = pathSensitiveTargetsEnabled
@@ -118,7 +122,9 @@ public class StaticValueDataflowPass {
 
     private PropagationResult propagate(List<SerialisableCFGFlowNode> nodes, List<SerialisableEdge> edges,
                                         Map<String, AliasSetSummary> aliasSets,
-                                        Map<String, Integer> alphanumericLengths) {
+                                        Map<String, Integer> alphanumericLengths,
+                                        Map<String, NumericPicture> numericPictures,
+                                        boolean numericPictureGatingEnabled) {
         Map<String, List<Map<String, Object>>> killsByNode = killsByNode(nodes, aliasSets);
         Map<String, List<String>> predecessors = predecessors(nodes, edges);
         Map<String, Map<String, Map<String, Object>>> entryStates = emptyStates(nodes);
@@ -132,7 +138,7 @@ public class StaticValueDataflowPass {
             for (SerialisableCFGFlowNode node : nodes) {
                 Map<String, Map<String, Object>> entry = joinedEntry(predecessors.get(node.getId()), exitStates);
                 Map<String, Map<String, Object>> exit = transfer(node, entry, killsByNode.get(node.getId()),
-                        alphanumericLengths);
+                        alphanumericLengths, numericPictures, numericPictureGatingEnabled);
                 if (!entry.equals(entryStates.get(node.getId())) || !exit.equals(exitStates.get(node.getId()))) {
                     changed = true;
                     entryStates.put(node.getId(), entry);
@@ -418,14 +424,16 @@ public class StaticValueDataflowPass {
 
     private Map<String, Map<String, Object>> transfer(SerialisableCFGFlowNode node,
             Map<String, Map<String, Object>> entry, List<Map<String, Object>> kills,
-            Map<String, Integer> alphanumericLengths) {
+            Map<String, Integer> alphanumericLengths, Map<String, NumericPicture> numericPictures,
+            boolean numericPictureGatingEnabled) {
         Map<String, Map<String, Object>> exit = new TreeMap<>(entry);
         for (Map<String, Object> kill : kills) {
             Object variable = kill.get("variable");
             if (variable instanceof String variableName) exit.remove(canonicalVariable(variableName));
         }
 
-        Map<String, Map<String, Object>> producedConstants = producedConstants(node, entry, alphanumericLengths);
+        Map<String, Map<String, Object>> producedConstants = producedConstants(node, entry, alphanumericLengths,
+                numericPictures, numericPictureGatingEnabled);
         Set<String> producedTargets = producedConstants.keySet();
         for (String modifiedVariable : sortedStrings(node.getVariablesModified())) {
             String canonicalModified = canonicalVariable(modifiedVariable);
@@ -437,32 +445,47 @@ public class StaticValueDataflowPass {
 
     private Map<String, Map<String, Object>> producedConstants(SerialisableCFGFlowNode node,
                                                                Map<String, Map<String, Object>> entry,
-                                                               Map<String, Integer> alphanumericLengths) {
+                                                               Map<String, Integer> alphanumericLengths,
+                                                               Map<String, NumericPicture> numericPictures,
+                                                               boolean numericPictureGatingEnabled) {
         Map<String, Map<String, Object>> constants = new TreeMap<>();
         Object foldedFacts = node.getMetadata().get("folded_value_facts");
         if (foldedFacts instanceof List<?> foldedFactList) {
-            for (Object fact : foldedFactList) addFoldedConstant(constants, fact);
+            for (Object fact : foldedFactList) {
+                addFoldedConstant(constants, fact, node, numericPictures, numericPictureGatingEnabled);
+            }
         }
 
         Object assignmentFacts = node.getMetadata().get("assignment_facts");
         if (assignmentFacts instanceof List<?> assignmentFactList) {
-            for (Object fact : assignmentFactList) addAssignmentConstant(constants, fact, entry, alphanumericLengths);
+            for (Object fact : assignmentFactList) {
+                addAssignmentConstant(constants, fact, entry, alphanumericLengths, numericPictures,
+                        numericPictureGatingEnabled);
+            }
         }
-        addMoveCopyConstants(constants, node, entry, alphanumericLengths);
-        addComputeExpressionConstants(constants, node, entry);
+        addMoveCopyConstants(constants, node, entry, alphanumericLengths, numericPictures,
+                numericPictureGatingEnabled);
+        addComputeExpressionConstants(constants, node, entry, numericPictures, numericPictureGatingEnabled);
         return constants;
     }
 
     private void addComputeExpressionConstants(Map<String, Map<String, Object>> constants, SerialisableCFGFlowNode node,
-                                               Map<String, Map<String, Object>> entry) {
+                                               Map<String, Map<String, Object>> entry,
+                                               Map<String, NumericPicture> numericPictures,
+                                               boolean numericPictureGatingEnabled) {
         if (node.getType() != FlowNodeType.COMPUTE || node.getOriginalText() == null) return;
         List<String> modifiedVariables = sortedStrings(node.getVariablesModified());
         if (modifiedVariables.size() != 1) return;
+        if (hasUnsupportedComputeSemantics(node.getOriginalText())) return;
         String expression = computeExpression(node.getOriginalText());
-        if (expression == null || hasUnsupportedComputeSuffix(expression)) return;
-        new DataflowExpressionEvaluator(expression, entry).evaluate().ifPresent(value ->
-                constants.put(canonicalVariable(modifiedVariables.getFirst()),
-                        ConstantStaticValue.numeric(value, value.toPlainString()).toJsonMap()));
+        if (expression == null) return;
+        String target = modifiedVariables.getFirst();
+        new DataflowExpressionEvaluator(expression, entry).evaluate().ifPresent(value -> {
+            Map<String, Object> valueMap = ConstantStaticValue.numeric(value, value.toPlainString()).toJsonMap();
+            if (fitsNumericTarget(target, valueMap, numericPictures, numericPictureGatingEnabled)) {
+                constants.put(canonicalVariable(target), valueMap);
+            }
+        });
     }
 
     private String computeExpression(String originalText) {
@@ -474,15 +497,17 @@ public class StaticValueDataflowPass {
         return expression.isEmpty() ? null : expression;
     }
 
-    private boolean hasUnsupportedComputeSuffix(String expression) {
-        String upper = expression.toUpperCase(Locale.ROOT);
+    private boolean hasUnsupportedComputeSemantics(String statementText) {
+        String upper = statementText.toUpperCase(Locale.ROOT);
         return upper.contains(" ROUNDED") || upper.contains(" ON SIZE ERROR")
                 || upper.contains(" NOT ON SIZE ERROR");
     }
 
     private void addMoveCopyConstants(Map<String, Map<String, Object>> constants, SerialisableCFGFlowNode node,
                                       Map<String, Map<String, Object>> entry,
-                                      Map<String, Integer> alphanumericLengths) {
+                                      Map<String, Integer> alphanumericLengths,
+                                      Map<String, NumericPicture> numericPictures,
+                                      boolean numericPictureGatingEnabled) {
         if (node.getType() != FlowNodeType.MOVE) return;
         List<String> sourceVariables = sortedStrings(node.getVariablesRead());
         if (sourceVariables.size() != 1) return;
@@ -490,11 +515,15 @@ public class StaticValueDataflowPass {
         if (sourceValue == null || !isSupportedCopyConstant(sourceValue)) return;
         for (String targetVariable : sortedStrings(node.getVariablesModified())) {
             if (!fitsAlphanumericTarget(targetVariable, sourceValue, alphanumericLengths)) continue;
+            if (!fitsNumericTarget(targetVariable, sourceValue, numericPictures, numericPictureGatingEnabled)) continue;
             constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(sourceValue));
         }
     }
 
-    private void addFoldedConstant(Map<String, Map<String, Object>> constants, Object fact) {
+    private void addFoldedConstant(Map<String, Map<String, Object>> constants, Object fact,
+                                   SerialisableCFGFlowNode node, Map<String, NumericPicture> numericPictures,
+                                   boolean numericPictureGatingEnabled) {
+        if (node.getOriginalText() != null && hasUnsupportedComputeSemantics(node.getOriginalText())) return;
         if (!(fact instanceof Map<?, ?> rawFact)) return;
         Map<String, Object> foldedFact = stringKeyMap(rawFact);
         Object target = foldedFact.get("target_variable");
@@ -502,24 +531,34 @@ public class StaticValueDataflowPass {
         if (!(target instanceof String targetVariable) || !(value instanceof Map<?, ?> rawValue)) return;
         Map<String, Object> valueMap = stringKeyMap(rawValue);
         if (!isNumericConstant(valueMap)) return;
+        if (!fitsNumericTarget(targetVariable, valueMap, numericPictures, numericPictureGatingEnabled)) return;
         constants.put(canonicalVariable(targetVariable), valueMap);
     }
 
     private void addAssignmentConstant(Map<String, Map<String, Object>> constants, Object fact,
                                        Map<String, Map<String, Object>> entry,
-                                       Map<String, Integer> alphanumericLengths) {
+                                       Map<String, Integer> alphanumericLengths,
+                                       Map<String, NumericPicture> numericPictures,
+                                       boolean numericPictureGatingEnabled) {
         if (!(fact instanceof Map<?, ?> rawFact)) return;
         Map<String, Object> assignmentFact = stringKeyMap(rawFact);
         Object target = assignmentFact.get("target_variable");
         Object sourceValue = assignmentFact.get("source_value");
         if (!(target instanceof String targetVariable) || !(sourceValue instanceof String literal)) return;
-        numericLiteralValue(literal).ifPresent(value ->
-                constants.put(canonicalVariable(targetVariable), value));
+        numericLiteralValue(literal).ifPresent(value -> {
+            if (fitsNumericTarget(targetVariable, value, numericPictures, numericPictureGatingEnabled)) {
+                constants.put(canonicalVariable(targetVariable), value);
+            }
+        });
         alphanumericLiteralValue(literal, targetVariable, alphanumericLengths).ifPresent(value ->
                 constants.put(canonicalVariable(targetVariable), value));
         String canonicalSource = canonicalVariable(literal);
         if (!entry.containsKey(canonicalSource)) return;
         if (!fitsAlphanumericTarget(targetVariable, entry.get(canonicalSource), alphanumericLengths)) return;
+        if (!fitsNumericTarget(targetVariable, entry.get(canonicalSource), numericPictures,
+                numericPictureGatingEnabled)) {
+            return;
+        }
         constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(entry.get(canonicalSource)));
     }
 
@@ -552,6 +591,35 @@ public class StaticValueDataflowPass {
                                            Map<String, Integer> alphanumericLengths) {
         Integer targetLength = alphanumericLengths.get(canonicalVariable(targetVariable));
         return targetLength == null || normalizedValue.length() <= targetLength;
+    }
+
+    private boolean fitsNumericTarget(String targetVariable, Map<String, Object> value,
+                                      Map<String, NumericPicture> numericPictures,
+                                      boolean numericPictureGatingEnabled) {
+        if (!isNumericConstant(value)) return true;
+        if (!numericPictureGatingEnabled) return true;
+        NumericPicture picture = numericPictures.get(canonicalVariable(targetVariable));
+        if (picture == null) return false;
+        return numericDecimal(value).map(picture::fits).orElse(false);
+    }
+
+    private java.util.Optional<BigDecimal> numericDecimal(Map<String, Object> value) {
+        Object rawNumeric = value.get("numeric");
+        if (rawNumeric instanceof Map<?, ?> rawNumericMap) {
+            Object decimal = stringKeyMap(rawNumericMap).get("decimal");
+            if (decimal instanceof String decimalValue) return decimalValue(decimalValue);
+        }
+        Object normalized = value.get("normalized_value");
+        return normalized instanceof String normalizedValue
+                ? decimalValue(normalizedValue) : java.util.Optional.empty();
+    }
+
+    private java.util.Optional<BigDecimal> decimalValue(String value) {
+        try {
+            return java.util.Optional.of(new BigDecimal(value));
+        } catch (NumberFormatException ignored) {
+            return java.util.Optional.empty();
+        }
     }
 
     private boolean isQuotedLiteral(String literal) {
@@ -778,6 +846,15 @@ public class StaticValueDataflowPass {
         return lengths;
     }
 
+    private Map<String, NumericPicture> numericPictures(CobolDataStructure dataStructures) {
+        Map<String, NumericPicture> pictures = new TreeMap<>();
+        for (DataItem item : flattenedDataItems(dataStructures)) {
+            if (item.numericPicture() == null) continue;
+            pictures.put(canonicalVariable(item.name()), item.numericPicture());
+        }
+        return pictures;
+    }
+
     private Map<String, AliasSetSummary> aliasSets(CobolDataStructure dataStructures) {
         List<DataItem> items = flattenedDataItems(dataStructures);
         Map<String, DataItem> byName = firstByName(items);
@@ -822,6 +899,7 @@ public class StaticValueDataflowPass {
                 occursCount(data),
                 occursDependingOn(data),
                 alphanumericLength(data),
+                numericPicture(data),
                 null,
                 null,
                 sourceLine(data)
@@ -974,6 +1052,55 @@ public class StaticValueDataflowPass {
         return length == 0 ? null : length;
     }
 
+    private NumericPicture numericPicture(CobolDataStructure data) {
+        if (!(data instanceof Format1DataStructure format1)) return null;
+        if (format1.getDataDescription() == null || format1.getDataDescription().dataPictureClause().isEmpty()) {
+            return null;
+        }
+        String picture = format1.getDataDescription().dataPictureClause().getFirst()
+                .pictureString().getFirst().getText();
+        return numericPicture(picture);
+    }
+
+    private NumericPicture numericPicture(String picture) {
+        if (picture == null || picture.isBlank()) return null;
+        String normalized = picture.toUpperCase(Locale.ROOT).replace(" ", "");
+        Matcher matcher = PICTURE_NUMERIC_TOKEN.matcher(normalized);
+        int position = 0;
+        int integerDigits = 0;
+        int fractionalDigits = 0;
+        boolean signed = false;
+        boolean afterDecimal = false;
+        boolean sawDigit = false;
+        while (matcher.find()) {
+            if (matcher.start() != position) return null;
+            String token = matcher.group(1).toUpperCase(Locale.ROOT);
+            String repeated = matcher.group(2);
+            int count = repeated == null ? 1 : Integer.parseInt(repeated);
+            switch (token) {
+                case "S" -> {
+                    if (repeated != null || signed || sawDigit || afterDecimal) return null;
+                    signed = true;
+                }
+                case "V" -> {
+                    if (repeated != null || afterDecimal) return null;
+                    afterDecimal = true;
+                }
+                case "9" -> {
+                    sawDigit = true;
+                    if (afterDecimal) fractionalDigits += count;
+                    else integerDigits += count;
+                }
+                default -> {
+                    return null;
+                }
+            }
+            position = matcher.end();
+        }
+        if (position != normalized.length() || !sawDigit) return null;
+        return new NumericPicture(integerDigits, fractionalDigits, signed);
+    }
+
     private Integer occursCount(CobolDataStructure data) {
         if (!(data instanceof Format1DataStructure format1)) return null;
         if (format1.getDataDescription() == null || format1.getDataDescription().dataOccursClause().isEmpty()) {
@@ -1113,9 +1240,22 @@ public class StaticValueDataflowPass {
 
     private record DataItem(String name, String parent, int levelNumber, boolean isRedefinition, String redefines,
                             String dataType, Integer occursCount, String occursDependingOn,
-                            Integer alphanumericLength, Integer byteOffset, Integer byteSize, Integer sourceLine) {
+                            Integer alphanumericLength, NumericPicture numericPicture,
+                            Integer byteOffset, Integer byteSize, Integer sourceLine) {
         private DataItem(String missingName) {
-            this(missingName, null, 0, false, "", "UNKNOWN", null, null, null, null, null, null);
+            this(missingName, null, 0, false, "", "UNKNOWN", null, null, null, null, null, null, null);
+        }
+    }
+
+    private record NumericPicture(int integerDigits, int fractionalDigits, boolean signed) {
+        private boolean fits(BigDecimal value) {
+            BigDecimal normalized = value.stripTrailingZeros();
+            int scale = Math.max(normalized.scale(), 0);
+            int digitsBeforeDecimal = Math.max(normalized.precision() - normalized.scale(), 0);
+            if (normalized.signum() == 0) digitsBeforeDecimal = 1;
+            return scale <= fractionalDigits
+                    && digitsBeforeDecimal <= integerDigits
+                    && (signed || normalized.signum() >= 0);
         }
     }
 

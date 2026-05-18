@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-18 — Phase 2.8 numeric PIC-aware value gating
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/pic-gating-phase28.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added conservative numeric PICTURE gating for dataflow `CONSTANT` facts. The solver now parses simple numeric PICTURE forms built from `S`, `9`, and `V`, refuses propagated numeric facts that would lose fractional digits, integer digits, or sign, blocks dataflow seeding for `ROUNDED`/size-error COMPUTEs, and bumps the dataflow analysis version to `1.6`.
+**Why:** Claude's review identified a soundness bug where expression values could be treated as stored variable values even when COBOL PICTURE storage would truncate, round, or reject them. This checkpoint fixes the simple numeric display case with exact tests and leaves unsupported storage forms as conservative false negatives.
+
+---
+
 ## 2026-05-18 — Phase 3.2b CICS arguments and alphanumeric length gate
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/PathSensitiveTargetResolver.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

@@ -283,12 +283,12 @@ If implementation discovers that this document is wrong, the documentation must 
 
 ### External Review Corrections — 2026-05-18
 
-Claude's review after Phase 3.2a accepted the source-preserving architecture but found a real soundness gap: the dataflow solver can currently seed propagated constants from expression or literal values without checking whether the target COBOL field can actually store that value. The local folding fact `folded_value_facts` is still acceptable because it is explicitly an expression fact, not a stored-value claim. The dataflow sidecar is different: `entry_constants` and `exit_constants` describe variable states, so they must become PICTURE-aware before this work can support accuracy claims or RAG facts.
+Claude's review after Phase 3.2a accepted the source-preserving architecture but found a real soundness gap: the dataflow solver could seed propagated constants from expression or literal values without checking whether the target COBOL field can actually store that value. The local folding fact `folded_value_facts` is still acceptable because it is explicitly an expression fact, not a stored-value claim. The dataflow sidecar is different: `entry_constants` and `exit_constants` describe variable states, so they must be PICTURE-aware before this work can support accuracy claims or RAG facts.
 
 Accepted blockers:
 
-- Numeric storage gating: `MOVE`, folded `COMPUTE`, and expression-propagated numeric constants must be emitted only when target PICTURE information proves the decimal value fits the target's integer digits, fractional digits, and sign. Otherwise, the solver must omit the constant.
-- Size-error/rounding gating: `ROUNDED`, `ON SIZE ERROR`, and `NOT ON SIZE ERROR` may still allow a local expression fold, but must prevent dataflow seeding until COBOL storage semantics are implemented.
+- Numeric storage gating: `MOVE`, folded `COMPUTE`, and expression-propagated numeric constants are emitted only when target PICTURE information proves the decimal value fits the target's integer digits, fractional digits, and sign. Otherwise, the solver omits the constant. This is complete for simple numeric PICTURE forms using `9`, `S`, and `V`; unsupported numeric PICTURE forms remain conservative false negatives.
+- Size-error/rounding gating: `ROUNDED`, `ON SIZE ERROR`, and `NOT ON SIZE ERROR` may still allow a local expression fold, but now prevent dataflow seeding.
 - Alphanumeric length gating: quoted `MOVE` constants must be placed into dataflow only when the receiving `PIC X(n)` field can hold the normalized value without truncation. This prevents wrong high-confidence `CALL` or CICS targets such as `MOVE "LONGERTHAN8" TO WS-PGM PIC X(8)`.
 - Negative target tests: Phase 3 must prove it does not emit `path_sensitive_*` fields for static `CALL`s, literal CICS targets, output-only CICS statements, unsupported CICS argument names, or branch joins with conflicting target values.
 
@@ -329,15 +329,15 @@ Secondary cleanup items:
 | 2.6e | `DONE` | Add join diagnostics for conflicting predecessor constants. | Solver-level tests prove a real multi-predecessor join drops `WS-D` when incoming predecessors prove `20` and `30`, and emits exact `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` evidence without changing the joined entry state. |
 | 2.6f | `DONE` | Add loop-carried constant diagnostics for CFG cycles. | Solver-level tests prove a variable modified inside a CFG cycle is not propagated after the loop and emits exact `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` evidence while the solver still converges. |
 | 2.7 | `DONE` | Record Phase 2 accuracy/performance stats. | This document now consolidates the Phase 2 examples, fixture metrics, supported transfer rules, diagnostics, limitations, and reproducibility commands. Memory profiling remains deferred to a corpus benchmark because the current Java hardening tests do not expose stable per-fixture heap measurements. |
-| 2.8 | `PENDING` | Add PIC-aware value gating for propagated numeric constants. | Dataflow must not seed or emit a `CONSTANT` for `MOVE`, folded `COMPUTE`, or expression propagation unless the target field's PICTURE makes the value provably representable; `ROUNDED` and `ON SIZE ERROR` must block propagation seeding even if local expression folding still emits an expression fact. |
+| 2.8 | `DONE` | Add PIC-aware value gating for propagated numeric constants. | Dataflow does not seed or emit a `CONSTANT` for `MOVE`, folded `COMPUTE`, or expression propagation unless the target field's PICTURE makes the value provably representable; `ROUNDED` and `ON SIZE ERROR` block propagation seeding even if local expression folding still emits an expression fact. |
 | 3.0 | `DONE` | Write detailed Phase 3 pre-coding plan. | This document now defines the exact ordering, schemas, fixtures, tests, invariants, and risk controls for path-sensitive dynamic `CALL`/CICS facts. |
 | 3.1a | `DONE` | Add quoted alphanumeric constants to the dataflow sidecar. | `MOVE "PROG-A" TO WS-PGM` and `MOVE WS-PGM TO WS-COPY` now carry `ALPHANUMERIC` constants through the same fixed-point solver; runtime, alias, and join kills still apply. Path-sensitive target fields remain disabled. |
 | 3.1b | `DONE` | Add path-sensitive dynamic `CALL` metadata fields. | Dynamic `CALL WS-PGM` reads `WS-PGM` from node `entry_constants` and emits new `path_sensitive_call_*` fields without changing `resolved_call_target`, `call_target_source`, or `dynamic_call_resolution_confidence`. Runtime-killed identifiers emit an explicit path-sensitive unresolved status rather than reusing stale legacy literals. |
 | 3.2a | `DONE` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-CICS-PGM)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`; runtime-killed identifiers stay path-sensitive unresolved. |
 | 3.2b | `DONE` | Add path-sensitive CICS argument facts plus alphanumeric length gating. | Multiple CICS identifier arguments are reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged; alphanumeric constants are not placed in dataflow if the target `PIC X(n)` cannot hold the literal without truncation. |
 | 3.2c | `PENDING` | Add Phase 3 negative and join-path tests. | Tests must prove static `CALL`s, literal CICS targets, output-only CICS nodes, unsupported CICS argument names, and conflicting branch joins do not emit false `path_sensitive_*` facts. |
-| 3.3 | `BLOCKED` | Evaluate target-resolution accuracy. | Blocked until `2.8` and `3.2c` are done; frozen fixtures then report exact expected-target pass/fail counts and legacy-vs-flow-sensitive deltas before any RAG integration claims are allowed. |
-| 4.1 | `BLOCKED` | Add optional static-value RAG chunks. | Blocked until `2.8` and `3.3` are done; chunks may include only high-confidence storage-safe facts with provenance and no unsupported "always" wording. |
+| 3.3 | `BLOCKED` | Evaluate target-resolution accuracy. | Blocked until `3.2c` is done; frozen fixtures then report exact expected-target pass/fail counts and legacy-vs-flow-sensitive deltas before any RAG integration claims are allowed. |
+| 4.1 | `BLOCKED` | Add optional static-value RAG chunks. | Blocked until `3.3` is done; chunks may include only high-confidence storage-safe facts with provenance and no unsupported "always" wording. |
 | 4.2 | `PENDING` | Evaluate retrieval and token impact. | Benchmark reports chunk count, token count, recall, and retrieval-ranking deltas. |
 | 5.1 | `PENDING` | Publish final implementation documentation update. | This document records final schemas, measured results, known limitations, and any skipped work. |
 
@@ -365,6 +365,7 @@ Secondary cleanup items:
 | 2026-05-15 | `DONE` | Added join diagnostics after fixed-point convergence. The solver still drops conflicting constants at joins, but now emits a node-level `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` diagnostic when real CFG predecessors prove different constants for the same variable. This checkpoint also bumps the dataflow analysis version to `1.0` and mode to `join_diagnostics_constant_propagation`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 38 tests, total time 15.119s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 50 tests, 2 skipped, total time 14.806s. Solver-level metrics: the synthetic join test has 3 node states, 2 edges, 1 join diagnostic, `WS-D` absent at join entry, and incoming values `20` and `30` recorded. Fixture metrics remain source-preserving: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 33 entry constants, 40 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 32,413-byte pretty-printed sidecar. |
 | 2026-05-15 | `DONE` | Added loop-carried constant diagnostics for CFG cycles. The solver now detects strongly connected components after fixed-point convergence and emits `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` when a variable is modified inside a cycle. This is explanatory only: the variable remains absent after the loop unless another safe transfer rule proves it. The dataflow analysis version is now `1.1` and mode is `loop_diagnostics_constant_propagation`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 39 tests, total time 13.351s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 51 tests, 2 skipped, total time 14.507s. Solver-level metrics: the synthetic loop test has 3 node states, 3 edges, 1 loop diagnostic, `WS-A` absent inside and after the loop, `WS-B` not propagated from stale `WS-A`, convergence true, and `max_iterations` 1000 recorded. Fixture metrics remain source-preserving: `constant-propagation-phase2.cbl` has 17 node states, 16 edges, 33 entry constants, 40 exit constants, 3 kill facts, 0 diagnostics, 1 alias set, 1 paragraph summary, convergence in 2 iterations, and a 32,413-byte pretty-printed sidecar. |
 | 2026-05-15 | `DONE` | Completed the Phase 2.7 evaluation cleanup. The implementation scope is now described in plain language with examples for literal propagation, variable-copy propagation, expression propagation, runtime kills, joins, loops, and alias kills. The document also records what the tool still does not support, so the project does not overclaim full compiler-style constant propagation. | Documentation-only checkpoint. It reuses the last passed implementation verification: targeted `JavaHardeningRegressionTest`, 39 tests, 13.351s; broader `smojol-toolkit` suite, 51 tests, 2 skipped, 14.507s. Reproducibility commands are listed in Section 20. |
+| 2026-05-18 | `DONE` | Added Phase 2.8 numeric PICTURE gating for stored-value constants. The dataflow pass now parses simple numeric PICTURE strings built from `S`, `9`, and `V`, and emits numeric `CONSTANT` facts only when the decimal value fits the target's integer digits, fractional digits, and sign. Unsupported PICTURE forms are treated as false negatives. `ROUNDED`, `ON SIZE ERROR`, and `NOT ON SIZE ERROR` still allow local expression facts but block dataflow seeding. The dataflow analysis version is now `1.6`. | Focused red/green check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowEmitsNumericConstantsOnlyWhenTargetPictureCanRepresentThem`, 1 test, total time 7.211s. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 48 tests, total time 27.924s. Fixture metrics: `pic-gating-phase28.cbl` has 15 node states, 14 edges, 17 entry constants, 20 exit constants, 0 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 17,559-byte pretty-printed sidecar, and a 29,390-byte pretty-printed CFG. Exact tests cover integer-scale refusal, fractional-fit success, fractional-overflow refusal, unsigned-negative refusal, signed-negative success, variable-copy overflow refusal, size-error blocking, and rounded blocking. |
 
 ### Phase 3 Checkpoints
 
@@ -432,7 +433,7 @@ Phase 2.6b adds these kill rules:
 - `EXEC CICS ... INTO(<identifier>)` and other known CICS output arguments emit `CICS_OUTPUT_KILL`.
 - `EXEC SQL SELECT/FETCH ... INTO :<host-variable>` emits `SQL_OUTPUT_KILL`.
 
-The current solver intentionally does not support function calls, string expressions, subscripts, reference modification, `ROUNDED`, size-error semantics, target PIC truncation/storage semantics, condition simplification, branch reachability pruning, interprocedural summaries, or RAG chunk generation. Dynamic `CALL` and CICS additive target fields now exist, but they depend on the same dataflow constants and therefore remain subject to the PICTURE-gating blockers listed above.
+The current solver intentionally does not support function calls, string expressions, subscripts, reference modification, condition simplification, branch reachability pruning, interprocedural summaries, or RAG chunk generation. Phase 2.8 adds a conservative stored-value gate for simple numeric PICTURE forms (`S`, `9`, and `V`) and blocks propagation seeding for `ROUNDED` and size-error phrases. It still does not simulate COBOL rounding/truncation, edited numeric fields, `P` scaling, `COMP`, or `COMP-3`; unsupported storage forms produce no propagated numeric constant.
 
 Join diagnostics are deliberately narrow in Phase 2.6e. They describe a real dataflow merge where a node has at least two CFG predecessors and every predecessor proves the same variable to a different constant. They do not yet repair or reinterpret CFG shapes where branch bodies are nested under an `IF_BRANCH` node but are not direct predecessors of the following statement. In that shape, the current solver still behaves conservatively by not carrying the branch-local value forward.
 
@@ -1225,7 +1226,7 @@ The string literal has 11 characters and the target field has `PIC X(8)`. Phase 
 
 #### Phase 3.3: Accuracy And Performance Evaluation
 
-Phase 3.3 is the first point where the project may claim improved dynamic target resolution. It is currently blocked until PIC-aware numeric value gating and the remaining Phase 3 negative/join-path tests are complete. Measuring accuracy before those gates would overstate the analyzer because it can currently emit wrong high-confidence numeric constants when COBOL storage would truncate, round, or reject the mathematical value. The alphanumeric `PIC X(n)` length gate is complete as of Phase 3.2b.
+Phase 3.3 is the first point where the project may claim improved dynamic target resolution. It is currently blocked until the remaining Phase 3 negative/join-path tests are complete. Numeric PICTURE gating is complete for simple `S`/`9`/`V` PICTUREs as of Phase 2.8, and the alphanumeric `PIC X(n)` length gate is complete as of Phase 3.2b.
 
 Metrics to record:
 
@@ -1307,7 +1308,7 @@ Each checkpoint should be committed separately and stop for user approval:
 4. `3.2b`: path-sensitive CICS argument array plus alphanumeric `PIC X(n)` length gating.
 5. `3.2c`: negative and join-path tests for CALL/CICS target over-resolution.
 6. `2.8`: numeric target-PICTURE and `ROUNDED`/size-error propagation gating before accuracy claims.
-7. `3.3`: metrics and documentation only, blocked until `2.8` and `3.2c` are done.
+7. `3.3`: metrics and documentation only, blocked until `3.2c` is done.
 
 Do not combine `3.1a` and `3.1b` unless the first checkpoint cannot be tested independently. Do not start CICS until dynamic `CALL` fields are proven additive and legacy-safe.
 
@@ -1727,9 +1728,36 @@ Implemented Phase 2 behavior:
 - Folded numeric `COMPUTE` facts from Phase 1 can seed the dataflow state.
 - `MOVE <known-variable> TO <target>` can copy a proven numeric constant if the source survives all prior kills.
 - Narrow numeric `COMPUTE` expressions can use proven numeric entry constants, numeric literals, parentheses, unary signs, addition, subtraction, multiplication, and exact division.
+- Numeric stored-value facts are gated by simple target PICTUREs built from `S`, `9`, and `V`; values that would require truncation, rounding, sign loss, or scale loss are not emitted.
 - `ACCEPT`, `CALL USING` by reference, `INITIALIZE`, `READ INTO`, `STRING INTO`, `UNSTRING INTO`, `INSPECT`, CICS output arguments, SQL `SELECT/FETCH ... INTO`, and alias-overlapping writes kill affected constants.
 - Real branch joins drop conflicting constants and emit `DATAFLOW_CONSTANT_DROPPED_AT_JOIN`.
 - CFG cycles with modified variables emit `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` instead of inventing final loop values.
+
+Example: PICTURE-gated numeric constants:
+
+```cobol
+01 WS-INT     PIC 9.
+01 WS-FIT-DEC PIC 9V9.
+01 WS-SIGNED  PIC S9(2).
+...
+COMPUTE WS-INT = 7 / 2
+COMPUTE WS-FIT-DEC = 7 / 2
+COMPUTE WS-SIGNED = 0 - 1
+```
+
+The local folding layer can still report that `7 / 2` is the expression value `3.5`. The dataflow layer is stricter: it does not put `WS-INT = 3.5` in `exit_constants` because `PIC 9` cannot represent the fractional digit. It does put `WS-FIT-DEC = 3.5` in `exit_constants` because `PIC 9V9` can represent one integer digit and one fractional digit. It also allows `WS-SIGNED = -1` because `S9(2)` is signed, while the same value into an unsigned `PIC 9(2)` is refused.
+
+Size-error and rounding phrases are also propagation blockers:
+
+```cobol
+COMPUTE WS-SIZE = 1 + 2
+    ON SIZE ERROR
+        MOVE 0 TO WS-SIZE
+END-COMPUTE
+COMPUTE WS-ROUNDED ROUNDED = 1 / 4
+```
+
+These statements may still carry local expression facts, but Phase 2.8 does not seed stored-value constants from them because final storage depends on COBOL size-error or rounding semantics that are not modeled yet.
 
 Still not implemented:
 
@@ -1737,7 +1765,7 @@ Still not implemented:
 - `IF`/`EVALUATE` condition simplification or branch reachability pruning.
 - General string expression propagation. Narrow quoted alphanumeric `MOVE` and variable-copy propagation exists for Phase 3 target resolution and is now length-gated when the receiving field has a known `PIC X(n)`, but COBOL string functions, reference modification, figurative expansion, and national/hex literals remain unsupported.
 - Group move expansion into child fields.
-- Target `PIC`, edited numeric, `COMP`, or `COMP-3` storage semantics. This is a soundness blocker for dataflow constants, not just a future enhancement.
+- Edited numeric, `P` scaling, `COMP`, or `COMP-3` storage semantics. Simple display numeric PICTURE fit-gating exists, but the analyzer still does not simulate COBOL storage conversion.
 - Interprocedural propagation through called programs.
 - Full formal path-sensitive analysis that keeps distinct facts per execution path after joins. The current `path_sensitive_*` fields are additive flow-sensitive/per-CFG-node facts.
 - Some kill patterns, including `INSPECT ... TALLYING IN` output variables and file record buffers modified by `READ` without explicit `INTO`.
