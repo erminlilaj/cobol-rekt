@@ -3,19 +3,24 @@ package org.smojol.toolkit.analysis.staticvalue;
 import com.mojo.algorithms.domain.FlowNodeType;
 import org.smojol.common.ast.SerialisableCFGFlowNode;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class PathSensitiveTargetResolver {
     private static final String DATAFLOW_ENTRY_CONSTANTS = "static_analysis.dataflow.entry_constants";
     private static final String DATAFLOW_ARTIFACT = "static_analysis/dataflow.json";
+    private static final Set<String> SUPPORTED_CICS_ARGUMENTS =
+            Set.of("PROGRAM", "FILE", "DATASET", "QUEUE", "QNAME", "MAP", "MAPSET", "TRANSID");
 
     public void annotateTargets(List<SerialisableCFGFlowNode> nodes, DataflowAnalysisResult dataflow) {
         for (SerialisableCFGFlowNode node : nodes) {
             annotateCallTarget(node, dataflow);
             annotateCicsTarget(node, dataflow);
+            annotateCicsArguments(node, dataflow);
         }
     }
 
@@ -30,6 +35,38 @@ public class PathSensitiveTargetResolver {
             annotateCallResolved(metadata, node.getId(), identifier, value);
         } else {
             annotateCallUnresolved(metadata, identifier);
+        }
+    }
+
+    private void annotateCicsArguments(SerialisableCFGFlowNode node, DataflowAnalysisResult dataflow) {
+        if (node.getType() != FlowNodeType.DIALECT) return;
+        Map<String, Object> metadata = node.getMetadata();
+        Object command = metadata.get("cics_command");
+        if (!(command instanceof String)) return;
+        Object cicsArguments = metadata.get("cics_arguments");
+        if (!(cicsArguments instanceof List<?> argumentList)) return;
+
+        List<Map<String, Object>> pathSensitiveArguments = new ArrayList<>();
+        for (Object argument : argumentList) {
+            if (!(argument instanceof Map<?, ?> rawArgument)) continue;
+            Map<String, Object> cicsArgument = stringKeyMap(rawArgument);
+            Object rawName = cicsArgument.get("name");
+            Object rawValue = cicsArgument.get("value");
+            Object rawSource = cicsArgument.get("value_source");
+            if (!(rawName instanceof String name) || !(rawValue instanceof String identifier)
+                    || !"identifier".equals(rawSource)) {
+                continue;
+            }
+            String canonicalName = name.toUpperCase(Locale.ROOT);
+            if (!SUPPORTED_CICS_ARGUMENTS.contains(canonicalName)) continue;
+
+            Map<String, Object> value = entryValue(node, dataflow, canonicalVariable(identifier));
+            pathSensitiveArguments.add(isAlphanumericConstant(value)
+                    ? resolvedCicsArgument(node.getId(), canonicalName, identifier, value)
+                    : unresolvedCicsArgument(canonicalName, identifier));
+        }
+        if (!pathSensitiveArguments.isEmpty()) {
+            metadata.put("path_sensitive_cics_arguments", pathSensitiveArguments);
         }
     }
 
@@ -120,6 +157,45 @@ public class PathSensitiveTargetResolver {
         return evidence;
     }
 
+    private Map<String, Object> resolvedCicsArgument(String nodeId, String name, String identifier,
+                                                     Map<String, Object> value) {
+        Map<String, Object> argument = new LinkedHashMap<>();
+        argument.put("name", name);
+        argument.put("identifier", canonicalVariable(identifier));
+        argument.put("resolution_status", "resolved");
+        argument.put("resolved_value", value.get("normalized_value"));
+        argument.put("value_kind", value.get("kind"));
+        argument.put("source", DATAFLOW_ENTRY_CONSTANTS);
+        argument.put("confidence", "high");
+        argument.put("evidence", cicsArgumentEvidence(nodeId, name, identifier, value));
+        return argument;
+    }
+
+    private Map<String, Object> unresolvedCicsArgument(String name, String identifier) {
+        String canonicalIdentifier = canonicalVariable(identifier);
+        Map<String, Object> argument = new LinkedHashMap<>();
+        argument.put("name", name);
+        argument.put("identifier", canonicalIdentifier);
+        argument.put("resolution_status", "unresolved");
+        argument.put("source", DATAFLOW_ENTRY_CONSTANTS);
+        argument.put("confidence", "none");
+        argument.put("resolution_note",
+                "No proven alphanumeric constant for " + canonicalIdentifier + " at CICS node entry.");
+        return argument;
+    }
+
+    private Map<String, Object> cicsArgumentEvidence(String nodeId, String name, String identifier,
+                                                    Map<String, Object> value) {
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        evidence.put("node_id", nodeId);
+        evidence.put("argument_name", name);
+        evidence.put("entry_variable", canonicalVariable(identifier));
+        evidence.put("value_state", value.get("state"));
+        evidence.put("value_kind", value.get("kind"));
+        evidence.put("dataflow_artifact", DATAFLOW_ARTIFACT);
+        return evidence;
+    }
+
     private void annotateCallUnresolved(Map<String, Object> metadata, String identifier) {
         String canonicalIdentifier = canonicalVariable(identifier);
         metadata.put("path_sensitive_call_resolution_status", "unresolved");
@@ -146,5 +222,13 @@ public class PathSensitiveTargetResolver {
         String canonical = variable.trim().toUpperCase(Locale.ROOT);
         int subscriptStart = canonical.indexOf('(');
         return subscriptStart < 0 ? canonical : canonical.substring(0, subscriptStart);
+    }
+
+    private Map<String, Object> stringKeyMap(Map<?, ?> rawMap) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            result.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return result;
     }
 }

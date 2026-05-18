@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.4";
+    private static final String ANALYSIS_VERSION = "1.5";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -39,6 +39,7 @@ public class StaticValueDataflowPass {
             "\\bINTO\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern INSPECT_TARGET = Pattern.compile(
             "^\\s*INSPECT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PICTURE_X_RUN = Pattern.compile("X(?:\\((\\d+)\\))?", Pattern.CASE_INSENSITIVE);
     private static final Set<String> CICS_OUTPUT_ARGUMENTS = Set.of("INTO", "SET", "RESP", "RESP2");
 
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
@@ -58,11 +59,12 @@ public class StaticValueDataflowPass {
                                                 boolean pathSensitiveTargetsEnabled) {
         Map<String, ParagraphSummary> paragraphSummaries = paragraphSummaries(nodes);
         Map<String, AliasSetSummary> aliasSets = aliasSets(dataStructures);
-        PropagationResult propagationResult = propagate(nodes, edges, aliasSets);
+        Map<String, Integer> alphanumericLengths = alphanumericLengths(dataStructures);
+        PropagationResult propagationResult = propagate(nodes, edges, aliasSets, alphanumericLengths);
         Map<String, DataflowNodeState> nodeStates = propagationResult.nodeStates();
         int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
         String status = pathSensitiveTargetsEnabled
-                ? "path_sensitive_cics_targets" : "alphanumeric_constant_propagation";
+                ? "flow_sensitive_call_cics_targets" : "alphanumeric_constant_propagation";
 
         return new DataflowAnalysisResult(
                 program,
@@ -115,7 +117,8 @@ public class StaticValueDataflowPass {
     }
 
     private PropagationResult propagate(List<SerialisableCFGFlowNode> nodes, List<SerialisableEdge> edges,
-                                        Map<String, AliasSetSummary> aliasSets) {
+                                        Map<String, AliasSetSummary> aliasSets,
+                                        Map<String, Integer> alphanumericLengths) {
         Map<String, List<Map<String, Object>>> killsByNode = killsByNode(nodes, aliasSets);
         Map<String, List<String>> predecessors = predecessors(nodes, edges);
         Map<String, Map<String, Map<String, Object>>> entryStates = emptyStates(nodes);
@@ -128,7 +131,8 @@ public class StaticValueDataflowPass {
             boolean changed = false;
             for (SerialisableCFGFlowNode node : nodes) {
                 Map<String, Map<String, Object>> entry = joinedEntry(predecessors.get(node.getId()), exitStates);
-                Map<String, Map<String, Object>> exit = transfer(node, entry, killsByNode.get(node.getId()));
+                Map<String, Map<String, Object>> exit = transfer(node, entry, killsByNode.get(node.getId()),
+                        alphanumericLengths);
                 if (!entry.equals(entryStates.get(node.getId())) || !exit.equals(exitStates.get(node.getId()))) {
                     changed = true;
                     entryStates.put(node.getId(), entry);
@@ -413,14 +417,15 @@ public class StaticValueDataflowPass {
     }
 
     private Map<String, Map<String, Object>> transfer(SerialisableCFGFlowNode node,
-            Map<String, Map<String, Object>> entry, List<Map<String, Object>> kills) {
+            Map<String, Map<String, Object>> entry, List<Map<String, Object>> kills,
+            Map<String, Integer> alphanumericLengths) {
         Map<String, Map<String, Object>> exit = new TreeMap<>(entry);
         for (Map<String, Object> kill : kills) {
             Object variable = kill.get("variable");
             if (variable instanceof String variableName) exit.remove(canonicalVariable(variableName));
         }
 
-        Map<String, Map<String, Object>> producedConstants = producedConstants(node, entry);
+        Map<String, Map<String, Object>> producedConstants = producedConstants(node, entry, alphanumericLengths);
         Set<String> producedTargets = producedConstants.keySet();
         for (String modifiedVariable : sortedStrings(node.getVariablesModified())) {
             String canonicalModified = canonicalVariable(modifiedVariable);
@@ -431,7 +436,8 @@ public class StaticValueDataflowPass {
     }
 
     private Map<String, Map<String, Object>> producedConstants(SerialisableCFGFlowNode node,
-                                                               Map<String, Map<String, Object>> entry) {
+                                                               Map<String, Map<String, Object>> entry,
+                                                               Map<String, Integer> alphanumericLengths) {
         Map<String, Map<String, Object>> constants = new TreeMap<>();
         Object foldedFacts = node.getMetadata().get("folded_value_facts");
         if (foldedFacts instanceof List<?> foldedFactList) {
@@ -440,9 +446,9 @@ public class StaticValueDataflowPass {
 
         Object assignmentFacts = node.getMetadata().get("assignment_facts");
         if (assignmentFacts instanceof List<?> assignmentFactList) {
-            for (Object fact : assignmentFactList) addAssignmentConstant(constants, fact, entry);
+            for (Object fact : assignmentFactList) addAssignmentConstant(constants, fact, entry, alphanumericLengths);
         }
-        addMoveCopyConstants(constants, node, entry);
+        addMoveCopyConstants(constants, node, entry, alphanumericLengths);
         addComputeExpressionConstants(constants, node, entry);
         return constants;
     }
@@ -475,13 +481,15 @@ public class StaticValueDataflowPass {
     }
 
     private void addMoveCopyConstants(Map<String, Map<String, Object>> constants, SerialisableCFGFlowNode node,
-                                      Map<String, Map<String, Object>> entry) {
+                                      Map<String, Map<String, Object>> entry,
+                                      Map<String, Integer> alphanumericLengths) {
         if (node.getType() != FlowNodeType.MOVE) return;
         List<String> sourceVariables = sortedStrings(node.getVariablesRead());
         if (sourceVariables.size() != 1) return;
         Map<String, Object> sourceValue = entry.get(canonicalVariable(sourceVariables.get(0)));
         if (sourceValue == null || !isSupportedCopyConstant(sourceValue)) return;
         for (String targetVariable : sortedStrings(node.getVariablesModified())) {
+            if (!fitsAlphanumericTarget(targetVariable, sourceValue, alphanumericLengths)) continue;
             constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(sourceValue));
         }
     }
@@ -498,7 +506,8 @@ public class StaticValueDataflowPass {
     }
 
     private void addAssignmentConstant(Map<String, Map<String, Object>> constants, Object fact,
-                                       Map<String, Map<String, Object>> entry) {
+                                       Map<String, Map<String, Object>> entry,
+                                       Map<String, Integer> alphanumericLengths) {
         if (!(fact instanceof Map<?, ?> rawFact)) return;
         Map<String, Object> assignmentFact = stringKeyMap(rawFact);
         Object target = assignmentFact.get("target_variable");
@@ -506,10 +515,11 @@ public class StaticValueDataflowPass {
         if (!(target instanceof String targetVariable) || !(sourceValue instanceof String literal)) return;
         numericLiteralValue(literal).ifPresent(value ->
                 constants.put(canonicalVariable(targetVariable), value));
-        alphanumericLiteralValue(literal).ifPresent(value ->
+        alphanumericLiteralValue(literal, targetVariable, alphanumericLengths).ifPresent(value ->
                 constants.put(canonicalVariable(targetVariable), value));
         String canonicalSource = canonicalVariable(literal);
         if (!entry.containsKey(canonicalSource)) return;
+        if (!fitsAlphanumericTarget(targetVariable, entry.get(canonicalSource), alphanumericLengths)) return;
         constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(entry.get(canonicalSource)));
     }
 
@@ -522,10 +532,26 @@ public class StaticValueDataflowPass {
         }
     }
 
-    private java.util.Optional<Map<String, Object>> alphanumericLiteralValue(String literal) {
+    private java.util.Optional<Map<String, Object>> alphanumericLiteralValue(String literal, String targetVariable,
+                                                                             Map<String, Integer> alphanumericLengths) {
         if (!isQuotedLiteral(literal)) return java.util.Optional.empty();
         String normalized = literal.substring(1, literal.length() - 1).toUpperCase(Locale.ROOT);
+        if (!fitsAlphanumericTarget(targetVariable, normalized, alphanumericLengths)) return java.util.Optional.empty();
         return java.util.Optional.of(ConstantStaticValue.alphanumeric(literal, normalized).toJsonMap());
+    }
+
+    private boolean fitsAlphanumericTarget(String targetVariable, Map<String, Object> value,
+                                           Map<String, Integer> alphanumericLengths) {
+        if (!"CONSTANT".equals(value.get("state")) || !"ALPHANUMERIC".equals(value.get("kind"))) return true;
+        Object normalized = value.get("normalized_value");
+        return !(normalized instanceof String stringValue)
+                || fitsAlphanumericTarget(targetVariable, stringValue, alphanumericLengths);
+    }
+
+    private boolean fitsAlphanumericTarget(String targetVariable, String normalizedValue,
+                                           Map<String, Integer> alphanumericLengths) {
+        Integer targetLength = alphanumericLengths.get(canonicalVariable(targetVariable));
+        return targetLength == null || normalizedValue.length() <= targetLength;
     }
 
     private boolean isQuotedLiteral(String literal) {
@@ -743,6 +769,15 @@ public class StaticValueDataflowPass {
         return subscriptStart < 0 ? canonical : canonical.substring(0, subscriptStart);
     }
 
+    private Map<String, Integer> alphanumericLengths(CobolDataStructure dataStructures) {
+        Map<String, Integer> lengths = new TreeMap<>();
+        for (DataItem item : flattenedDataItems(dataStructures)) {
+            if (item.alphanumericLength() == null) continue;
+            lengths.put(canonicalVariable(item.name()), item.alphanumericLength());
+        }
+        return lengths;
+    }
+
     private Map<String, AliasSetSummary> aliasSets(CobolDataStructure dataStructures) {
         List<DataItem> items = flattenedDataItems(dataStructures);
         Map<String, DataItem> byName = firstByName(items);
@@ -786,6 +821,7 @@ public class StaticValueDataflowPass {
                 dataType(data),
                 occursCount(data),
                 occursDependingOn(data),
+                alphanumericLength(data),
                 null,
                 null,
                 sourceLine(data)
@@ -915,6 +951,27 @@ public class StaticValueDataflowPass {
     private String dataType(CobolDataStructure data) {
         if (data.getDataType() == null || data.getDataType().abstractType() == null) return "UNKNOWN";
         return data.getDataType().abstractType().name();
+    }
+
+    private Integer alphanumericLength(CobolDataStructure data) {
+        if (!(data instanceof Format1DataStructure format1)) return null;
+        if (format1.getDataDescription() == null || format1.getDataDescription().dataPictureClause().isEmpty()) {
+            return null;
+        }
+        String picture = format1.getDataDescription().dataPictureClause().getFirst()
+                .pictureString().getFirst().getText();
+        return alphanumericPictureLength(picture);
+    }
+
+    private Integer alphanumericPictureLength(String picture) {
+        if (picture == null || picture.isBlank()) return null;
+        Matcher matcher = PICTURE_X_RUN.matcher(picture.toUpperCase(Locale.ROOT).replace(" ", ""));
+        int length = 0;
+        while (matcher.find()) {
+            String repeated = matcher.group(1);
+            length += repeated == null ? 1 : Integer.parseInt(repeated);
+        }
+        return length == 0 ? null : length;
     }
 
     private Integer occursCount(CobolDataStructure data) {
@@ -1055,10 +1112,10 @@ public class StaticValueDataflowPass {
     }
 
     private record DataItem(String name, String parent, int levelNumber, boolean isRedefinition, String redefines,
-                            String dataType, Integer occursCount, String occursDependingOn, Integer byteOffset,
-                            Integer byteSize, Integer sourceLine) {
+                            String dataType, Integer occursCount, String occursDependingOn,
+                            Integer alphanumericLength, Integer byteOffset, Integer byteSize, Integer sourceLine) {
         private DataItem(String missingName) {
-            this(missingName, null, 0, false, "", "UNKNOWN", null, null, null, null, null);
+            this(missingName, null, 0, false, "", "UNKNOWN", null, null, null, null, null, null);
         }
     }
 

@@ -9,10 +9,16 @@
        01 WS-AFTER-KILL PIC X(8).
        01 WS-CICS-PGM PIC X(8).
        01 WS-CICS-KILLED PIC X(8).
+       01 WS-QUEUE PIC X(9).
+       01 WS-QUEUE-KILLED PIC X(8).
+       01 WS-LONG-PGM PIC X(8).
+       01 WS-LONG-COPY PIC X(8).
+       01 WS-AREA PIC X(20).
        PROCEDURE DIVISION.
        MAIN-PARA.
            MOVE "PROG-A" TO WS-PGM
            CALL WS-PGM
+           CALL "STATPROG"
            MOVE "PROG-B" TO WS-PGM
            CALL WS-PGM
            MOVE WS-PGM TO WS-COPY
@@ -34,4 +40,20 @@
            EXEC CICS LINK PROGRAM(WS-CICS-KILLED)
                 COMMAREA(WS-COPY)
            END-EXEC
+           EXEC CICS LINK PROGRAM('LITPGM')
+                COMMAREA(WS-COPY)
+           END-EXEC
+           MOVE "CUSTOMERQ" TO WS-QUEUE
+           EXEC CICS READQ TS QUEUE(WS-QUEUE)
+                INTO(WS-AREA)
+           END-EXEC
+           MOVE "KILLQ" TO WS-QUEUE-KILLED
+           ACCEPT WS-QUEUE-KILLED
+           EXEC CICS READQ TS QUEUE(WS-QUEUE-KILLED)
+                INTO(WS-AREA)
+           END-EXEC
+           EXEC CICS RECEIVE INTO(WS-AREA) END-EXEC
+           MOVE "LONGERTHAN8" TO WS-LONG-PGM
+           CALL WS-LONG-PGM
+           MOVE WS-LONG-PGM TO WS-LONG-COPY
            GOBACK.

@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-18 — Phase 3.2b CICS arguments and alphanumeric length gate
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/PathSensitiveTargetResolver.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added additive `path_sensitive_cics_arguments` entries for supported CICS identifier arguments such as `QUEUE(WS-QUEUE)`, while preserving existing `cics_arguments`. The dataflow pass now refuses alphanumeric constants when a known target `PIC X(n)` would truncate the normalized value, updates the analysis version to `1.5`, and uses the broader `flow_sensitive_call_cics_targets` mode/status.
+**Why:** Claude's review found that high-confidence string targets could be wrong if COBOL storage truncates them. This checkpoint implements the alphanumeric half of that safety gate and documents the resolved, killed, output-only, static/literal, and overlength examples; numeric PIC-aware gating remains a separate blocked step before accuracy/RAG claims.
+
+---
+
 ## 2026-05-18 — Constant propagation review corrections plan
 
 **File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
