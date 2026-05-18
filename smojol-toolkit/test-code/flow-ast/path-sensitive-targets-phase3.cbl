@@ -7,6 +7,8 @@
        01 WS-SINGLE PIC X(8).
        01 WS-KILLED PIC X(8).
        01 WS-AFTER-KILL PIC X(8).
+       01 WS-CICS-PGM PIC X(8).
+       01 WS-CICS-KILLED PIC X(8).
        PROCEDURE DIVISION.
        MAIN-PARA.
            MOVE "PROG-A" TO WS-PGM
@@ -19,4 +21,17 @@
            ACCEPT WS-KILLED
            CALL WS-KILLED
            MOVE WS-KILLED TO WS-AFTER-KILL
+           MOVE "CICSA" TO WS-CICS-PGM
+           EXEC CICS LINK PROGRAM(WS-CICS-PGM)
+                COMMAREA(WS-COPY)
+           END-EXEC
+           MOVE "CICSB" TO WS-CICS-PGM
+           EXEC CICS LINK PROGRAM(WS-CICS-PGM)
+                COMMAREA(WS-COPY)
+           END-EXEC
+           MOVE "CICSKILL" TO WS-CICS-KILLED
+           ACCEPT WS-CICS-KILLED
+           EXEC CICS LINK PROGRAM(WS-CICS-KILLED)
+                COMMAREA(WS-COPY)
+           END-EXEC
            GOBACK.

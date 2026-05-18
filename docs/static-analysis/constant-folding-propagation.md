@@ -311,7 +311,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 3.0 | `DONE` | Write detailed Phase 3 pre-coding plan. | This document now defines the exact ordering, schemas, fixtures, tests, invariants, and risk controls for path-sensitive dynamic `CALL`/CICS facts. |
 | 3.1a | `DONE` | Add quoted alphanumeric constants to the dataflow sidecar. | `MOVE "PROG-A" TO WS-PGM` and `MOVE WS-PGM TO WS-COPY` now carry `ALPHANUMERIC` constants through the same fixed-point solver; runtime, alias, and join kills still apply. Path-sensitive target fields remain disabled. |
 | 3.1b | `DONE` | Add path-sensitive dynamic `CALL` metadata fields. | Dynamic `CALL WS-PGM` reads `WS-PGM` from node `entry_constants` and emits new `path_sensitive_call_*` fields without changing `resolved_call_target`, `call_target_source`, or `dynamic_call_resolution_confidence`. Runtime-killed identifiers emit an explicit path-sensitive unresolved status rather than reusing stale legacy literals. |
-| 3.2a | `PENDING` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-PGM)` and `QUEUE(WS-QUEUE)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`. |
+| 3.2a | `DONE` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-CICS-PGM)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`; runtime-killed identifiers stay path-sensitive unresolved. |
 | 3.2b | `PENDING` | Add path-sensitive CICS argument facts. | Multiple CICS identifier arguments can be reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged. |
 | 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures report exact expected-target pass/fail counts and legacy-vs-path-sensitive deltas before any RAG integration claims are allowed. |
 | 4.1 | `PENDING` | Add optional static-value RAG chunks. | Chunks include only high-confidence facts with provenance and no unsupported "always" wording. |
@@ -349,6 +349,7 @@ If implementation discovers that this document is wrong, the documentation must 
 |---|---|---|---|
 | 2026-05-15 | `DONE` | Added Phase 3.1a alphanumeric constant propagation as a prerequisite for path-sensitive targets. The sidecar now represents quoted `MOVE` literals as `ALPHANUMERIC` constants, copies proven alphanumeric values through `MOVE <known-var> TO <target>`, and keeps runtime/input/output/alias kills kind-agnostic. It also bumps the dataflow analysis version to `1.2` and mode/status to `alphanumeric_constant_propagation`. No `path_sensitive_call_*` or `path_sensitive_cics_*` fields are emitted yet. | Targeted checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true -Dtest=StaticValueTest`, 4 tests; `mvn -pl smojol-core install -Dcheckstyle.skip=true -DskipTests`; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 41 tests, total time 15.902s. Broader checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true`, 100 tests, total time 5.258s; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 53 tests, 2 skipped, total time 15.828s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 13 node states, 12 edges, 17 entry constants, 20 exit constants, 1 kill fact, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, and a 12,731-byte pretty-printed sidecar. |
 | 2026-05-18 | `DONE` | Added Phase 3.1b path-sensitive dynamic `CALL` metadata. `WRITE_CFG` now builds `static_analysis/dataflow.json` before serializing the CFG, annotates only dynamic `CALL` nodes from proven alphanumeric entry constants, then writes the CFG and sidecar. The legacy resolver still emits `resolved_call_target`, `call_target_source`, and `dynamic_call_resolution_confidence` unchanged; new facts are strictly additive under the `path_sensitive_call_*` prefix. The dataflow analysis version is now `1.3` with mode/status `path_sensitive_call_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 42 tests, total time 18.071s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 16 node states, 15 edges, 22 entry constants, 25 exit constants, 1 kill fact, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 15,517-byte pretty-printed sidecar, and a 25,392-byte pretty-printed CFG. Exact tests cover two path-sensitive resolved `CALL WS-PGM` nodes and one stale-legacy-but-path-sensitive-unresolved `CALL WS-KILLED` node. |
+| 2026-05-18 | `DONE` | Added Phase 3.2a path-sensitive CICS target metadata. The same additive resolver now annotates CICS dialect nodes whose target identifier has a proven alphanumeric constant at node entry. It emits top-level `path_sensitive_cics_*` fields only; legacy `resolved_cics_target`, `cics_target_source`, `cics_dynamic_resolution_confidence`, nested `cics_operation`, and existing `cics_arguments` remain compatibility fields. The dataflow analysis version is now `1.4` with mode/status `path_sensitive_cics_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 44 tests, total time 17.871s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 56 tests, 2 skipped, total time 18.124s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 29 node states, 28 edges, 33 entry constants, 38 exit constants, 2 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 23,746-byte pretty-printed sidecar, and a 55,569-byte pretty-printed CFG. Exact tests cover two CICS `LINK PROGRAM(WS-CICS-PGM)` nodes resolving to `CICSA` and `CICSB`, plus one `ACCEPT`-killed `WS-CICS-KILLED` node where legacy still reports `CICSKILL` but path-sensitive CICS metadata is unresolved. |
 
 ### Fool-Proof Execution Rules
 
@@ -902,9 +903,9 @@ Current legacy input:
   - nested `cics_operation.target`
   - nested `cics_arguments[*].resolved_value` for selected identifier arguments
 
-Phase 3.2a must leave those legacy fields unchanged and add top-level path-sensitive fields.
+Phase 3.2a leaves those legacy fields unchanged and adds top-level path-sensitive fields.
 
-Planned top-level metadata fields:
+Implemented top-level metadata fields:
 
 ```json
 {
@@ -919,7 +920,7 @@ Planned top-level metadata fields:
     "entry_variable": "WS-CICS-PGM",
     "value_state": "CONSTANT",
     "value_kind": "ALPHANUMERIC",
-    "cics_command": "LINK",
+    "target_kind": "PROGRAM",
     "dataflow_artifact": "static_analysis/dataflow.json"
   }
 }
@@ -938,32 +939,84 @@ Unresolved CICS identifier target:
 }
 ```
 
-Required tests:
+Committed test fixture:
 
 ```cobol
-MOVE "PAYPGM" TO WS-CICS-PGM
+MOVE "CICSA" TO WS-CICS-PGM
 EXEC CICS LINK PROGRAM(WS-CICS-PGM)
+     COMMAREA(WS-COPY)
+END-EXEC
+MOVE "CICSB" TO WS-CICS-PGM
+EXEC CICS LINK PROGRAM(WS-CICS-PGM)
+     COMMAREA(WS-COPY)
+END-EXEC
 ```
 
 Expected:
 
-- `path_sensitive_cics_target: "PAYPGM"`
+- The first CICS `LINK` emits `path_sensitive_cics_target: "CICSA"`.
+- The second CICS `LINK` emits `path_sensitive_cics_target: "CICSB"`.
 - `path_sensitive_cics_target_identifier: "WS-CICS-PGM"`
 - `path_sensitive_cics_target_kind: "PROGRAM"`
 - Legacy `resolved_cics_target`, `cics_target_source`, and `cics_dynamic_resolution_confidence` remain unchanged.
 
+The fixture includes `COMMAREA(WS-COPY)` because the existing accepted parser shape for CICS `LINK` in this codebase includes a `COMMAREA` argument. This keeps the test focused on path-sensitive target resolution rather than dialect grammar expansion.
+
 Runtime-kill negative case:
 
 ```cobol
-MOVE "PAYPGM" TO WS-CICS-PGM
-ACCEPT WS-CICS-PGM
-EXEC CICS LINK PROGRAM(WS-CICS-PGM)
+MOVE "CICSKILL" TO WS-CICS-KILLED
+ACCEPT WS-CICS-KILLED
+EXEC CICS LINK PROGRAM(WS-CICS-KILLED)
+     COMMAREA(WS-COPY)
+END-EXEC
 ```
 
 Expected:
 
 - CICS node is unresolved path-sensitively.
-- No stale `PAYPGM` path-sensitive target is emitted.
+- No stale `CICSKILL` path-sensitive target is emitted.
+- Legacy CICS metadata still reports `resolved_cics_target: "CICSKILL"` with `cics_target_source: "inferred_literal_assignment"` and `cics_dynamic_resolution_confidence: "medium"`; the new path-sensitive fields are the safer dataflow-based view.
+
+Representative resolved metadata:
+
+```json
+{
+  "resolved_cics_target": "CICSA",
+  "cics_target_source": "inferred_literal_assignment",
+  "cics_dynamic_resolution_confidence": "medium",
+  "path_sensitive_cics_resolution_status": "resolved",
+  "path_sensitive_cics_target": "CICSA",
+  "path_sensitive_cics_target_identifier": "WS-CICS-PGM",
+  "path_sensitive_cics_target_kind": "PROGRAM",
+  "path_sensitive_cics_target_source": "static_analysis.dataflow.entry_constants",
+  "path_sensitive_cics_confidence": "high",
+  "path_sensitive_cics_evidence": {
+    "node_id": "node-456",
+    "entry_variable": "WS-CICS-PGM",
+    "value_state": "CONSTANT",
+    "value_kind": "ALPHANUMERIC",
+    "target_kind": "PROGRAM",
+    "dataflow_artifact": "static_analysis/dataflow.json"
+  }
+}
+```
+
+Representative killed-target metadata:
+
+```json
+{
+  "resolved_cics_target": "CICSKILL",
+  "cics_target_source": "inferred_literal_assignment",
+  "cics_dynamic_resolution_confidence": "medium",
+  "path_sensitive_cics_resolution_status": "unresolved",
+  "path_sensitive_cics_target_identifier": "WS-CICS-KILLED",
+  "path_sensitive_cics_target_kind": "PROGRAM",
+  "path_sensitive_cics_target_source": "static_analysis.dataflow.entry_constants",
+  "path_sensitive_cics_confidence": "none",
+  "path_sensitive_cics_resolution_note": "No proven alphanumeric constant for WS-CICS-KILLED at CICS node entry."
+}
+```
 
 #### Phase 3.2b: Path-Sensitive CICS Argument Facts
 

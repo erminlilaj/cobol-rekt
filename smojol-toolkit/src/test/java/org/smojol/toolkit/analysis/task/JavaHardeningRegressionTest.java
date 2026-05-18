@@ -362,8 +362,8 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("1.3", dataflow.get("analysis_version").getAsString());
-        assertEquals("path_sensitive_call_targets", dataflow.get("status").getAsString());
+        assertEquals("1.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("path_sensitive_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
         assertTrue(config.get("constant_propagation_enabled").getAsBoolean());
@@ -371,7 +371,7 @@ class JavaHardeningRegressionTest {
         assertTrue(config.get("paragraph_summaries_enabled").getAsBoolean());
         assertTrue(config.get("alias_analysis_enabled").getAsBoolean());
         assertTrue(config.get("alias_kills_enabled").getAsBoolean());
-        assertEquals("path_sensitive_call_targets", config.get("mode").getAsString());
+        assertEquals("path_sensitive_cics_targets", config.get("mode").getAsString());
         assertEquals(1000, config.get("max_iterations").getAsInt());
 
         JsonObject summary = dataflow.getAsJsonObject("summary");
@@ -511,8 +511,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
         JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.3", dataflow.get("analysis_version").getAsString());
-        assertEquals("path_sensitive_call_targets", dataflow.get("status").getAsString());
+        assertEquals("1.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("path_sensitive_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject childWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "MOVE \"A\" TO CHILD-A", "MOVE");
@@ -606,11 +606,11 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("constant-propagation-phase2.cbl.report/cfg/cfg-constant-propagation-phase2.cbl.json");
         JsonObject dataflow = readJson("constant-propagation-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.3", dataflow.get("analysis_version").getAsString());
-        assertEquals("path_sensitive_call_targets", dataflow.get("status").getAsString());
+        assertEquals("1.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("path_sensitive_cics_targets", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("constant_propagation_enabled").getAsBoolean());
         assertTrue(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
-        assertEquals("path_sensitive_call_targets",
+        assertEquals("path_sensitive_cics_targets",
                 dataflow.getAsJsonObject("config").get("mode").getAsString());
 
         JsonObject moveA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -641,8 +641,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("path-sensitive-targets-phase3.cbl.report/cfg/cfg-path-sensitive-targets-phase3.cbl.json");
         JsonObject dataflow = readJson("path-sensitive-targets-phase3.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.3", dataflow.get("analysis_version").getAsString());
-        assertEquals("path_sensitive_call_targets", dataflow.get("status").getAsString());
+        assertEquals("1.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("path_sensitive_cics_targets", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
 
         JsonObject moveProgram = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -697,6 +697,53 @@ class JavaHardeningRegressionTest {
     }
 
     @Test
+    void pathSensitiveCicsTargetsUseEntryConstants() throws IOException {
+        new TestTaskRunner("path-sensitive-targets-phase3.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("path-sensitive-targets-phase3.cbl.report/cfg/cfg-path-sensitive-targets-phase3.cbl.json");
+        JsonObject dataflow = readJson("path-sensitive-targets-phase3.cbl.report/static_analysis/dataflow.json");
+
+        List<JsonObject> cicsLinks = findNodesByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "EXEC CICS LINK PROGRAM(WS-CICS-PGM)", "DIALECT").stream()
+                .sorted((left, right) -> Integer.compare(left.get("sourceLine").getAsInt(),
+                        right.get("sourceLine").getAsInt()))
+                .toList();
+        assertEquals(2, cicsLinks.size());
+
+        JsonObject firstLinkState = nodeStateFor(dataflow, cicsLinks.get(0));
+        assertAlphanumericConstant(firstLinkState.getAsJsonObject("entry_constants"), "WS-CICS-PGM",
+                "\"CICSA\"", "CICSA");
+        assertPathSensitiveCicsResolved(cicsLinks.get(0).getAsJsonObject("metadata"),
+                "WS-CICS-PGM", "PROGRAM", "CICSA");
+
+        JsonObject secondLinkState = nodeStateFor(dataflow, cicsLinks.get(1));
+        assertAlphanumericConstant(secondLinkState.getAsJsonObject("entry_constants"), "WS-CICS-PGM",
+                "\"CICSB\"", "CICSB");
+        assertPathSensitiveCicsResolved(cicsLinks.get(1).getAsJsonObject("metadata"),
+                "WS-CICS-PGM", "PROGRAM", "CICSB");
+    }
+
+    @Test
+    void pathSensitiveCicsTargetDoesNotReuseStaleKilledConstants() throws IOException {
+        new TestTaskRunner("path-sensitive-targets-phase3.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("path-sensitive-targets-phase3.cbl.report/cfg/cfg-path-sensitive-targets-phase3.cbl.json");
+        JsonObject dataflow = readJson("path-sensitive-targets-phase3.cbl.report/static_analysis/dataflow.json");
+
+        JsonObject cics = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "EXEC CICS LINK PROGRAM(WS-CICS-KILLED)", "DIALECT");
+        JsonObject cicsState = nodeStateFor(dataflow, cics);
+        assertFalse(cicsState.getAsJsonObject("entry_constants").has("WS-CICS-KILLED"));
+        JsonObject metadata = cics.getAsJsonObject("metadata");
+        assertEquals("CICSKILL", metadata.get("resolved_cics_target").getAsString());
+        assertEquals("inferred_literal_assignment", metadata.get("cics_target_source").getAsString());
+        assertEquals("medium", metadata.get("cics_dynamic_resolution_confidence").getAsString());
+        assertPathSensitiveCicsUnresolved(metadata, "WS-CICS-KILLED", "PROGRAM");
+    }
+
+    @Test
     void dataflowKillsAlphanumericConstantsBeforeLaterMoves() throws IOException {
         new TestTaskRunner("path-sensitive-targets-phase3.cbl", "test-code/flow-ast")
                 .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
@@ -724,8 +771,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("runtime-kills-phase26a.cbl.report/cfg/cfg-runtime-kills-phase26a.cbl.json");
         JsonObject dataflow = readJson("runtime-kills-phase26a.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.3", dataflow.get("analysis_version").getAsString());
-        assertEquals("path_sensitive_call_targets", dataflow.get("status").getAsString());
+        assertEquals("1.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("path_sensitive_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject acceptA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "ACCEPT WS-A FROM DATE", "ACCEPT"));
@@ -796,8 +843,8 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("output-kills-phase26b.cbl.report/cfg/cfg-output-kills-phase26b.cbl.json");
         JsonObject dataflow = readJson("output-kills-phase26b.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.3", dataflow.get("analysis_version").getAsString());
-        assertEquals("path_sensitive_call_targets", dataflow.get("status").getAsString());
+        assertEquals("1.4", dataflow.get("analysis_version").getAsString());
+        assertEquals("path_sensitive_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "READ IN-FILE INTO WS-READ", "READ"));
@@ -1468,6 +1515,35 @@ class JavaHardeningRegressionTest {
         assertEquals("none", metadata.get("path_sensitive_call_confidence").getAsString());
         assertEquals("No proven alphanumeric constant for " + identifier + " at CALL node entry.",
                 metadata.get("path_sensitive_call_resolution_note").getAsString());
+    }
+
+    private void assertPathSensitiveCicsResolved(JsonObject metadata, String identifier, String targetKind,
+                                                 String target) {
+        assertEquals("resolved", metadata.get("path_sensitive_cics_resolution_status").getAsString());
+        assertEquals(target, metadata.get("path_sensitive_cics_target").getAsString());
+        assertEquals(identifier, metadata.get("path_sensitive_cics_target_identifier").getAsString());
+        assertEquals(targetKind, metadata.get("path_sensitive_cics_target_kind").getAsString());
+        assertEquals("static_analysis.dataflow.entry_constants",
+                metadata.get("path_sensitive_cics_target_source").getAsString());
+        assertEquals("high", metadata.get("path_sensitive_cics_confidence").getAsString());
+        JsonObject evidence = metadata.getAsJsonObject("path_sensitive_cics_evidence");
+        assertEquals(identifier, evidence.get("entry_variable").getAsString());
+        assertEquals("CONSTANT", evidence.get("value_state").getAsString());
+        assertEquals("ALPHANUMERIC", evidence.get("value_kind").getAsString());
+        assertEquals(targetKind, evidence.get("target_kind").getAsString());
+        assertEquals("static_analysis/dataflow.json", evidence.get("dataflow_artifact").getAsString());
+    }
+
+    private void assertPathSensitiveCicsUnresolved(JsonObject metadata, String identifier, String targetKind) {
+        assertEquals("unresolved", metadata.get("path_sensitive_cics_resolution_status").getAsString());
+        assertFalse(metadata.has("path_sensitive_cics_target"));
+        assertEquals(identifier, metadata.get("path_sensitive_cics_target_identifier").getAsString());
+        assertEquals(targetKind, metadata.get("path_sensitive_cics_target_kind").getAsString());
+        assertEquals("static_analysis.dataflow.entry_constants",
+                metadata.get("path_sensitive_cics_target_source").getAsString());
+        assertEquals("none", metadata.get("path_sensitive_cics_confidence").getAsString());
+        assertEquals("No proven alphanumeric constant for " + identifier + " at CICS node entry.",
+                metadata.get("path_sensitive_cics_resolution_note").getAsString());
     }
 
     private void assertNumericConstant(JsonObject constants, String variable, String rawLexeme, String decimal,

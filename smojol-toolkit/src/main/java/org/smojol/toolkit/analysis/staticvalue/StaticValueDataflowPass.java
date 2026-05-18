@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.3";
+    private static final String ANALYSIS_VERSION = "1.4";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -62,7 +62,7 @@ public class StaticValueDataflowPass {
         Map<String, DataflowNodeState> nodeStates = propagationResult.nodeStates();
         int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
         String status = pathSensitiveTargetsEnabled
-                ? "path_sensitive_call_targets" : "alphanumeric_constant_propagation";
+                ? "path_sensitive_cics_targets" : "alphanumeric_constant_propagation";
 
         return new DataflowAnalysisResult(
                 program,

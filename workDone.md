@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-18 — Phase 3.2a path-sensitive CICS target metadata
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/PathSensitiveTargetResolver.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added additive path-sensitive CICS target metadata. CICS dialect nodes now read proven alphanumeric `entry_constants` for identifier targets such as `PROGRAM(WS-CICS-PGM)` and emit top-level `path_sensitive_cics_*` fields while preserving legacy `resolved_cics_target`, `cics_target_source`, `cics_dynamic_resolution_confidence`, nested `cics_operation`, and existing `cics_arguments` behavior.
+**Why:** Phase 3 needs CICS target facts that are controlled by dataflow and runtime kills. This checkpoint proves two CICS `LINK PROGRAM(WS-CICS-PGM)` nodes can resolve to different proven entry constants and that an `ACCEPT`-killed CICS identifier remains path-sensitive unresolved even when legacy order-based metadata still reports a stale literal.
+
+---
+
 ## 2026-05-18 — Phase 3.1b path-sensitive dynamic CALL metadata
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/PathSensitiveTargetResolver.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/WriteControlFlowGraphTask.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

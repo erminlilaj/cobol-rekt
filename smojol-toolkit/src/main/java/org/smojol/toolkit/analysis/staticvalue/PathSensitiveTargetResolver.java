@@ -14,17 +14,38 @@ public class PathSensitiveTargetResolver {
 
     public void annotateTargets(List<SerialisableCFGFlowNode> nodes, DataflowAnalysisResult dataflow) {
         for (SerialisableCFGFlowNode node : nodes) {
-            if (node.getType() != FlowNodeType.CALL) continue;
-            Map<String, Object> metadata = node.getMetadata();
-            if (!Boolean.TRUE.equals(metadata.get("dynamic_call"))) continue;
-            String identifier = callTargetIdentifier(metadata);
-            if (identifier == null || identifier.isBlank()) continue;
-            Map<String, Object> value = entryValue(node, dataflow, canonicalVariable(identifier));
-            if (isAlphanumericConstant(value)) {
-                annotateResolved(metadata, node.getId(), identifier, value);
-            } else {
-                annotateUnresolved(metadata, identifier);
-            }
+            annotateCallTarget(node, dataflow);
+            annotateCicsTarget(node, dataflow);
+        }
+    }
+
+    private void annotateCallTarget(SerialisableCFGFlowNode node, DataflowAnalysisResult dataflow) {
+        if (node.getType() != FlowNodeType.CALL) return;
+        Map<String, Object> metadata = node.getMetadata();
+        if (!Boolean.TRUE.equals(metadata.get("dynamic_call"))) return;
+        String identifier = callTargetIdentifier(metadata);
+        if (identifier == null || identifier.isBlank()) return;
+        Map<String, Object> value = entryValue(node, dataflow, canonicalVariable(identifier));
+        if (isAlphanumericConstant(value)) {
+            annotateCallResolved(metadata, node.getId(), identifier, value);
+        } else {
+            annotateCallUnresolved(metadata, identifier);
+        }
+    }
+
+    private void annotateCicsTarget(SerialisableCFGFlowNode node, DataflowAnalysisResult dataflow) {
+        if (node.getType() != FlowNodeType.DIALECT) return;
+        Map<String, Object> metadata = node.getMetadata();
+        Object command = metadata.get("cics_command");
+        if (!(command instanceof String)) return;
+        String identifier = cicsTargetIdentifier(metadata);
+        if (identifier == null || identifier.isBlank()) return;
+        String targetKind = cicsTargetKind(metadata);
+        Map<String, Object> value = entryValue(node, dataflow, canonicalVariable(identifier));
+        if (isAlphanumericConstant(value)) {
+            annotateCicsResolved(metadata, node.getId(), identifier, targetKind, value);
+        } else {
+            annotateCicsUnresolved(metadata, identifier, targetKind);
         }
     }
 
@@ -52,27 +73,54 @@ public class PathSensitiveTargetResolver {
                 && !normalized.isBlank();
     }
 
-    private void annotateResolved(Map<String, Object> metadata, String nodeId, String identifier,
-                                  Map<String, Object> value) {
+    private String cicsTargetIdentifier(Map<String, Object> metadata) {
+        Object explicitIdentifier = metadata.get("cics_target_identifier");
+        if (explicitIdentifier instanceof String identifier && !identifier.isBlank()) return identifier;
+        Object targetSource = metadata.get("cics_target_source");
+        Object target = metadata.get("cics_target");
+        if ("identifier".equals(targetSource) && target instanceof String identifier) return identifier;
+        return null;
+    }
+
+    private String cicsTargetKind(Map<String, Object> metadata) {
+        Object targetKind = metadata.get("cics_target_kind");
+        return targetKind instanceof String kind && !kind.isBlank() ? kind : "UNKNOWN";
+    }
+
+    private void annotateCallResolved(Map<String, Object> metadata, String nodeId, String identifier,
+                                      Map<String, Object> value) {
         metadata.put("path_sensitive_call_resolution_status", "resolved");
         metadata.put("path_sensitive_call_target", value.get("normalized_value"));
         metadata.put("path_sensitive_call_target_identifier", canonicalVariable(identifier));
         metadata.put("path_sensitive_call_target_source", DATAFLOW_ENTRY_CONSTANTS);
         metadata.put("path_sensitive_call_confidence", "high");
-        metadata.put("path_sensitive_call_evidence", evidence(nodeId, identifier, value));
+        metadata.put("path_sensitive_call_evidence", evidence(nodeId, identifier, value, null));
     }
 
-    private Map<String, Object> evidence(String nodeId, String identifier, Map<String, Object> value) {
+    private void annotateCicsResolved(Map<String, Object> metadata, String nodeId, String identifier,
+                                      String targetKind, Map<String, Object> value) {
+        metadata.put("path_sensitive_cics_resolution_status", "resolved");
+        metadata.put("path_sensitive_cics_target", value.get("normalized_value"));
+        metadata.put("path_sensitive_cics_target_identifier", canonicalVariable(identifier));
+        metadata.put("path_sensitive_cics_target_kind", targetKind);
+        metadata.put("path_sensitive_cics_target_source", DATAFLOW_ENTRY_CONSTANTS);
+        metadata.put("path_sensitive_cics_confidence", "high");
+        metadata.put("path_sensitive_cics_evidence", evidence(nodeId, identifier, value, targetKind));
+    }
+
+    private Map<String, Object> evidence(String nodeId, String identifier, Map<String, Object> value,
+                                         String targetKind) {
         Map<String, Object> evidence = new LinkedHashMap<>();
         evidence.put("node_id", nodeId);
         evidence.put("entry_variable", canonicalVariable(identifier));
         evidence.put("value_state", value.get("state"));
         evidence.put("value_kind", value.get("kind"));
+        if (targetKind != null) evidence.put("target_kind", targetKind);
         evidence.put("dataflow_artifact", DATAFLOW_ARTIFACT);
         return evidence;
     }
 
-    private void annotateUnresolved(Map<String, Object> metadata, String identifier) {
+    private void annotateCallUnresolved(Map<String, Object> metadata, String identifier) {
         String canonicalIdentifier = canonicalVariable(identifier);
         metadata.put("path_sensitive_call_resolution_status", "unresolved");
         metadata.put("path_sensitive_call_target_identifier", canonicalIdentifier);
@@ -80,6 +128,17 @@ public class PathSensitiveTargetResolver {
         metadata.put("path_sensitive_call_confidence", "none");
         metadata.put("path_sensitive_call_resolution_note",
                 "No proven alphanumeric constant for " + canonicalIdentifier + " at CALL node entry.");
+    }
+
+    private void annotateCicsUnresolved(Map<String, Object> metadata, String identifier, String targetKind) {
+        String canonicalIdentifier = canonicalVariable(identifier);
+        metadata.put("path_sensitive_cics_resolution_status", "unresolved");
+        metadata.put("path_sensitive_cics_target_identifier", canonicalIdentifier);
+        metadata.put("path_sensitive_cics_target_kind", targetKind);
+        metadata.put("path_sensitive_cics_target_source", DATAFLOW_ENTRY_CONSTANTS);
+        metadata.put("path_sensitive_cics_confidence", "none");
+        metadata.put("path_sensitive_cics_resolution_note",
+                "No proven alphanumeric constant for " + canonicalIdentifier + " at CICS node entry.");
     }
 
     private static String canonicalVariable(String variable) {
