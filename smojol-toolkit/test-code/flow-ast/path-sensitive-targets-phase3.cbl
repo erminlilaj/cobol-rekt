@@ -11,9 +11,12 @@
        MAIN-PARA.
            MOVE "PROG-A" TO WS-PGM
            CALL WS-PGM
+           MOVE "PROG-B" TO WS-PGM
+           CALL WS-PGM
            MOVE WS-PGM TO WS-COPY
            MOVE 'PROG-C' TO WS-SINGLE
            MOVE "PROG-D" TO WS-KILLED
            ACCEPT WS-KILLED
+           CALL WS-KILLED
            MOVE WS-KILLED TO WS-AFTER-KILL
            GOBACK.

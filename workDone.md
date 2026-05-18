@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-18 — Phase 3.1b path-sensitive dynamic CALL metadata
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/PathSensitiveTargetResolver.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/WriteControlFlowGraphTask.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added an additive path-sensitive dynamic `CALL` resolver. `WRITE_CFG` now builds dataflow before CFG serialization, annotates dynamic `CALL` nodes from proven alphanumeric entry constants, and emits `path_sensitive_call_*` metadata while preserving legacy `resolved_call_target`, `call_target_source`, and `dynamic_call_resolution_confidence` fields.
+**Why:** Phase 3 needs dynamic CALL target facts that are controlled by CFG dataflow and runtime kills, not only global latest literal assignment order. This checkpoint proves two calls to the same identifier can resolve differently and that a runtime-killed identifier stays path-sensitive unresolved.
+
+---
+
 ## 2026-05-15 — Phase 3.1a alphanumeric dataflow constants
 
 **File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/value/ConstantStaticValue.java`, `smojol-core/src/test/java/org/smojol/common/staticanalysis/value/StaticValueTest.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

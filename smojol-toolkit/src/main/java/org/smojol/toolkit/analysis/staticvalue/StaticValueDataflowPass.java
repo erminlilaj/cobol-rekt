@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.2";
+    private static final String ANALYSIS_VERSION = "1.3";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -49,19 +49,28 @@ public class StaticValueDataflowPass {
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
                                                 List<SerialisableEdge> edges,
                                                 CobolDataStructure dataStructures) {
+        return buildSkeleton(program, nodes, edges, dataStructures, false);
+    }
+
+    public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
+                                                List<SerialisableEdge> edges,
+                                                CobolDataStructure dataStructures,
+                                                boolean pathSensitiveTargetsEnabled) {
         Map<String, ParagraphSummary> paragraphSummaries = paragraphSummaries(nodes);
         Map<String, AliasSetSummary> aliasSets = aliasSets(dataStructures);
         PropagationResult propagationResult = propagate(nodes, edges, aliasSets);
         Map<String, DataflowNodeState> nodeStates = propagationResult.nodeStates();
         int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
+        String status = pathSensitiveTargetsEnabled
+                ? "path_sensitive_call_targets" : "alphanumeric_constant_propagation";
 
         return new DataflowAnalysisResult(
                 program,
                 SCHEMA_VERSION,
                 "static_value_dataflow",
                 ANALYSIS_VERSION,
-                "alphanumeric_constant_propagation",
-                config(),
+                status,
+                config(pathSensitiveTargetsEnabled, status),
                 summary(nodes.size(), edges.size(), paragraphSummaries.size(), aliasSets.size(), killCount,
                         nodeStates, propagationResult.iterationCount(), propagationResult.converged()),
                 nodeStates,
@@ -71,14 +80,14 @@ public class StaticValueDataflowPass {
         );
     }
 
-    private Map<String, Object> config() {
+    private Map<String, Object> config(boolean pathSensitiveTargetsEnabled, String mode) {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("constant_propagation_enabled", true);
-        config.put("path_sensitive_targets_enabled", false);
+        config.put("path_sensitive_targets_enabled", pathSensitiveTargetsEnabled);
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
-        config.put("mode", "alphanumeric_constant_propagation");
+        config.put("mode", mode);
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
     }

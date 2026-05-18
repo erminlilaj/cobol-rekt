@@ -8,6 +8,7 @@ import com.mojo.algorithms.id.IdProvider;
 import org.smojol.common.resource.ResourceOperations;
 import com.mojo.algorithms.task.CommandLineAnalysisTask;
 import org.smojol.toolkit.analysis.staticvalue.DataflowAnalysisResult;
+import org.smojol.toolkit.analysis.staticvalue.PathSensitiveTargetResolver;
 import org.smojol.toolkit.analysis.staticvalue.StaticValueDataflowPass;
 import org.smojol.toolkit.analysis.pipeline.SerialisableCFGGraphCollector;
 import com.mojo.algorithms.task.AnalysisTask;
@@ -43,6 +44,8 @@ public class WriteControlFlowGraphTask implements AnalysisTask {
         SerialisableCFGGraphCollector cfgGraphCollector = new SerialisableCFGGraphCollector(idProvider);
         astRoot.accept(cfgGraphCollector, -1);
         cfgGraphCollector.annotateReachability();
+        DataflowAnalysisResult dataflow = buildDataflow(cfgGraphCollector);
+        new PathSensitiveTargetResolver().annotateTargets(cfgGraphCollector.nodes(), dataflow);
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         try {
 //            Files.createDirectories(cfgOutputConfig.outputDir());
@@ -54,18 +57,21 @@ public class WriteControlFlowGraphTask implements AnalysisTask {
         try (JsonWriter writer = new JsonWriter(resourceOperations.fileWriter(cfgOutputConfig.outputPath()))) {
             writer.setIndent("  ");  // Optional: for pretty printing
             gson.toJson(cfgGraphCollector, SerialisableCFGGraphCollector.class, writer);
-            writeDataflowSkeleton(gson, cfgGraphCollector);
+            writeDataflow(gson, dataflow);
             return AnalysisTaskResult.OK(CommandLineAnalysisTask.WRITE_CFG);
         } catch (IOException e) {
             return AnalysisTaskResult.ERROR(e, CommandLineAnalysisTask.WRITE_CFG);
         }
     }
 
-    private void writeDataflowSkeleton(Gson gson, SerialisableCFGGraphCollector cfgGraphCollector) throws IOException {
+    private DataflowAnalysisResult buildDataflow(SerialisableCFGGraphCollector cfgGraphCollector) {
+        return new StaticValueDataflowPass()
+                .buildSkeleton(programName(), cfgGraphCollector.nodes(), cfgGraphCollector.edges(), dataStructures, true);
+    }
+
+    private void writeDataflow(Gson gson, DataflowAnalysisResult result) throws IOException {
         Path staticAnalysisDir = cfgOutputConfig.outputDir().getParent().resolve("static_analysis");
         resourceOperations.createDirectories(staticAnalysisDir);
-        DataflowAnalysisResult result = new StaticValueDataflowPass()
-                .buildSkeleton(programName(), cfgGraphCollector.nodes(), cfgGraphCollector.edges(), dataStructures);
         try (JsonWriter writer = new JsonWriter(resourceOperations.fileWriter(
                 staticAnalysisDir.resolve("dataflow.json").toAbsolutePath().normalize().toString()))) {
             writer.setIndent("  ");

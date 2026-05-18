@@ -310,7 +310,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2.7 | `DONE` | Record Phase 2 accuracy/performance stats. | This document now consolidates the Phase 2 examples, fixture metrics, supported transfer rules, diagnostics, limitations, and reproducibility commands. Memory profiling remains deferred to a corpus benchmark because the current Java hardening tests do not expose stable per-fixture heap measurements. |
 | 3.0 | `DONE` | Write detailed Phase 3 pre-coding plan. | This document now defines the exact ordering, schemas, fixtures, tests, invariants, and risk controls for path-sensitive dynamic `CALL`/CICS facts. |
 | 3.1a | `DONE` | Add quoted alphanumeric constants to the dataflow sidecar. | `MOVE "PROG-A" TO WS-PGM` and `MOVE WS-PGM TO WS-COPY` now carry `ALPHANUMERIC` constants through the same fixed-point solver; runtime, alias, and join kills still apply. Path-sensitive target fields remain disabled. |
-| 3.1b | `PENDING` | Add path-sensitive dynamic `CALL` metadata fields. | Dynamic `CALL WS-PGM` reads `WS-PGM` from node `entry_constants` and emits new `path_sensitive_call_*` fields without changing `resolved_call_target`, `call_target_source`, or `dynamic_call_resolution_confidence`. |
+| 3.1b | `DONE` | Add path-sensitive dynamic `CALL` metadata fields. | Dynamic `CALL WS-PGM` reads `WS-PGM` from node `entry_constants` and emits new `path_sensitive_call_*` fields without changing `resolved_call_target`, `call_target_source`, or `dynamic_call_resolution_confidence`. Runtime-killed identifiers emit an explicit path-sensitive unresolved status rather than reusing stale legacy literals. |
 | 3.2a | `PENDING` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-PGM)` and `QUEUE(WS-QUEUE)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`. |
 | 3.2b | `PENDING` | Add path-sensitive CICS argument facts. | Multiple CICS identifier arguments can be reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged. |
 | 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures report exact expected-target pass/fail counts and legacy-vs-path-sensitive deltas before any RAG integration claims are allowed. |
@@ -348,6 +348,7 @@ If implementation discovers that this document is wrong, the documentation must 
 | Date | Status | What changed | Verification |
 |---|---|---|---|
 | 2026-05-15 | `DONE` | Added Phase 3.1a alphanumeric constant propagation as a prerequisite for path-sensitive targets. The sidecar now represents quoted `MOVE` literals as `ALPHANUMERIC` constants, copies proven alphanumeric values through `MOVE <known-var> TO <target>`, and keeps runtime/input/output/alias kills kind-agnostic. It also bumps the dataflow analysis version to `1.2` and mode/status to `alphanumeric_constant_propagation`. No `path_sensitive_call_*` or `path_sensitive_cics_*` fields are emitted yet. | Targeted checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true -Dtest=StaticValueTest`, 4 tests; `mvn -pl smojol-core install -Dcheckstyle.skip=true -DskipTests`; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 41 tests, total time 15.902s. Broader checks passed: `mvn -pl smojol-core test -Dcheckstyle.skip=true`, 100 tests, total time 5.258s; `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 53 tests, 2 skipped, total time 15.828s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 13 node states, 12 edges, 17 entry constants, 20 exit constants, 1 kill fact, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, and a 12,731-byte pretty-printed sidecar. |
+| 2026-05-18 | `DONE` | Added Phase 3.1b path-sensitive dynamic `CALL` metadata. `WRITE_CFG` now builds `static_analysis/dataflow.json` before serializing the CFG, annotates only dynamic `CALL` nodes from proven alphanumeric entry constants, then writes the CFG and sidecar. The legacy resolver still emits `resolved_call_target`, `call_target_source`, and `dynamic_call_resolution_confidence` unchanged; new facts are strictly additive under the `path_sensitive_call_*` prefix. The dataflow analysis version is now `1.3` with mode/status `path_sensitive_call_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 42 tests, total time 18.071s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 16 node states, 15 edges, 22 entry constants, 25 exit constants, 1 kill fact, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 15,517-byte pretty-printed sidecar, and a 25,392-byte pretty-printed CFG. Exact tests cover two path-sensitive resolved `CALL WS-PGM` nodes and one stale-legacy-but-path-sensitive-unresolved `CALL WS-KILLED` node. |
 
 ### Fool-Proof Execution Rules
 
@@ -763,9 +764,9 @@ Current legacy input:
   - dynamic calls resolved from the latest prior literal assignment with confidence `medium`
   - unresolved dynamic calls with the identifier itself and confidence `low`
 
-Phase 3.1b must not change that behavior. It adds a second view.
+Phase 3.1b does not change that behavior. It adds a second view.
 
-Planned fields on dynamic `CALL` node metadata:
+Implemented fields on dynamic `CALL` node metadata:
 
 ```json
 {
@@ -796,7 +797,7 @@ Unresolved dynamic calls should be explicit but compact:
 }
 ```
 
-Implementation shape:
+Implemented shape:
 
 1. Build the dataflow result before serializing the CFG JSON in `WriteControlFlowGraphTask`.
 2. Run a new additive resolver over `cfgGraphCollector.nodes()` and the dataflow result.
@@ -804,13 +805,13 @@ Implementation shape:
 4. Keep `DataflowAnalysisResult.config.path_sensitive_targets_enabled` set to `true` once the resolver is active.
 5. Do not call `annotateCallResolution()` from the path-sensitive resolver, because that method writes legacy fields.
 
-Candidate new class:
+Implemented class:
 
 ```text
 smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/PathSensitiveTargetResolver.java
 ```
 
-Candidate API:
+Implemented API:
 
 ```text
 void annotateTargets(List<SerialisableCFGFlowNode> nodes, DataflowAnalysisResult dataflow)
@@ -827,36 +828,61 @@ Resolution algorithm:
    - Otherwise emit unresolved `path_sensitive_call_*` fields.
 3. Do nothing for static calls except preserve legacy fields.
 
-Required tests:
-
-- A chained dynamic call fixture proves two `CALL WS-PGM` nodes resolve differently when the entry constant changes:
+Committed Phase 3.1b example:
 
 ```cobol
 MOVE "PROG-A" TO WS-PGM
 CALL WS-PGM
 MOVE "PROG-B" TO WS-PGM
 CALL WS-PGM
+MOVE WS-PGM TO WS-COPY
+MOVE 'PROG-C' TO WS-SINGLE
+MOVE "PROG-D" TO WS-KILLED
+ACCEPT WS-KILLED
+CALL WS-KILLED
+MOVE WS-KILLED TO WS-AFTER-KILL
 ```
 
-Expected:
+The first dynamic call keeps the legacy medium-confidence fields and adds the path-sensitive high-confidence view:
 
-- First call has `path_sensitive_call_target: "PROG-A"`.
-- Second call has `path_sensitive_call_target: "PROG-B"`.
-- Legacy fields are still present and exactly equal to their pre-Phase-3 behavior.
-
-- A runtime-kill fixture proves no stale path-sensitive call target:
-
-```cobol
-MOVE "PROG-A" TO WS-PGM
-ACCEPT WS-PGM
-CALL WS-PGM
+```json
+{
+  "call_target": "WS-PGM",
+  "program_reference_type": "DYNAMIC",
+  "dynamic_call": true,
+  "call_target_identifier": "WS-PGM",
+  "resolved_call_target": "PROG-A",
+  "call_target_source": "inferred_literal_assignment",
+  "dynamic_call_resolution_confidence": "medium",
+  "path_sensitive_call_resolution_status": "resolved",
+  "path_sensitive_call_target": "PROG-A",
+  "path_sensitive_call_target_identifier": "WS-PGM",
+  "path_sensitive_call_target_source": "static_analysis.dataflow.entry_constants",
+  "path_sensitive_call_confidence": "high",
+  "path_sensitive_call_evidence": {
+    "entry_variable": "WS-PGM",
+    "value_state": "CONSTANT",
+    "value_kind": "ALPHANUMERIC",
+    "dataflow_artifact": "static_analysis/dataflow.json"
+  }
+}
 ```
 
-Expected:
+The second `CALL WS-PGM` sees the later `MOVE "PROG-B" TO WS-PGM` in its dataflow entry state and emits `path_sensitive_call_target: "PROG-B"`. This proves the new resolver reads per-node entry constants rather than one global latest assignment.
 
-- `ACCEPT WS-PGM` removes the entry constant.
-- The `CALL` node has `path_sensitive_call_resolution_status: "unresolved"`.
-- There is no `path_sensitive_call_target`.
+The killed-target example is intentionally different from the legacy result. After `MOVE "PROG-D" TO WS-KILLED`, `ACCEPT WS-KILLED` removes the proven entry constant before `CALL WS-KILLED`. The old order-based resolver still reports `resolved_call_target: "PROG-D"` with `call_target_source: "inferred_literal_assignment"` and confidence `medium`; the new path-sensitive view reports:
+
+```json
+{
+  "path_sensitive_call_resolution_status": "unresolved",
+  "path_sensitive_call_target_identifier": "WS-KILLED",
+  "path_sensitive_call_target_source": "static_analysis.dataflow.entry_constants",
+  "path_sensitive_call_confidence": "none",
+  "path_sensitive_call_resolution_note": "No proven alphanumeric constant for WS-KILLED at CALL node entry."
+}
+```
+
+This is the safety property for Phase 3.1b: path-sensitive metadata may disagree with legacy metadata when dataflow proves the legacy global assignment is stale, but it does so only in additive fields. No old `CALL` metadata key is removed or rewritten.
 
 #### Phase 3.2a: Path-Sensitive CICS Target Facts
 
