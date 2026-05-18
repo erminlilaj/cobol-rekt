@@ -48,7 +48,7 @@ Expected benefits:
 - Better variable value facts.
 - Better dynamic `CALL` target resolution later.
 - Better CICS target resolution later.
-- Better path-sensitive analysis later.
+- Better flow-sensitive, per-CFG-node analysis later.
 - Better RAG chunks later.
 - Better diagnostics for unsupported or unsafe cases.
 - Better distinction between values that are known, unknown, runtime-dependent, or unsupported.
@@ -281,6 +281,27 @@ This document is part of the implementation contract. It must be updated wheneve
 
 If implementation discovers that this document is wrong, the documentation must be corrected and committed before the code that depends on the corrected decision is merged. No phase is considered complete until the document status and measured results match the implementation.
 
+### External Review Corrections — 2026-05-18
+
+Claude's review after Phase 3.2a accepted the source-preserving architecture but found a real soundness gap: the dataflow solver can currently seed propagated constants from expression or literal values without checking whether the target COBOL field can actually store that value. The local folding fact `folded_value_facts` is still acceptable because it is explicitly an expression fact, not a stored-value claim. The dataflow sidecar is different: `entry_constants` and `exit_constants` describe variable states, so they must become PICTURE-aware before this work can support accuracy claims or RAG facts.
+
+Accepted blockers:
+
+- Numeric storage gating: `MOVE`, folded `COMPUTE`, and expression-propagated numeric constants must be emitted only when target PICTURE information proves the decimal value fits the target's integer digits, fractional digits, and sign. Otherwise, the solver must omit the constant.
+- Size-error/rounding gating: `ROUNDED`, `ON SIZE ERROR`, and `NOT ON SIZE ERROR` may still allow a local expression fold, but must prevent dataflow seeding until COBOL storage semantics are implemented.
+- Alphanumeric length gating: quoted `MOVE` constants must be placed into dataflow only when the receiving `PIC X(n)` field can hold the normalized value without truncation. This prevents wrong high-confidence `CALL` or CICS targets such as `MOVE "LONGERTHAN8" TO WS-PGM PIC X(8)`.
+- Negative target tests: Phase 3 must prove it does not emit `path_sensitive_*` fields for static `CALL`s, literal CICS targets, output-only CICS statements, unsupported CICS argument names, or branch joins with conflicting target values.
+
+Terminology correction: the JSON field names keep the committed `path_sensitive_*` prefix for compatibility, but the implementation is more precisely flow-sensitive or per-CFG-node. It stores one merged fact set per CFG node; it does not retain separate facts per distinct execution path after joins. Documentation and thesis prose should use "flow-sensitive/per-CFG-node" and explain that `path_sensitive_*` is the additive field prefix chosen for the dual-emission window.
+
+Secondary cleanup items:
+
+- Treat `FOLD_UNSAFE_SIZE_ERROR_SEMANTICS` as reserved until the folder has statement-level access to `ON SIZE ERROR`; do not claim it is emitted today.
+- Extract the duplicated variable canonicalization rule from `StaticValueDataflowPass` and `PathSensitiveTargetResolver` when touching either class for the next implementation checkpoint.
+- Document that `config.path_sensitive_targets_enabled` in `dataflow.json` is an analysis-mode/configuration flag; the actual `path_sensitive_*` facts live in CFG node metadata.
+- Reconsider the mode/status string after Phase 3.2b so it does not imply only CICS targets when both dynamic `CALL` and CICS facts are active.
+- Add known limitations for missed kill patterns such as `INSPECT ... TALLYING IN` and file record-buffer effects when `READ` has no explicit `INTO`.
+
 ### Grand Plan Status Ledger
 
 | Step | Flag | Deliverable | Acceptance Check |
@@ -308,13 +329,15 @@ If implementation discovers that this document is wrong, the documentation must 
 | 2.6e | `DONE` | Add join diagnostics for conflicting predecessor constants. | Solver-level tests prove a real multi-predecessor join drops `WS-D` when incoming predecessors prove `20` and `30`, and emits exact `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` evidence without changing the joined entry state. |
 | 2.6f | `DONE` | Add loop-carried constant diagnostics for CFG cycles. | Solver-level tests prove a variable modified inside a CFG cycle is not propagated after the loop and emits exact `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` evidence while the solver still converges. |
 | 2.7 | `DONE` | Record Phase 2 accuracy/performance stats. | This document now consolidates the Phase 2 examples, fixture metrics, supported transfer rules, diagnostics, limitations, and reproducibility commands. Memory profiling remains deferred to a corpus benchmark because the current Java hardening tests do not expose stable per-fixture heap measurements. |
+| 2.8 | `PENDING` | Add PIC-aware value gating for propagated numeric constants. | Dataflow must not seed or emit a `CONSTANT` for `MOVE`, folded `COMPUTE`, or expression propagation unless the target field's PICTURE makes the value provably representable; `ROUNDED` and `ON SIZE ERROR` must block propagation seeding even if local expression folding still emits an expression fact. |
 | 3.0 | `DONE` | Write detailed Phase 3 pre-coding plan. | This document now defines the exact ordering, schemas, fixtures, tests, invariants, and risk controls for path-sensitive dynamic `CALL`/CICS facts. |
 | 3.1a | `DONE` | Add quoted alphanumeric constants to the dataflow sidecar. | `MOVE "PROG-A" TO WS-PGM` and `MOVE WS-PGM TO WS-COPY` now carry `ALPHANUMERIC` constants through the same fixed-point solver; runtime, alias, and join kills still apply. Path-sensitive target fields remain disabled. |
 | 3.1b | `DONE` | Add path-sensitive dynamic `CALL` metadata fields. | Dynamic `CALL WS-PGM` reads `WS-PGM` from node `entry_constants` and emits new `path_sensitive_call_*` fields without changing `resolved_call_target`, `call_target_source`, or `dynamic_call_resolution_confidence`. Runtime-killed identifiers emit an explicit path-sensitive unresolved status rather than reusing stale legacy literals. |
 | 3.2a | `DONE` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-CICS-PGM)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`; runtime-killed identifiers stay path-sensitive unresolved. |
-| 3.2b | `PENDING` | Add path-sensitive CICS argument facts. | Multiple CICS identifier arguments can be reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged. |
-| 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures report exact expected-target pass/fail counts and legacy-vs-path-sensitive deltas before any RAG integration claims are allowed. |
-| 4.1 | `PENDING` | Add optional static-value RAG chunks. | Chunks include only high-confidence facts with provenance and no unsupported "always" wording. |
+| 3.2b | `PENDING` | Add path-sensitive CICS argument facts plus alphanumeric length gating. | Multiple CICS identifier arguments can be reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged; alphanumeric constants must not be placed in dataflow if the target `PIC X(n)` cannot hold the literal without truncation. |
+| 3.2c | `PENDING` | Add Phase 3 negative and join-path tests. | Tests must prove static `CALL`s, literal CICS targets, output-only CICS nodes, unsupported CICS argument names, and conflicting branch joins do not emit false `path_sensitive_*` facts. |
+| 3.3 | `BLOCKED` | Evaluate target-resolution accuracy. | Blocked until `2.8`, `3.2b`, and `3.2c` are done; frozen fixtures then report exact expected-target pass/fail counts and legacy-vs-flow-sensitive deltas before any RAG integration claims are allowed. |
+| 4.1 | `BLOCKED` | Add optional static-value RAG chunks. | Blocked until `2.8` and `3.3` are done; chunks may include only high-confidence storage-safe facts with provenance and no unsupported "always" wording. |
 | 4.2 | `PENDING` | Evaluate retrieval and token impact. | Benchmark reports chunk count, token count, recall, and retrieval-ranking deltas. |
 | 5.1 | `PENDING` | Publish final implementation documentation update. | This document records final schemas, measured results, known limitations, and any skipped work. |
 
@@ -408,7 +431,7 @@ Phase 2.6b adds these kill rules:
 - `EXEC CICS ... INTO(<identifier>)` and other known CICS output arguments emit `CICS_OUTPUT_KILL`.
 - `EXEC SQL SELECT/FETCH ... INTO :<host-variable>` emits `SQL_OUTPUT_KILL`.
 
-The current solver intentionally does not support function calls, string expressions, subscripts, reference modification, `ROUNDED`, size-error semantics, target PIC truncation/storage semantics, condition simplification, branch reachability pruning, interprocedural summaries, dynamic CALL/CICS path-sensitive fields, or RAG chunk generation.
+The current solver intentionally does not support function calls, string expressions, subscripts, reference modification, `ROUNDED`, size-error semantics, target PIC truncation/storage semantics, condition simplification, branch reachability pruning, interprocedural summaries, or RAG chunk generation. Dynamic `CALL` and CICS additive target fields now exist, but they depend on the same dataflow constants and therefore remain subject to the PICTURE-gating blockers listed above.
 
 Join diagnostics are deliberately narrow in Phase 2.6e. They describe a real dataflow merge where a node has at least two CFG predecessors and every predecessor proves the same variable to a different constant. They do not yet repair or reinterpret CFG shapes where branch bodies are nested under an `IF_BRANCH` node but are not direct predecessors of the following statement. In that shape, the current solver still behaves conservatively by not carrying the branch-local value forward.
 
@@ -437,7 +460,7 @@ MOVE WS-A TO WS-B
 
 The analyzer should not claim `WS-A = 6` unless it implements full COBOL loop semantics. The current safe behavior is to keep `WS-A` absent after the loop-carried modification, not propagate `WS-B` from stale `WS-A`, and emit `DATAFLOW_LOOP_CARRIED_CONSTANT_NOT_INFERRED` on the loop modification evidence.
 
-Representative Phase 2.6f artifact shape, shortened from fixture outputs and solver-level tests. The paragraph-summary, alias-summary, kill, propagated-constant, join-diagnostic, and loop-diagnostic examples may come from different checks because the checkpoints verify these shapes independently.
+Historical Phase 2.6f artifact shape, shortened from fixture outputs and solver-level tests. The paragraph-summary, alias-summary, kill, propagated-constant, join-diagnostic, and loop-diagnostic examples may come from different checks because the checkpoints verify these shapes independently. Current reports use the latest analysis version and status from the most recent committed checkpoint; this example is kept only to explain the Phase 2.6f shape.
 
 ```json
 {
@@ -633,9 +656,9 @@ Deferred beyond the current Phase 2 checkpoint:
 - More join diagnostics, including constants lost because one predecessor lacks a binding.
 - More loop diagnostics for real COBOL `PERFORM VARYING`/`PERFORM UNTIL` CFG shapes and explicit max-iteration limit tests.
 
-### Phase 3: Path-Sensitive Dynamic CALL/CICS Resolution
+### Phase 3: Flow-Sensitive Dynamic CALL/CICS Resolution
 
-Phase 3 uses the constants proven in `static_analysis/dataflow.json` to add path-sensitive target facts beside the legacy dynamic `CALL` and CICS fields. It must not replace the old resolver. The legacy resolver in `SerialisableCFGGraphCollector.annotateDynamicCallResolution()` is order-based and writes fields such as `resolved_call_target`, `call_target_source`, `dynamic_call_resolution_confidence`, `resolved_cics_target`, `cics_target_source`, and `cics_dynamic_resolution_confidence`. Phase 3 adds new fields with a `path_sensitive_` prefix so downstream consumers can compare both views during a dual-emission window.
+Phase 3 uses the constants proven in `static_analysis/dataflow.json` to add flow-sensitive, per-CFG-node target facts beside the legacy dynamic `CALL` and CICS fields. It must not replace the old resolver. The legacy resolver in `SerialisableCFGGraphCollector.annotateDynamicCallResolution()` is order-based and writes fields such as `resolved_call_target`, `call_target_source`, `dynamic_call_resolution_confidence`, `resolved_cics_target`, `cics_target_source`, and `cics_dynamic_resolution_confidence`. Phase 3 keeps the committed `path_sensitive_` JSON prefix so downstream consumers can compare both views during a dual-emission window, but the analysis is not fully path-sensitive in the formal compiler sense because branch joins still merge facts into one node state.
 
 The plan is deliberately split into small checkpoints because dynamic target resolution is user-visible and easy to overclaim.
 
@@ -659,8 +682,9 @@ The plan is deliberately split into small checkpoints because dynamic target res
   - `cics_operation`
   - `cics_arguments`
 - New facts are additive and start with `path_sensitive_`.
-- A path-sensitive fact may only be emitted from a `CONSTANT` value in the target node's dataflow `entry_constants`.
-- If a runtime kill, alias kill, branch merge, or loop cycle removes the constant before the target node, the path-sensitive target must be unresolved.
+- A flow-sensitive target fact may only be emitted from a `CONSTANT` value in the target node's dataflow `entry_constants`.
+- If a runtime kill, alias kill, branch merge, or loop cycle removes the constant before the target node, the additive target fact must be unresolved.
+- A high-confidence target fact may not be emitted from a dataflow constant that would be truncated by the target field PICTURE.
 - No RAG chunk changes are allowed in Phase 3.
 - No dependency-chunk behavior changes are allowed in Phase 3.
 
@@ -861,6 +885,7 @@ The first dynamic call keeps the legacy medium-confidence fields and adds the pa
   "path_sensitive_call_target_source": "static_analysis.dataflow.entry_constants",
   "path_sensitive_call_confidence": "high",
   "path_sensitive_call_evidence": {
+    "node_id": "node-123",
     "entry_variable": "WS-PGM",
     "value_state": "CONSTANT",
     "value_kind": "ALPHANUMERIC",
@@ -883,7 +908,7 @@ The killed-target example is intentionally different from the legacy result. Aft
 }
 ```
 
-This is the safety property for Phase 3.1b: path-sensitive metadata may disagree with legacy metadata when dataflow proves the legacy global assignment is stale, but it does so only in additive fields. No old `CALL` metadata key is removed or rewritten.
+This is the safety property for Phase 3.1b: the additive flow-sensitive metadata may disagree with legacy metadata when dataflow proves the legacy global assignment is stale, but it does so only in new fields. No old `CALL` metadata key is removed or rewritten.
 
 #### Phase 3.2a: Path-Sensitive CICS Target Facts
 
@@ -1022,6 +1047,8 @@ Representative killed-target metadata:
 
 CICS statements can contain more than one identifier argument. Mutating legacy `cics_arguments` would make compatibility harder, so Phase 3.2b adds a separate array.
 
+Phase 3.2b must also close the alphanumeric truncation gap before emitting any new resolved argument values. The preferred implementation point is the dataflow transfer rule for quoted `MOVE` literals and variable copies: do not store an `ALPHANUMERIC` `CONSTANT` in `entry_constants` or `exit_constants` if the receiving field has a known `PIC X(n)` and the normalized literal length is greater than `n`. The resolver should then naturally see no proven value and emit either no argument entry or an unresolved argument entry, depending on the final schema chosen for unresolved arguments.
+
 Planned field:
 
 ```json
@@ -1064,9 +1091,19 @@ Expected:
 - `path_sensitive_cics_arguments[0].resolved_value: "CUSTOMERQ"`
 - Existing `cics_arguments` array remains byte-for-byte equivalent except for unrelated pre-existing legacy fields.
 
+Required negative tests:
+
+- Static `CALL "SUBPROG"` emits no `path_sensitive_call_*` fields.
+- Literal CICS target such as `EXEC CICS LINK PROGRAM("LITPGM")` emits no `path_sensitive_cics_*` fields because no identifier needs dataflow resolution.
+- Output-only CICS nodes such as `EXEC CICS RECEIVE INTO(WS-AREA)` are treated as kills, not target facts.
+- Unsupported CICS argument names are ignored by `path_sensitive_cics_arguments`.
+- A killed argument identifier, for example `MOVE "CUSTOMERQ" TO WS-QUEUE` followed by `ACCEPT WS-QUEUE` before `EXEC CICS READQ TS QUEUE(WS-QUEUE)`, does not emit a stale resolved argument.
+- A branch join where different incoming paths assign different target names leaves the later `CALL` or CICS argument unresolved.
+- An overlength alphanumeric assignment such as `MOVE "LONGERTHAN8" TO WS-PGM` where `WS-PGM PIC X(8)` does not produce a high-confidence target or argument value.
+
 #### Phase 3.3: Accuracy And Performance Evaluation
 
-Phase 3.3 is the first point where the project may claim improved dynamic target resolution. The evaluation must be explicit.
+Phase 3.3 is the first point where the project may claim improved dynamic target resolution. It is currently blocked until PIC-aware value gating, alphanumeric length gating, and Phase 3 negative tests are complete. Measuring accuracy before those gates would overstate the analyzer because it can currently emit wrong high-confidence constants when COBOL storage would truncate, round, or reject the mathematical/source literal value.
 
 Metrics to record:
 
@@ -1087,9 +1124,14 @@ Metrics to record:
 
 Minimum acceptance criteria:
 
+- `2.8` PIC-aware numeric value gating is complete.
+- `3.2b` alphanumeric length gating and CICS argument facts are complete.
+- `3.2c` negative and join-path tests are complete.
 - Every expected dynamic `CALL` in the Phase 3 fixture has the exact expected `path_sensitive_call_*` result.
 - Every expected CICS identifier target/argument in the Phase 3 fixture has the exact expected `path_sensitive_cics_*` result.
 - At least one negative runtime-kill case proves no stale path-sensitive target is emitted.
+- At least one overlength `PIC X(n)` case proves no truncated target is emitted as a high-confidence path-sensitive value.
+- At least one numeric target-PICTURE mismatch proves no non-representable numeric constant is emitted in `exit_constants`.
 - Existing Stage 1 legacy dynamic `CALL` and CICS tests still pass without changing their expected legacy values.
 - Existing Phase 2 dataflow tests still pass.
 - No RAG chunk tests are changed in Phase 3.
@@ -1140,8 +1182,10 @@ Each checkpoint should be committed separately and stop for user approval:
 1. `3.1a`: alphanumeric dataflow constants only.
 2. `3.1b`: path-sensitive dynamic `CALL` fields only.
 3. `3.2a`: path-sensitive CICS top-level target fields only.
-4. `3.2b`: path-sensitive CICS argument array only.
-5. `3.3`: metrics and documentation only.
+4. `3.2b`: path-sensitive CICS argument array plus alphanumeric `PIC X(n)` length gating.
+5. `3.2c`: negative and join-path tests for CALL/CICS target over-resolution.
+6. `2.8`: numeric target-PICTURE and `ROUNDED`/size-error propagation gating before accuracy claims.
+7. `3.3`: metrics and documentation only, blocked until `2.8`, `3.2b`, and `3.2c` are done.
 
 Do not combine `3.1a` and `3.1b` unless the first checkpoint cannot be tested independently. Do not start CICS until dynamic `CALL` fields are proven additive and legacy-safe.
 
@@ -1237,6 +1281,8 @@ FOLD_UNSAFE_NON_TERMINATING_DIVISION
 FOLD_UNSAFE_SIZE_ERROR_SEMANTICS
 FOLD_INVALID_NUMERIC_LITERAL
 ```
+
+`FOLD_UNSAFE_SIZE_ERROR_SEMANTICS` is currently reserved. The Phase 1 folder sees the arithmetic expression, not the full statement suffix, so statement-level `ON SIZE ERROR` handling must be implemented before this diagnostic can be claimed as emitted.
 
 ## 11. Conservative Rules And Safety Policy
 
@@ -1390,6 +1436,8 @@ Golden fixture:
 |---|---|
 | Overclaiming constants | Only emit proven facts; use diagnostics for uncertainty; avoid "always" unless globally proven. |
 | Incorrect decimal arithmetic | `BigDecimal` only; no `double`/`float`; exact division only; no target PIC truncation in Phase 1. |
+| Incorrect stored-value constants | Before Phase 3.3 or RAG, gate all dataflow constants by target PICTURE; if scale, integer digits, sign, or alphanumeric length are not provably safe, emit no `CONSTANT`. |
+| Conditional arithmetic semantics | `ROUNDED`, `ON SIZE ERROR`, and `NOT ON SIZE ERROR` may still have local expression facts but must not seed variable propagation until COBOL storage semantics are modeled. |
 | Breaking existing artifacts | Additive metadata only; golden regression tests; `assignment_facts`, `originalText`, and CFG edges unchanged. |
 | COBOL aliasing issues | Conservative kill rules; treat `REDEFINES`, OCCURS, and reference modification carefully; no alias-based propagation until tested. |
 | Artifact bloat | Diagnostics only for considered `COMPUTE` statements in PR 1; no diagnostics for every non-`COMPUTE` statement; optional flags later. |
@@ -1565,11 +1613,12 @@ Still not implemented:
 
 - Full COBOL loop trip-count reasoning or final loop-value inference.
 - `IF`/`EVALUATE` condition simplification or branch reachability pruning.
-- Alphanumeric/string constant propagation.
+- General string expression propagation. Narrow quoted alphanumeric `MOVE` and variable-copy propagation exists for Phase 3 target resolution, but it is not yet length-gated by `PIC X(n)`.
 - Group move expansion into child fields.
-- Target `PIC`, edited numeric, `COMP`, or `COMP-3` storage semantics.
+- Target `PIC`, edited numeric, `COMP`, or `COMP-3` storage semantics. This is a soundness blocker for dataflow constants, not just a future enhancement.
 - Interprocedural propagation through called programs.
-- Path-sensitive dynamic `CALL` or CICS target fields.
+- Full formal path-sensitive analysis that keeps distinct facts per execution path after joins. The current `path_sensitive_*` fields are additive flow-sensitive/per-CFG-node facts.
+- Some kill patterns, including `INSPECT ... TALLYING IN` output variables and file record buffers modified by `READ` without explicit `INTO`.
 - RAG chunks that summarize propagated constants.
 - Corpus-level precision/recall or heap-memory benchmarking.
 

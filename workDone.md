@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-18 — Constant propagation review corrections plan
+
+**File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Updated the constant folding/propagation plan after Claude's detailed review. The plan now records PIC-aware numeric gating, alphanumeric `PIC X(n)` length gating, `ROUNDED`/size-error propagation blocking, Phase 3 negative tests, and the terminology correction from formal "path-sensitive" to flow-sensitive/per-CFG-node facts with committed `path_sensitive_*` field names.
+**Why:** The review found that dataflow `CONSTANT` facts can currently overclaim stored values when COBOL PICTURE truncation, scale, sign, or alphanumeric length would change the runtime value. Accuracy evaluation and RAG integration are now blocked until those safety gates are implemented and tested.
+
+---
+
 ## 2026-05-18 — Phase 3.2a path-sensitive CICS target metadata
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/PathSensitiveTargetResolver.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
