@@ -336,8 +336,8 @@ Secondary cleanup items:
 | 3.2a | `DONE` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-CICS-PGM)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`; runtime-killed identifiers stay path-sensitive unresolved. |
 | 3.2b | `DONE` | Add path-sensitive CICS argument facts plus alphanumeric length gating. | Multiple CICS identifier arguments are reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged; alphanumeric constants are not placed in dataflow if the target `PIC X(n)` cannot hold the literal without truncation. |
 | 3.2c | `DONE` | Add Phase 3 negative and join-path tests. | Tests prove static `CALL`s, literal CICS targets, output-only CICS nodes, unsupported CICS argument names, overlength `PIC X(n)` values, runtime-killed identifiers, and conflicting branch joins do not emit false resolved `path_sensitive_*` facts. |
-| 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures should now report exact expected-target pass/fail counts and legacy-vs-flow-sensitive deltas before any RAG integration claims are allowed. |
-| 4.1 | `BLOCKED` | Add optional static-value RAG chunks. | Blocked until `3.3` is done; chunks may include only high-confidence storage-safe facts with provenance and no unsupported "always" wording. |
+| 3.3 | `DONE` | Evaluate target-resolution accuracy. | The Phase 3 fixture now records exact legacy-vs-flow-sensitive counts: dynamic CALL improves from 2/4 reliable outcomes to 4/4, CICS targets improve from 4/6 to 6/6, and supported CICS selector arguments improve from 4/6 to 6/6 by refusing stale or unsafe resolved values. |
+| 4.1 | `PENDING` | Add optional static-value RAG chunks. | Chunks may include only high-confidence storage-safe facts with provenance and no unsupported "always" wording; RAG remains off until explicitly implemented and evaluated. |
 | 4.2 | `PENDING` | Evaluate retrieval and token impact. | Benchmark reports chunk count, token count, recall, and retrieval-ranking deltas. |
 | 5.1 | `PENDING` | Publish final implementation documentation update. | This document records final schemas, measured results, known limitations, and any skipped work. |
 
@@ -376,6 +376,7 @@ Secondary cleanup items:
 | 2026-05-18 | `DONE` | Added Phase 3.2a path-sensitive CICS target metadata. The same additive resolver now annotates CICS dialect nodes whose target identifier has a proven alphanumeric constant at node entry. It emits top-level `path_sensitive_cics_*` fields only; legacy `resolved_cics_target`, `cics_target_source`, `cics_dynamic_resolution_confidence`, nested `cics_operation`, and existing `cics_arguments` remain compatibility fields. The dataflow analysis version is now `1.4` with mode/status `path_sensitive_cics_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 44 tests, total time 17.871s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 56 tests, 2 skipped, total time 18.124s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 29 node states, 28 edges, 33 entry constants, 38 exit constants, 2 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 23,746-byte pretty-printed sidecar, and a 55,569-byte pretty-printed CFG. Exact tests cover two CICS `LINK PROGRAM(WS-CICS-PGM)` nodes resolving to `CICSA` and `CICSB`, plus one `ACCEPT`-killed `WS-CICS-KILLED` node where legacy still reports `CICSKILL` but path-sensitive CICS metadata is unresolved. |
 | 2026-05-18 | `DONE` | Added Phase 3.2b CICS argument facts and the first storage-safety gate for alphanumeric dataflow constants. The resolver now emits additive `path_sensitive_cics_arguments` entries for supported identifier arguments such as `QUEUE(WS-QUEUE)`, while leaving the existing `cics_arguments` array unchanged. The dataflow transfer now refuses quoted literals and copied alphanumeric constants when a known target `PIC X(n)` would truncate the normalized value. The dataflow analysis version is now `1.5` with mode/status `flow_sensitive_call_cics_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 47 tests, total time 25.387s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 59 tests, 2 skipped, total time 26.412s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 48 node states, 47 edges, 37 entry constants, 43 exit constants, 6 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 31,579-byte pretty-printed sidecar, and a 98,071-byte pretty-printed CFG. Exact tests cover resolved `READQ TS QUEUE(WS-QUEUE)`, killed `QUEUE(WS-QUEUE-KILLED)`, output-only `RECEIVE INTO(WS-AREA)`, static `CALL "STATPROG"`, literal `LINK PROGRAM('LITPGM')`, and overlength `MOVE "LONGERTHAN8" TO WS-LONG-PGM PIC X(8)` refusing a high-confidence flow-sensitive target. |
 | 2026-05-18 | `DONE` | Completed Phase 3.2c as a hardening-only checkpoint. The real CICS fixture now includes an unsupported `RESP(WS-RESP)` identifier argument; the resolver still reports the supported `PROGRAM(WS-CICS-PGM)` argument but does not add a `RESP` entry to `path_sensitive_cics_arguments`. A solver-level two-predecessor join test proves `MOVE "PROG-A" TO WS-PGM` on one predecessor and `MOVE "PROG-B" TO WS-PGM` on another predecessor leaves a later `CALL WS-PGM` path-sensitive unresolved and records the join diagnostic instead of guessing a target. | Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#pathSensitiveCicsArgumentsIgnoreUnsupportedArgumentNames+pathSensitiveDynamicCallStaysUnresolvedAfterConflictingJoin`, 2 tests, total time 9.546s. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 50 tests, total time 33.864s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 62 tests, 2 skipped, total time 30.927s. Fixture metrics after adding the `RESP` case: `path-sensitive-targets-phase3.cbl` has 53 node states, 52 edges, 41 entry constants, 48 exit constants, 7 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 35,073-byte pretty-printed sidecar, and a 110,187-byte pretty-printed CFG. |
+| 2026-05-19 | `DONE` | Completed Phase 3.3 measurement without changing resolver behavior. The measured fixture treats stale values after runtime kills and unresolved overlength `PIC X(n)` values as reliability outcomes, not raw resolution counts. Flow-sensitive metadata resolves fewer cases than the legacy resolver, but all measured outcomes match the fixture's expected safe behavior because unsafe cases become explicit unresolved facts. | Documentation-only checkpoint. It reuses the passing Phase 3.2c verification: focused 2-test check, targeted `JavaHardeningRegressionTest` 50 tests, and broader `smojol-toolkit` 62 tests with 2 skipped. Measured fixture counts: 4 dynamic CALL identifier nodes, 6 CICS identifier target nodes, 6 supported CICS selector arguments, 14 legacy CICS identifier arguments total, 8 unsupported/output identifier arguments intentionally ignored by `path_sensitive_cics_arguments`, 35,073-byte dataflow sidecar, and 110,187-byte CFG. |
 
 ### Fool-Proof Execution Rules
 
@@ -1259,7 +1260,7 @@ The string literal has 11 characters and the target field has `PIC X(8)`. Phase 
 
 #### Phase 3.3: Accuracy And Performance Evaluation
 
-Phase 3.3 is the first point where the project may claim improved dynamic target resolution. Numeric PICTURE gating is complete for simple `S`/`9`/`V` PICTUREs as of Phase 2.8, the alphanumeric `PIC X(n)` length gate is complete as of Phase 3.2b, and the Phase 3 negative/join-path tests are complete as of Phase 3.2c. The next work is measurement, not new resolver behavior.
+Phase 3.3 is the first point where the project may claim improved dynamic target resolution. Numeric PICTURE gating is complete for simple `S`/`9`/`V` PICTUREs as of Phase 2.8, the alphanumeric `PIC X(n)` length gate is complete as of Phase 3.2b, and the Phase 3 negative/join-path tests are complete as of Phase 3.2c. This checkpoint is measurement-only: it does not add resolver behavior.
 
 Metrics to record:
 
@@ -1293,6 +1294,34 @@ Minimum acceptance criteria:
 - No RAG chunk tests are changed in Phase 3.
 - No dependency chunk output is changed in Phase 3.
 - `path_sensitive_targets_enabled` is `true` only after the path-sensitive annotator is active.
+
+Measured fixture: `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`.
+
+Accuracy results:
+
+| Surface | Measured nodes | Legacy behavior | Flow-sensitive behavior | Reliability result |
+|---|---:|---|---|---|
+| Dynamic `CALL` identifier targets | 4 | Resolves all 4, including 2 unsafe cases: one runtime-killed identifier and one overlength `PIC X(8)` literal. | Resolves the 2 proven calls and marks the 2 unsafe calls unresolved. | Legacy reliable outcomes: 2/4. Flow-sensitive reliable outcomes: 4/4. |
+| CICS identifier targets | 6 | Resolves all 6, including 2 runtime-killed stale targets. | Resolves the 4 proven CICS targets and marks the 2 killed targets unresolved. | Legacy reliable outcomes: 4/6. Flow-sensitive reliable outcomes: 6/6. |
+| Supported CICS selector arguments | 6 | Resolves all 6 selector identifiers, including the same 2 runtime-killed stale selectors. | Emits 6 additive argument entries: 4 resolved and 2 unresolved. | Legacy reliable outcomes: 4/6. Flow-sensitive reliable outcomes: 6/6. |
+| Static/literal/output negative cases | 3 categories | Static `CALL`, literal CICS target, and output-only CICS node stay in legacy metadata. | Emits 0 flow-sensitive fields for static `CALL`, 0 for literal CICS target, and 0 target/argument fields for output-only `RECEIVE INTO`. | No over-resolution observed. |
+| Unsupported/output CICS identifier arguments | 8 legacy identifier arguments | Legacy `cics_arguments` keeps the evidence for `COMMAREA`, `INTO`, and `RESP`. | `path_sensitive_cics_arguments` ignores all 8 because they are not resource selectors. | No unsupported argument is promoted to a high-confidence target fact. |
+
+Artifact and runtime results:
+
+| Measurement | Phase 3.2b | Phase 3.2c/3.3 fixture | Delta | Interpretation |
+|---|---:|---:|---:|---|
+| Dataflow sidecar size | 31,579 bytes | 35,073 bytes | +3,494 bytes | Not an apples-to-apples overhead figure: the fixture gained the `RESP(WS-RESP)` CICS case. |
+| CFG JSON size | 98,071 bytes | 110,187 bytes | +12,116 bytes | Mostly from the added CICS node and additive metadata needed to test ignored `RESP`. |
+| Targeted `JavaHardeningRegressionTest` runtime | 25.387s, 47 tests | 33.864s, 50 tests | +8.477s | Includes three additional exact regression tests and a longer fixture. |
+| Broader `smojol-toolkit` runtime | 26.412s, 59 tests, 2 skipped | 30.927s, 62 tests, 2 skipped | +4.515s | Test-suite level signal only; not a standalone analyzer benchmark. |
+
+Interpretation:
+
+- The flow-sensitive fields intentionally resolve fewer raw targets than the legacy resolver.
+- The improvement is reliability, not aggressive resolution count. Unsafe stale or storage-truncated values become explicit unresolved facts instead of high-confidence targets.
+- Legacy fields remain useful compatibility evidence, but they are not safe enough for later RAG claims without the new flow-sensitive fields and provenance.
+- Phase 4 RAG may now start from the high-confidence resolved flow-sensitive facts, but it must still exclude unresolved facts from "known target" wording and must include provenance.
 
 #### Phase 3 Fixture Sketch
 

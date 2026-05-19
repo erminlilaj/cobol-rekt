@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-19 — Phase 3.3 target-resolution measurement
+
+**File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Recorded Phase 3.3 legacy-vs-flow-sensitive target-resolution metrics for the Phase 3 fixture. The documentation now reports dynamic CALL, CICS target, CICS selector-argument, negative-case, artifact-size, and test-runtime results without changing analyzer behavior.
+**Why:** The project should only claim improved dynamic target resolution after measuring the safe flow-sensitive fields against legacy metadata and documenting that the improvement is reliability, not aggressive raw resolution count.
+
+---
+
 ## 2026-05-18 — Phase 3.2c path-sensitive negative tests
 
 **File(s):** `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
