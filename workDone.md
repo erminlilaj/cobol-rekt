@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-18 — Phase 3.2c path-sensitive negative tests
+
+**File(s):** `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/path-sensitive-targets-phase3.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added hardening tests for the remaining Phase 3 overclaim cases. The CICS fixture now includes `RESP(WS-RESP)` to prove unsupported output/status arguments stay out of `path_sensitive_cics_arguments`, and a synthetic two-predecessor join proves conflicting `WS-PGM` constants leave `CALL WS-PGM` path-sensitive unresolved with an exact join diagnostic.
+**Why:** Phase 3.3 accuracy measurements should not start until the resolver has exact negative tests for static/literal targets, output-only arguments, overlength strings, runtime kills, unsupported CICS arguments, and branch joins with conflicting target values.
+
+---
+
 ## 2026-05-18 — Phase 2.8 numeric PIC-aware value gating
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/pic-gating-phase28.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

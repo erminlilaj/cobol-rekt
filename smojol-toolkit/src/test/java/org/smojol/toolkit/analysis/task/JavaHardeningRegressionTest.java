@@ -18,6 +18,7 @@ import org.smojol.common.logging.LoggingConfig;
 import org.smojol.common.resource.LocalFilesystemOperations;
 import org.smojol.toolkit.analysis.staticvalue.DataflowAnalysisResult;
 import org.smojol.toolkit.analysis.staticvalue.DataflowNodeState;
+import org.smojol.toolkit.analysis.staticvalue.PathSensitiveTargetResolver;
 import org.smojol.toolkit.analysis.staticvalue.StaticValueDataflowPass;
 import org.smojol.toolkit.analysis.pipeline.ProgramSearch;
 import org.smojol.toolkit.analysis.task.analysis.CodeTaskRunner;
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -758,6 +760,7 @@ class JavaHardeningRegressionTest {
 
         List<JsonObject> cicsLinks = findNodesByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "EXEC CICS LINK PROGRAM(WS-CICS-PGM)", "DIALECT").stream()
+                .filter(node -> hasCicsArgument(node.getAsJsonObject("metadata"), "COMMAREA", "WS-COPY"))
                 .sorted((left, right) -> Integer.compare(left.get("sourceLine").getAsInt(),
                         right.get("sourceLine").getAsInt()))
                 .toList();
@@ -844,6 +847,28 @@ class JavaHardeningRegressionTest {
     }
 
     @Test
+    void pathSensitiveCicsArgumentsIgnoreUnsupportedArgumentNames() throws IOException {
+        new TestTaskRunner("path-sensitive-targets-phase3.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("path-sensitive-targets-phase3.cbl.report/cfg/cfg-path-sensitive-targets-phase3.cbl.json");
+        JsonObject dataflow = readJson("path-sensitive-targets-phase3.cbl.report/static_analysis/dataflow.json");
+
+        JsonObject cics = findCicsNodeWithArgument(cfg.getAsJsonArray("nodes"), "RESP", "WS-RESP");
+        JsonObject cicsState = nodeStateFor(dataflow, cics);
+        assertAlphanumericConstant(cicsState.getAsJsonObject("entry_constants"), "WS-CICS-PGM",
+                "\"CICSRSP\"", "CICSRSP");
+        assertAlphanumericConstant(cicsState.getAsJsonObject("entry_constants"), "WS-RESP",
+                "\"RESPVAL\"", "RESPVAL");
+
+        JsonObject metadata = cics.getAsJsonObject("metadata");
+        assertPathSensitiveCicsResolved(metadata, "WS-CICS-PGM", "PROGRAM", "CICSRSP");
+        assertPathSensitiveCicsArgumentResolved(metadata, "PROGRAM", "WS-CICS-PGM", "CICSRSP");
+        assertFalse(hasPathSensitiveCicsArgument(metadata, "RESP", "WS-RESP"));
+        assertCicsArgument(metadata, "RESP", "WS-RESP", "identifier", null, null);
+    }
+
+    @Test
     void pathSensitiveTargetsSkipStaticCallsLiteralCicsTargetsAndOverlengthAlphanumericFacts() throws IOException {
         new TestTaskRunner("path-sensitive-targets-phase3.cbl", "test-code/flow-ast")
                 .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
@@ -876,6 +901,35 @@ class JavaHardeningRegressionTest {
         JsonObject longCopy = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "MOVE WS-LONG-PGM TO WS-LONG-COPY", "MOVE"));
         assertFalse(longCopy.getAsJsonObject("exit_constants").has("WS-LONG-COPY"));
+    }
+
+    @Test
+    void pathSensitiveDynamicCallStaysUnresolvedAfterConflictingJoin() {
+        TestCFGNode moveA = new TestCFGNode("move-a", "MOVE \"PROG-A\" TO WS-PGM", FlowNodeType.MOVE,
+                List.of(), List.of("WS-PGM"), moveAssignmentFact("WS-PGM", "\"PROG-A\""));
+        TestCFGNode moveB = new TestCFGNode("move-b", "MOVE \"PROG-B\" TO WS-PGM", FlowNodeType.MOVE,
+                List.of(), List.of("WS-PGM"), moveAssignmentFact("WS-PGM", "\"PROG-B\""));
+        Map<String, Object> callMetadata = new LinkedHashMap<>();
+        callMetadata.put("dynamic_call", true);
+        callMetadata.put("call_target", "WS-PGM");
+        callMetadata.put("call_target_identifier", "WS-PGM");
+        TestCFGNode call = new TestCFGNode("call-node", "CALL WS-PGM", FlowNodeType.CALL,
+                List.of("WS-PGM"), List.of(), callMetadata);
+
+        DataflowAnalysisResult result = new StaticValueDataflowPass().buildSkeleton("path-sensitive-join-test.cbl",
+                List.of(moveA, moveB, call),
+                List.of(
+                        new SerialisableEdge("edge-a", "move-a", "call-node", "FOLLOWED_BY"),
+                        new SerialisableEdge("edge-b", "move-b", "call-node", "FOLLOWED_BY")));
+
+        new PathSensitiveTargetResolver().annotateTargets(List.of(moveA, moveB, call), result);
+
+        DataflowNodeState callState = result.nodeStates().get("call-node");
+        assertFalse(callState.entryConstants().containsKey("WS-PGM"));
+        JsonArray diagnostics = new JsonArray();
+        callState.diagnostics().forEach(diagnostic -> diagnostics.add(GSON.toJsonTree(diagnostic)));
+        assertJoinDiagnosticForDroppedConstant(diagnostics, "WS-PGM", List.of("PROG-A", "PROG-B"));
+        assertPathSensitiveCallUnresolved(GSON.toJsonTree(call.getMetadata()).getAsJsonObject(), "WS-PGM");
     }
 
     @Test
@@ -1515,6 +1569,15 @@ class JavaHardeningRegressionTest {
                 .toList();
     }
 
+    private JsonObject findCicsNodeWithArgument(JsonArray nodes, String name, String value) {
+        return jsonObjects(nodes).stream()
+                .filter(node -> node.has("type") && "DIALECT".equals(node.get("type").getAsString()))
+                .filter(node -> node.has("metadata"))
+                .filter(node -> hasCicsArgument(node.getAsJsonObject("metadata"), name, value))
+                .findFirst()
+                .orElse(null);
+    }
+
     private JsonObject findNodeByOriginalTextTypeAndLocation(JsonArray nodes, String text, String type,
                                                              int sourceLine, int sourceColumn) {
         return jsonObjects(nodes).stream()
@@ -1716,6 +1779,13 @@ class JavaHardeningRegressionTest {
                 .orElseThrow();
     }
 
+    private boolean hasPathSensitiveCicsArgument(JsonObject metadata, String name, String identifier) {
+        return metadata.has("path_sensitive_cics_arguments")
+                && jsonObjects(metadata.getAsJsonArray("path_sensitive_cics_arguments")).stream()
+                .anyMatch(argument -> name.equals(argument.get("name").getAsString())
+                        && identifier.equals(argument.get("identifier").getAsString()));
+    }
+
     private void assertCicsArgument(JsonObject metadata, String name, String value, String valueSource,
                                     String resolvedValue, String resolvedValueSource) {
         JsonObject argument = jsonObjects(metadata.getAsJsonArray("cics_arguments")).stream()
@@ -1731,6 +1801,13 @@ class JavaHardeningRegressionTest {
             assertEquals(resolvedValue, argument.get("resolved_value").getAsString());
             assertEquals(resolvedValueSource, argument.get("resolved_value_source").getAsString());
         }
+    }
+
+    private boolean hasCicsArgument(JsonObject metadata, String name, String value) {
+        return metadata.has("cics_arguments")
+                && jsonObjects(metadata.getAsJsonArray("cics_arguments")).stream()
+                .anyMatch(argument -> name.equals(argument.get("name").getAsString())
+                        && value.equals(argument.get("value").getAsString()));
     }
 
     private void assertNumericConstant(JsonObject constants, String variable, String rawLexeme, String decimal,

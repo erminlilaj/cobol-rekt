@@ -335,8 +335,8 @@ Secondary cleanup items:
 | 3.1b | `DONE` | Add path-sensitive dynamic `CALL` metadata fields. | Dynamic `CALL WS-PGM` reads `WS-PGM` from node `entry_constants` and emits new `path_sensitive_call_*` fields without changing `resolved_call_target`, `call_target_source`, or `dynamic_call_resolution_confidence`. Runtime-killed identifiers emit an explicit path-sensitive unresolved status rather than reusing stale legacy literals. |
 | 3.2a | `DONE` | Add path-sensitive CICS target metadata fields. | CICS identifier targets such as `PROGRAM(WS-CICS-PGM)` read proven entry constants and emit new `path_sensitive_cics_*` fields without changing legacy `resolved_cics_target`, `cics_target_source`, or `cics_dynamic_resolution_confidence`; runtime-killed identifiers stay path-sensitive unresolved. |
 | 3.2b | `DONE` | Add path-sensitive CICS argument facts plus alphanumeric length gating. | Multiple CICS identifier arguments are reported in a new additive `path_sensitive_cics_arguments` array; existing `cics_arguments` stays unchanged; alphanumeric constants are not placed in dataflow if the target `PIC X(n)` cannot hold the literal without truncation. |
-| 3.2c | `PENDING` | Add Phase 3 negative and join-path tests. | Tests must prove static `CALL`s, literal CICS targets, output-only CICS nodes, unsupported CICS argument names, and conflicting branch joins do not emit false `path_sensitive_*` facts. |
-| 3.3 | `BLOCKED` | Evaluate target-resolution accuracy. | Blocked until `3.2c` is done; frozen fixtures then report exact expected-target pass/fail counts and legacy-vs-flow-sensitive deltas before any RAG integration claims are allowed. |
+| 3.2c | `DONE` | Add Phase 3 negative and join-path tests. | Tests prove static `CALL`s, literal CICS targets, output-only CICS nodes, unsupported CICS argument names, overlength `PIC X(n)` values, runtime-killed identifiers, and conflicting branch joins do not emit false resolved `path_sensitive_*` facts. |
+| 3.3 | `PENDING` | Evaluate target-resolution accuracy. | Frozen fixtures should now report exact expected-target pass/fail counts and legacy-vs-flow-sensitive deltas before any RAG integration claims are allowed. |
 | 4.1 | `BLOCKED` | Add optional static-value RAG chunks. | Blocked until `3.3` is done; chunks may include only high-confidence storage-safe facts with provenance and no unsupported "always" wording. |
 | 4.2 | `PENDING` | Evaluate retrieval and token impact. | Benchmark reports chunk count, token count, recall, and retrieval-ranking deltas. |
 | 5.1 | `PENDING` | Publish final implementation documentation update. | This document records final schemas, measured results, known limitations, and any skipped work. |
@@ -375,6 +375,7 @@ Secondary cleanup items:
 | 2026-05-18 | `DONE` | Added Phase 3.1b path-sensitive dynamic `CALL` metadata. `WRITE_CFG` now builds `static_analysis/dataflow.json` before serializing the CFG, annotates only dynamic `CALL` nodes from proven alphanumeric entry constants, then writes the CFG and sidecar. The legacy resolver still emits `resolved_call_target`, `call_target_source`, and `dynamic_call_resolution_confidence` unchanged; new facts are strictly additive under the `path_sensitive_call_*` prefix. The dataflow analysis version is now `1.3` with mode/status `path_sensitive_call_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 42 tests, total time 18.071s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 16 node states, 15 edges, 22 entry constants, 25 exit constants, 1 kill fact, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 15,517-byte pretty-printed sidecar, and a 25,392-byte pretty-printed CFG. Exact tests cover two path-sensitive resolved `CALL WS-PGM` nodes and one stale-legacy-but-path-sensitive-unresolved `CALL WS-KILLED` node. |
 | 2026-05-18 | `DONE` | Added Phase 3.2a path-sensitive CICS target metadata. The same additive resolver now annotates CICS dialect nodes whose target identifier has a proven alphanumeric constant at node entry. It emits top-level `path_sensitive_cics_*` fields only; legacy `resolved_cics_target`, `cics_target_source`, `cics_dynamic_resolution_confidence`, nested `cics_operation`, and existing `cics_arguments` remain compatibility fields. The dataflow analysis version is now `1.4` with mode/status `path_sensitive_cics_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 44 tests, total time 17.871s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 56 tests, 2 skipped, total time 18.124s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 29 node states, 28 edges, 33 entry constants, 38 exit constants, 2 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 23,746-byte pretty-printed sidecar, and a 55,569-byte pretty-printed CFG. Exact tests cover two CICS `LINK PROGRAM(WS-CICS-PGM)` nodes resolving to `CICSA` and `CICSB`, plus one `ACCEPT`-killed `WS-CICS-KILLED` node where legacy still reports `CICSKILL` but path-sensitive CICS metadata is unresolved. |
 | 2026-05-18 | `DONE` | Added Phase 3.2b CICS argument facts and the first storage-safety gate for alphanumeric dataflow constants. The resolver now emits additive `path_sensitive_cics_arguments` entries for supported identifier arguments such as `QUEUE(WS-QUEUE)`, while leaving the existing `cics_arguments` array unchanged. The dataflow transfer now refuses quoted literals and copied alphanumeric constants when a known target `PIC X(n)` would truncate the normalized value. The dataflow analysis version is now `1.5` with mode/status `flow_sensitive_call_cics_targets`. | Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 47 tests, total time 25.387s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 59 tests, 2 skipped, total time 26.412s. Fixture metrics: `path-sensitive-targets-phase3.cbl` has 48 node states, 47 edges, 37 entry constants, 43 exit constants, 6 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 31,579-byte pretty-printed sidecar, and a 98,071-byte pretty-printed CFG. Exact tests cover resolved `READQ TS QUEUE(WS-QUEUE)`, killed `QUEUE(WS-QUEUE-KILLED)`, output-only `RECEIVE INTO(WS-AREA)`, static `CALL "STATPROG"`, literal `LINK PROGRAM('LITPGM')`, and overlength `MOVE "LONGERTHAN8" TO WS-LONG-PGM PIC X(8)` refusing a high-confidence flow-sensitive target. |
+| 2026-05-18 | `DONE` | Completed Phase 3.2c as a hardening-only checkpoint. The real CICS fixture now includes an unsupported `RESP(WS-RESP)` identifier argument; the resolver still reports the supported `PROGRAM(WS-CICS-PGM)` argument but does not add a `RESP` entry to `path_sensitive_cics_arguments`. A solver-level two-predecessor join test proves `MOVE "PROG-A" TO WS-PGM` on one predecessor and `MOVE "PROG-B" TO WS-PGM` on another predecessor leaves a later `CALL WS-PGM` path-sensitive unresolved and records the join diagnostic instead of guessing a target. | Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#pathSensitiveCicsArgumentsIgnoreUnsupportedArgumentNames+pathSensitiveDynamicCallStaysUnresolvedAfterConflictingJoin`, 2 tests, total time 9.546s. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 50 tests, total time 33.864s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 62 tests, 2 skipped, total time 30.927s. Fixture metrics after adding the `RESP` case: `path-sensitive-targets-phase3.cbl` has 53 node states, 52 edges, 41 entry constants, 48 exit constants, 7 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 35,073-byte pretty-printed sidecar, and a 110,187-byte pretty-printed CFG. |
 
 ### Fool-Proof Execution Rules
 
@@ -1120,18 +1121,50 @@ Expected:
 - `path_sensitive_cics_arguments[0].resolved_value: "CUSTOMERQ"`
 - Existing `cics_arguments` array remains byte-for-byte equivalent except for unrelated pre-existing legacy fields.
 
-Implemented negative tests in this checkpoint:
+Implemented negative tests through Phase 3.2c:
 
 - Static `CALL "SUBPROG"` emits no `path_sensitive_call_*` fields.
 - Literal CICS target such as `EXEC CICS LINK PROGRAM("LITPGM")` emits no `path_sensitive_cics_*` fields because no identifier needs dataflow resolution.
 - Output-only CICS nodes such as `EXEC CICS RECEIVE INTO(WS-AREA)` are treated as kills, not target facts.
 - A killed argument identifier, for example `MOVE "CUSTOMERQ" TO WS-QUEUE` followed by `ACCEPT WS-QUEUE` before `EXEC CICS READQ TS QUEUE(WS-QUEUE)`, does not emit a stale resolved argument.
 - An overlength alphanumeric assignment such as `MOVE "LONGERTHAN8" TO WS-PGM` where `WS-PGM PIC X(8)` does not produce a high-confidence target or argument value.
+- Unsupported CICS argument names such as `RESP(WS-RESP)` are ignored by `path_sensitive_cics_arguments` even when `WS-RESP` has a proven alphanumeric constant.
+- A real two-predecessor dataflow join where one incoming path proves `WS-PGM = "PROG-A"` and another proves `WS-PGM = "PROG-B"` leaves the later `CALL WS-PGM` unresolved and emits `DATAFLOW_CONSTANT_DROPPED_AT_JOIN`.
 
-Negative tests still pending in Phase 3.2c:
+Unsupported CICS argument example:
 
-- Unsupported CICS argument names are ignored by `path_sensitive_cics_arguments`.
-- A branch join where different incoming paths assign different target names leaves the later `CALL` or CICS argument unresolved.
+```cobol
+MOVE "CICSRSP" TO WS-CICS-PGM
+MOVE "RESPVAL" TO WS-RESP
+EXEC CICS LINK PROGRAM(WS-CICS-PGM)
+     RESP(WS-RESP)
+END-EXEC
+```
+
+Expected result:
+
+- `PROGRAM(WS-CICS-PGM)` can produce a resolved `path_sensitive_cics_target`.
+- `path_sensitive_cics_arguments` can include `PROGRAM`.
+- `RESP(WS-RESP)` remains only in the legacy `cics_arguments` evidence and is not copied into `path_sensitive_cics_arguments`, because `RESP` is an output/status field rather than a resource selector.
+
+Conflicting join example:
+
+```cobol
+*> Path A
+MOVE "PROG-A" TO WS-PGM
+
+*> Path B
+MOVE "PROG-B" TO WS-PGM
+
+*> Join
+CALL WS-PGM
+```
+
+Expected result:
+
+- The joined `CALL WS-PGM` entry state does not contain `WS-PGM`.
+- The join node records `DATAFLOW_CONSTANT_DROPPED_AT_JOIN` with incoming values `PROG-A` and `PROG-B`.
+- The CALL metadata has `path_sensitive_call_resolution_status: "unresolved"` and no `path_sensitive_call_target`.
 
 Committed Phase 3.2b examples:
 
@@ -1226,7 +1259,7 @@ The string literal has 11 characters and the target field has `PIC X(8)`. Phase 
 
 #### Phase 3.3: Accuracy And Performance Evaluation
 
-Phase 3.3 is the first point where the project may claim improved dynamic target resolution. It is currently blocked until the remaining Phase 3 negative/join-path tests are complete. Numeric PICTURE gating is complete for simple `S`/`9`/`V` PICTUREs as of Phase 2.8, and the alphanumeric `PIC X(n)` length gate is complete as of Phase 3.2b.
+Phase 3.3 is the first point where the project may claim improved dynamic target resolution. Numeric PICTURE gating is complete for simple `S`/`9`/`V` PICTUREs as of Phase 2.8, the alphanumeric `PIC X(n)` length gate is complete as of Phase 3.2b, and the Phase 3 negative/join-path tests are complete as of Phase 3.2c. The next work is measurement, not new resolver behavior.
 
 Metrics to record:
 

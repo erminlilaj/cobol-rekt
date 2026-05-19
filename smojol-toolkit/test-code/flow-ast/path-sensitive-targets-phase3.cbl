@@ -13,6 +13,7 @@
        01 WS-QUEUE-KILLED PIC X(8).
        01 WS-LONG-PGM PIC X(8).
        01 WS-LONG-COPY PIC X(8).
+       01 WS-RESP PIC X(8).
        01 WS-AREA PIC X(20).
        PROCEDURE DIVISION.
        MAIN-PARA.
@@ -56,4 +57,9 @@
            MOVE "LONGERTHAN8" TO WS-LONG-PGM
            CALL WS-LONG-PGM
            MOVE WS-LONG-PGM TO WS-LONG-COPY
+           MOVE "CICSRSP" TO WS-CICS-PGM
+           MOVE "RESPVAL" TO WS-RESP
+           EXEC CICS LINK PROGRAM(WS-CICS-PGM)
+                RESP(WS-RESP)
+           END-EXEC
            GOBACK.
