@@ -364,7 +364,7 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
@@ -513,7 +513,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
         JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject childWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -608,7 +608,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("constant-propagation-phase2.cbl.report/cfg/cfg-constant-propagation-phase2.cbl.json");
         JsonObject dataflow = readJson("constant-propagation-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("constant_propagation_enabled").getAsBoolean());
         assertTrue(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
@@ -643,7 +643,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("pic-gating-phase28.cbl.report/cfg/cfg-pic-gating-phase28.cbl.json");
         JsonObject dataflow = readJson("pic-gating-phase28.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject intCompute = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -695,7 +695,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("subscript-refusal-phase29.cbl.report/cfg/cfg-subscript-refusal-phase29.cbl.json");
         JsonObject dataflow = readJson("subscript-refusal-phase29.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject tableWrite = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -738,7 +738,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("perform-kill-phase210.cbl.report/cfg/cfg-perform-kill-phase210.cbl.json");
         JsonObject dataflow = readJson("perform-kill-phase210.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject moveA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -804,7 +804,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("path-sensitive-targets-phase3.cbl.report/cfg/cfg-path-sensitive-targets-phase3.cbl.json");
         JsonObject dataflow = readJson("path-sensitive-targets-phase3.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
 
@@ -1069,7 +1069,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("runtime-kills-phase26a.cbl.report/cfg/cfg-runtime-kills-phase26a.cbl.json");
         JsonObject dataflow = readJson("runtime-kills-phase26a.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject acceptA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -1141,7 +1141,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("output-kills-phase26b.cbl.report/cfg/cfg-output-kills-phase26b.cbl.json");
         JsonObject dataflow = readJson("output-kills-phase26b.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.8", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -1201,6 +1201,117 @@ class JavaHardeningRegressionTest {
         assertEquals(List.of("SQL_OUTPUT_KILL@WS-SQL"), killCodesAndVariables(sql.getAsJsonArray("kills")));
         assertDataflowKill(sql.getAsJsonArray("kills").get(0).getAsJsonObject(),
                 "SQL_OUTPUT_KILL", "WS-SQL", "sql_output_host_variable", "DIALECT");
+    }
+
+    @Test
+    void dataflowHardensKnownUnsupportedOutputAndConditionCases() throws IOException {
+        new TestTaskRunner("negative-hardening-phase211.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject cfg = readJson("negative-hardening-phase211.cbl.report/cfg/cfg-negative-hardening-phase211.cbl.json");
+        JsonObject dataflow = readJson("negative-hardening-phase211.cbl.report/static_analysis/dataflow.json");
+        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+
+        JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "READ IN-FILE", "READ"));
+        assertAlphanumericConstant(read.getAsJsonObject("entry_constants"), "IN-REC", "\"AA\"", "AA");
+        assertFalse(read.getAsJsonObject("exit_constants").has("IN-REC"));
+        assertTrue(killCodesAndVariables(read.getAsJsonArray("kills")).contains("READ_RECORD_BUFFER_KILL@IN-REC"));
+
+        JsonObject recordCopy = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE IN-REC TO WS-REC-COPY", "MOVE"));
+        assertFalse(recordCopy.getAsJsonObject("entry_constants").has("IN-REC"));
+        assertFalse(recordCopy.getAsJsonObject("exit_constants").has("WS-REC-COPY"));
+
+        JsonObject inspect = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "INSPECT WS-TEXT TALLYING WS-TALLY", "INSPECT"));
+        assertNumericConstant(inspect.getAsJsonObject("entry_constants"), "WS-TALLY",
+                "3", "3", 0, 1, "POSITIVE");
+        assertFalse(inspect.getAsJsonObject("exit_constants").has("WS-TALLY"));
+        assertEquals(List.of("INSPECT_TALLYING_KILL@WS-TALLY"),
+                killCodesAndVariables(inspect.getAsJsonArray("kills")));
+        assertDataflowKill(inspect.getAsJsonArray("kills").get(0).getAsJsonObject(),
+                "INSPECT_TALLYING_KILL", "WS-TALLY", "inspect_tallying", "INSPECT");
+
+        JsonObject tallyCopy = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE WS-TALLY TO WS-TALLY-COPY", "MOVE"));
+        assertFalse(tallyCopy.getAsJsonObject("entry_constants").has("WS-TALLY"));
+        assertFalse(tallyCopy.getAsJsonObject("exit_constants").has("WS-TALLY-COPY"));
+
+        JsonObject set = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "SET FLAG-ON TO TRUE", "SET"));
+        assertAlphanumericConstant(set.getAsJsonObject("entry_constants"), "WS-FLAG", "\"N\"", "N");
+        assertFalse(set.getAsJsonObject("exit_constants").has("WS-FLAG"));
+        assertEquals(List.of("SET_CONDITION_PARENT_KILL@WS-FLAG"), killCodesAndVariables(set.getAsJsonArray("kills")));
+        assertEquals("FLAG-ON", set.getAsJsonArray("kills").get(0).getAsJsonObject()
+                .get("condition_name").getAsString());
+
+        JsonObject flagCopy = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE WS-FLAG TO WS-FLAG-COPY", "MOVE"));
+        assertFalse(flagCopy.getAsJsonObject("entry_constants").has("WS-FLAG"));
+        assertFalse(flagCopy.getAsJsonObject("exit_constants").has("WS-FLAG-COPY"));
+
+        JsonObject multiMove = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "MOVE 7 TO WS-MULTI-A WS-MULTI-B", "MOVE"));
+        assertNumericConstant(multiMove.getAsJsonObject("exit_constants"), "WS-MULTI-A",
+                "7", "7", 0, 1, "POSITIVE");
+        assertNumericConstant(multiMove.getAsJsonObject("exit_constants"), "WS-MULTI-B",
+                "7", "7", 0, 1, "POSITIVE");
+    }
+
+    @Test
+    void dataflowKillsCallUsingReferenceWhenMetadataIsMissing() {
+        TestCFGNode moveRef = new TestCFGNode("move-ref", "MOVE 10 TO WS-REF", FlowNodeType.MOVE,
+                List.of(), List.of("WS-REF"), moveAssignmentFact("WS-REF", "10"));
+        TestCFGNode moveContent = new TestCFGNode("move-content", "MOVE 20 TO WS-CONTENT", FlowNodeType.MOVE,
+                List.of(), List.of("WS-CONTENT"), moveAssignmentFact("WS-CONTENT", "20"));
+        TestCFGNode call = new TestCFGNode("call-node",
+                "CALL \"SUBPROG\" USING WS-REF BY CONTENT WS-CONTENT", FlowNodeType.CALL,
+                List.of("WS-REF", "WS-CONTENT"), List.of(), Map.of());
+
+        DataflowAnalysisResult result = new StaticValueDataflowPass().buildSkeleton("call-fallback-kill-test.cbl",
+                List.of(moveRef, moveContent, call),
+                List.of(
+                        new SerialisableEdge("edge-ref", "move-ref", "move-content", "FOLLOWED_BY"),
+                        new SerialisableEdge("edge-content", "move-content", "call-node", "FOLLOWED_BY")));
+
+        DataflowNodeState callState = result.nodeStates().get("call-node");
+        assertTrue(callState.entryConstants().containsKey("WS-REF"));
+        assertTrue(callState.entryConstants().containsKey("WS-CONTENT"));
+        assertFalse(callState.exitConstants().containsKey("WS-REF"));
+        assertTrue(callState.exitConstants().containsKey("WS-CONTENT"));
+        assertEquals(List.of("CALL_USING_REFERENCE_KILL@WS-REF"), killCodesAndVariables(callState.kills()));
+        assertEquals(1, result.summary().get("kill_count"));
+    }
+
+    @Test
+    void dataflowKillsSqlReturningIntoHostVariablesOutsideSelectFetch() {
+        TestCFGNode moveSql = new TestCFGNode("move-sql", "MOVE 4 TO WS-SQL-RETURN", FlowNodeType.MOVE,
+                List.of(), List.of("WS-SQL-RETURN"), moveAssignmentFact("WS-SQL-RETURN", "4"));
+        Map<String, Object> sqlMetadata = new LinkedHashMap<>();
+        sqlMetadata.put("sql_operation", "UPDATE");
+        sqlMetadata.put("host_variables", List.of("WS-SQL-RETURN"));
+        TestCFGNode sql = new TestCFGNode("sql-node",
+                "EXEC SQL UPDATE ACCOUNT SET AMOUNT = 1 RETURNING AMOUNT INTO :WS-SQL-RETURN END-EXEC",
+                FlowNodeType.DIALECT, List.of(), List.of(), sqlMetadata);
+        TestCFGNode copy = new TestCFGNode("copy-node", "MOVE WS-SQL-RETURN TO WS-SQL-COPY", FlowNodeType.MOVE,
+                List.of("WS-SQL-RETURN"), List.of("WS-SQL-COPY"), Map.of());
+
+        DataflowAnalysisResult result = new StaticValueDataflowPass().buildSkeleton("sql-returning-kill-test.cbl",
+                List.of(moveSql, sql, copy),
+                List.of(
+                        new SerialisableEdge("edge-sql", "move-sql", "sql-node", "FOLLOWED_BY"),
+                        new SerialisableEdge("edge-copy", "sql-node", "copy-node", "FOLLOWED_BY")));
+
+        DataflowNodeState sqlState = result.nodeStates().get("sql-node");
+        assertTrue(sqlState.entryConstants().containsKey("WS-SQL-RETURN"));
+        assertFalse(sqlState.exitConstants().containsKey("WS-SQL-RETURN"));
+        assertEquals(List.of("SQL_OUTPUT_KILL@WS-SQL-RETURN"), killCodesAndVariables(sqlState.kills()));
+
+        DataflowNodeState copyState = result.nodeStates().get("copy-node");
+        assertFalse(copyState.entryConstants().containsKey("WS-SQL-RETURN"));
+        assertFalse(copyState.exitConstants().containsKey("WS-SQL-COPY"));
+        assertEquals(1, result.summary().get("kill_count"));
     }
 
     @Test
@@ -1736,6 +1847,12 @@ class JavaHardeningRegressionTest {
     private List<String> killCodesAndVariables(JsonArray kills) {
         return jsonObjects(kills).stream()
                 .map(kill -> kill.get("code").getAsString() + "@" + kill.get("variable").getAsString())
+                .toList();
+    }
+
+    private List<String> killCodesAndVariables(List<Map<String, Object>> kills) {
+        return kills.stream()
+                .map(kill -> kill.get("code") + "@" + kill.get("variable"))
                 .toList();
     }
 

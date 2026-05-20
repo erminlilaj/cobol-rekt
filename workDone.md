@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-20 — Phase 2.11 negative propagation hardening
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/negative-hardening-phase211.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added Phase 2.11 conservative hardening for unsupported output and kill cases. The dataflow pass now kills default/BY REFERENCE `CALL USING` arguments even when structured metadata is missing, kills file descriptor record buffers on `READ` without `INTO`, kills `INSPECT ... TALLYING` outputs, kills SQL `RETURNING ... INTO` host variables, kills parent fields for `SET <88-level> TO TRUE`, and keeps multi-target `MOVE` propagation exact when each target is storage-safe. The dataflow analysis version is now `1.9`.
+**Why:** These cases were either known false-negative boundaries or metadata-dependent kill paths. Locking them with exact tests reduces the chance that later expression/RAG work exposes stale constants as facts.
+
+---
+
 ## 2026-05-20 — Phase 2.10 PERFORM transitive kills
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/perform-kill-phase210.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

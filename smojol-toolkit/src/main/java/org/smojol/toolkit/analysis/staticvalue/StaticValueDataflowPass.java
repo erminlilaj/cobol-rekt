@@ -4,7 +4,9 @@ import com.mojo.algorithms.domain.FlowNodeType;
 import org.antlr.v4.runtime.Token;
 import org.smojol.common.ast.SerialisableCFGFlowNode;
 import org.smojol.common.ast.SerialisableEdge;
+import org.smojol.common.structure.SourceSection;
 import org.smojol.common.staticanalysis.value.ConstantStaticValue;
+import org.smojol.common.vm.structure.ConditionalDataStructure;
 import org.smojol.common.vm.structure.CobolDataStructure;
 import org.smojol.common.vm.structure.Format1DataStructure;
 
@@ -26,7 +28,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.8";
+    private static final String ANALYSIS_VERSION = "1.9";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -39,6 +41,10 @@ public class StaticValueDataflowPass {
             "\\bINTO\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern INSPECT_TARGET = Pattern.compile(
             "^\\s*INSPECT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern INSPECT_TALLYING_TARGET = Pattern.compile(
+            "\\bTALLYING\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SET_CONDITION_TARGET = Pattern.compile(
+            "^\\s*SET\\s+([A-Z][A-Z0-9-]*)\\s+TO\\s+TRUE\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern PICTURE_X_RUN = Pattern.compile("X(?:\\((\\d+)\\))?", Pattern.CASE_INSENSITIVE);
     private static final Pattern PICTURE_NUMERIC_TOKEN = Pattern.compile("([S9V])(?:\\((\\d+)\\))?",
             Pattern.CASE_INSENSITIVE);
@@ -65,8 +71,11 @@ public class StaticValueDataflowPass {
         Map<String, AliasSetSummary> aliasSets = aliasSets(dataStructures);
         Map<String, Integer> alphanumericLengths = alphanumericLengths(dataStructures);
         Map<String, NumericPicture> numericPictures = numericPictures(dataStructures);
+        Set<String> fileDescriptorVariables = fileDescriptorVariables(dataStructures);
+        Map<String, String> conditionParents = conditionParents(dataStructures);
         PropagationResult propagationResult = propagate(nodes, edges, aliasSets, paragraphSummaries,
-                alphanumericLengths, numericPictures, dataStructures != null);
+                alphanumericLengths, numericPictures, fileDescriptorVariables, conditionParents,
+                dataStructures != null);
         Map<String, DataflowNodeState> nodeStates = propagationResult.nodeStates();
         int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
         String status = pathSensitiveTargetsEnabled
@@ -127,11 +136,14 @@ public class StaticValueDataflowPass {
                                         Map<String, ParagraphSummary> paragraphSummaries,
                                         Map<String, Integer> alphanumericLengths,
                                         Map<String, NumericPicture> numericPictures,
+                                        Set<String> fileDescriptorVariables,
+                                        Map<String, String> conditionParents,
                                         boolean numericPictureGatingEnabled) {
         Map<String, List<String>> transitiveModifiedVariablesByParagraph =
                 transitiveModifiedVariablesByParagraph(paragraphSummaries);
         Map<String, List<Map<String, Object>>> killsByNode =
-                killsByNode(nodes, aliasSets, transitiveModifiedVariablesByParagraph);
+                killsByNode(nodes, aliasSets, transitiveModifiedVariablesByParagraph,
+                        fileDescriptorVariables, conditionParents);
         Map<String, List<String>> predecessors = predecessors(nodes, edges);
         Map<String, Map<String, Map<String, Object>>> entryStates = emptyStates(nodes);
         Map<String, Map<String, Map<String, Object>>> exitStates = emptyStates(nodes);
@@ -380,10 +392,13 @@ public class StaticValueDataflowPass {
     private Map<String, List<Map<String, Object>>> killsByNode(List<SerialisableCFGFlowNode> nodes,
                                                                Map<String, AliasSetSummary> aliasSets,
                                                                Map<String, List<String>>
-                                                                       transitiveModifiedVariablesByParagraph) {
+                                                                       transitiveModifiedVariablesByParagraph,
+                                                               Set<String> fileDescriptorVariables,
+                                                               Map<String, String> conditionParents) {
         Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
         for (SerialisableCFGFlowNode node : nodes) {
-            result.put(node.getId(), killFacts(node, aliasSets, transitiveModifiedVariablesByParagraph));
+            result.put(node.getId(), killFacts(node, aliasSets, transitiveModifiedVariablesByParagraph,
+                    fileDescriptorVariables, conditionParents));
         }
         return result;
     }
@@ -391,10 +406,13 @@ public class StaticValueDataflowPass {
     private List<Map<String, Object>> killFacts(SerialisableCFGFlowNode node,
                                                 Map<String, AliasSetSummary> aliasSets,
                                                 Map<String, List<String>>
-                                                        transitiveModifiedVariablesByParagraph) {
+                                                        transitiveModifiedVariablesByParagraph,
+                                                Set<String> fileDescriptorVariables,
+                                                Map<String, String> conditionParents) {
         Map<String, Map<String, Object>> kills = new TreeMap<>();
         for (Map<String, Object> kill : aliasKills(node, aliasSets)) kills.put(killKey(kill), kill);
-        for (Map<String, Object> kill : dataflowKills(node, transitiveModifiedVariablesByParagraph)) {
+        for (Map<String, Object> kill : dataflowKills(node, transitiveModifiedVariablesByParagraph,
+                fileDescriptorVariables, conditionParents)) {
             kills.put(killKey(kill), kill);
         }
         return new ArrayList<>(kills.values());
@@ -689,14 +707,17 @@ public class StaticValueDataflowPass {
 
     private List<Map<String, Object>> dataflowKills(SerialisableCFGFlowNode node,
                                                     Map<String, List<String>>
-                                                            transitiveModifiedVariablesByParagraph) {
+                                                            transitiveModifiedVariablesByParagraph,
+                                                    Set<String> fileDescriptorVariables,
+                                                    Map<String, String> conditionParents) {
         return switch (node.getType()) {
             case ACCEPT -> acceptKills(node);
             case CALL -> callUsingKills(node);
             case DIALECT -> dialectOutputKills(node);
             case INITIALIZE -> targetKills(node, "INITIALIZE_TARGET_KILL", "initialize_target");
-            case INSPECT -> originalTextTargetKills(node, INSPECT_TARGET, "INSPECT_TARGET_KILL", "inspect_target");
-            case READ -> originalTextTargetKills(node, READ_INTO_TARGET, "READ_INTO_KILL", "read_into");
+            case INSPECT -> inspectKills(node);
+            case READ -> readKills(node, fileDescriptorVariables);
+            case SET -> setConditionParentKills(node, conditionParents);
             case STRING -> originalTextTargetKills(node, STRING_INTO_TARGET, "STRING_OUTPUT_KILL", "string_into");
             case UNSTRING -> originalTextTargetKills(node, UNSTRING_INTO_TARGET, "UNSTRING_OUTPUT_KILL", "unstring_into");
             case PERFORM -> performTransitiveKills(node, transitiveModifiedVariablesByParagraph);
@@ -745,9 +766,69 @@ public class StaticValueDataflowPass {
         return List.of(dataflowKill(node, matcher.group(1), code, reason));
     }
 
+    private List<Map<String, Object>> readKills(SerialisableCFGFlowNode node, Set<String> fileDescriptorVariables) {
+        if (node.getOriginalText() == null) return List.of();
+        Matcher intoMatcher = READ_INTO_TARGET.matcher(node.getOriginalText());
+        if (intoMatcher.find()) {
+            return List.of(dataflowKill(node, intoMatcher.group(1), "READ_INTO_KILL", "read_into"));
+        }
+
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (String variable : fileDescriptorVariables) {
+            Map<String, Object> kill = dataflowKill(node, variable, "READ_RECORD_BUFFER_KILL",
+                    "read_record_buffer");
+            kills.put(killKey(kill), kill);
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private List<Map<String, Object>> inspectKills(SerialisableCFGFlowNode node) {
+        if (node.getOriginalText() == null) return List.of();
+        String upper = node.getOriginalText().toUpperCase(Locale.ROOT);
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        if (upper.contains(" REPLACING ")) {
+            Matcher targetMatcher = INSPECT_TARGET.matcher(node.getOriginalText());
+            if (targetMatcher.find()) {
+                Map<String, Object> kill = dataflowKill(node, targetMatcher.group(1),
+                        "INSPECT_TARGET_KILL", "inspect_target");
+                kills.put(killKey(kill), kill);
+            }
+        }
+        Matcher tallyingMatcher = INSPECT_TALLYING_TARGET.matcher(node.getOriginalText());
+        while (tallyingMatcher.find()) {
+            Map<String, Object> kill = dataflowKill(node, tallyingMatcher.group(1),
+                    "INSPECT_TALLYING_KILL", "inspect_tallying");
+            kills.put(killKey(kill), kill);
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private List<Map<String, Object>> setConditionParentKills(SerialisableCFGFlowNode node,
+                                                              Map<String, String> conditionParents) {
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        Set<String> conditionNames = new TreeSet<>(sortedStrings(node.getVariablesModified()));
+        if (node.getOriginalText() != null) {
+            Matcher matcher = SET_CONDITION_TARGET.matcher(node.getOriginalText());
+            if (matcher.find()) conditionNames.add(matcher.group(1));
+        }
+        for (String modifiedVariable : conditionNames) addConditionParentKill(node, conditionParents, kills,
+                modifiedVariable);
+        return new ArrayList<>(kills.values());
+    }
+
+    private void addConditionParentKill(SerialisableCFGFlowNode node, Map<String, String> conditionParents,
+                                        Map<String, Map<String, Object>> kills, String modifiedVariable) {
+        String parent = conditionParents.get(canonicalVariable(modifiedVariable));
+        if (parent == null) return;
+        Map<String, Object> kill = dataflowKill(node, parent,
+                "SET_CONDITION_PARENT_KILL", "set_condition_name_parent");
+        kill.put("condition_name", canonicalVariable(modifiedVariable));
+        kills.put(killKey(kill), kill);
+    }
+
     private List<Map<String, Object>> callUsingKills(SerialisableCFGFlowNode node) {
         Object usingParameters = node.getMetadata().get("using_parameters");
-        if (!(usingParameters instanceof List<?> parameterList)) return List.of();
+        if (!(usingParameters instanceof List<?> parameterList)) return callUsingFallbackKills(node);
         Map<String, Map<String, Object>> kills = new TreeMap<>();
         for (Object parameter : parameterList) {
             if (!(parameter instanceof Map<?, ?> rawParameter)) continue;
@@ -763,6 +844,40 @@ public class StaticValueDataflowPass {
             kills.put(killKey(kill), kill);
         }
         return new ArrayList<>(kills.values());
+    }
+
+    private List<Map<String, Object>> callUsingFallbackKills(SerialisableCFGFlowNode node) {
+        if (node.getOriginalText() == null) return List.of();
+        String upper = node.getOriginalText().toUpperCase(Locale.ROOT);
+        int usingIndex = upper.indexOf(" USING ");
+        if (usingIndex < 0) return List.of();
+        String usingText = upper.substring(usingIndex + " USING ".length())
+                .replace(".", " ")
+                .replace(",", " ");
+        int endCallIndex = usingText.indexOf(" END-CALL");
+        if (endCallIndex >= 0) usingText = usingText.substring(0, endCallIndex);
+
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        String mode = "REFERENCE";
+        for (String token : usingText.split("\\s+")) {
+            if (token.isBlank() || "BY".equals(token)) continue;
+            if ("REFERENCE".equals(token) || "CONTENT".equals(token) || "VALUE".equals(token)) {
+                mode = token;
+                continue;
+            }
+            if (isCallUsingNoise(token) || isQuotedLiteral(token) || "CONTENT".equals(mode) || "VALUE".equals(mode)) {
+                continue;
+            }
+            Map<String, Object> kill = dataflowKill(node, token,
+                    "CALL_USING_REFERENCE_KILL", "call_using_reference_fallback");
+            kills.put(killKey(kill), kill);
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private boolean isCallUsingNoise(String token) {
+        return "ADDRESS".equals(token) || "OF".equals(token) || "LENGTH".equals(token)
+                || "OMITTED".equals(token) || "NULL".equals(token);
     }
 
     private List<Map<String, Object>> dialectOutputKills(SerialisableCFGFlowNode node) {
@@ -792,9 +907,12 @@ public class StaticValueDataflowPass {
     private List<Map<String, Object>> sqlOutputKills(SerialisableCFGFlowNode node) {
         Object operation = node.getMetadata().get("sql_operation");
         if (!(operation instanceof String sqlOperation)) return List.of();
-        if (!Set.of("SELECT", "FETCH").contains(sqlOperation.toUpperCase(Locale.ROOT))) return List.of();
         if (node.getOriginalText() == null
                 || !node.getOriginalText().toUpperCase(Locale.ROOT).contains(" INTO ")) return List.of();
+        String upper = node.getOriginalText().toUpperCase(Locale.ROOT);
+        boolean knownOutputForm = Set.of("SELECT", "FETCH").contains(sqlOperation.toUpperCase(Locale.ROOT))
+                || upper.contains(" RETURNING ");
+        if (!knownOutputForm) return List.of();
 
         Object hostVariables = node.getMetadata().get("host_variables");
         if (!(hostVariables instanceof List<?> hostVariableList)) return List.of();
@@ -905,6 +1023,31 @@ public class StaticValueDataflowPass {
             pictures.put(canonicalVariable(item.name()), item.numericPicture());
         }
         return pictures;
+    }
+
+    private Set<String> fileDescriptorVariables(CobolDataStructure dataStructures) {
+        if (dataStructures == null) return Set.of();
+        Set<String> variables = new TreeSet<>();
+        dataStructures.accept((data, parent, root) -> {
+            if (data.getSourceSection() == SourceSection.FILE_DESCRIPTOR) {
+                variables.add(canonicalVariable(data.name()));
+            }
+            return data;
+        }, null, ignored -> false, dataStructures);
+        variables.remove("");
+        return variables;
+    }
+
+    private Map<String, String> conditionParents(CobolDataStructure dataStructures) {
+        if (dataStructures == null) return Map.of();
+        Map<String, String> parents = new TreeMap<>();
+        dataStructures.accept((data, parent, root) -> {
+            if (data instanceof ConditionalDataStructure && parent != null) {
+                parents.put(canonicalVariable(data.name()), canonicalVariable(parent.name()));
+            }
+            return data;
+        }, null, ignored -> false, dataStructures);
+        return parents;
     }
 
     private Map<String, AliasSetSummary> aliasSets(CobolDataStructure dataStructures) {

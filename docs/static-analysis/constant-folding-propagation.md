@@ -332,7 +332,7 @@ Secondary cleanup items:
 | 2.8 | `DONE` | Add PIC-aware value gating for propagated numeric constants. | Dataflow does not seed or emit a `CONSTANT` for `MOVE`, folded `COMPUTE`, or expression propagation unless the target field's PICTURE makes the value provably representable; `ROUNDED` and `ON SIZE ERROR` block propagation seeding even if local expression folding still emits an expression fact. |
 | 2.9 | `DONE` | Refuse subscripted and reference-modified propagation targets. | `subscript-refusal-phase29.cbl` proves `MOVE 5 TO WS-TBL(1)` does not create a whole-table `WS-TBL = 5` constant, `MOVE WS-TBL(2) TO WS-X` does not copy a stale table-cell value, `MOVE "ABC" TO WS-AREA(1:3)` does not create a full-field `WS-AREA = "ABC"` constant, and ordinary non-subscripted moves still propagate. |
 | 2.10 | `DONE` | Add conservative `PERFORM` transitive kills. | `perform-kill-phase210.cbl` proves constants do not survive `PERFORM SUB-PARA` when the performed paragraph modifies the same variable, transitive `PERFORM SUB-A` -> `SUB-B` writes are killed at the caller, and no-write performed paragraphs preserve safe constants. |
-| 2.11 | `PENDING` | Expand negative hardening tests for unsupported output/kill cases. | Lock false-negative behavior for CALL metadata absence, READ record-buffer mutation, INSPECT TALLYING targets, SQL output forms outside SELECT/FETCH INTO, multi-target COMPUTE/MOVE, and SET 88-level conditions. |
+| 2.11 | `DONE` | Expand negative hardening tests for unsupported output/kill cases. | `negative-hardening-phase211.cbl` and solver-level tests lock CALL metadata absence, READ record-buffer mutation, INSPECT TALLYING targets, SQL `RETURNING ... INTO`, multi-target MOVE, and SET 88-level condition-name parent kills. |
 | 2.12 | `PENDING` | Replace text-level dataflow expression parsing with grammar-backed evaluation or prove it is fail-closed. | The current evaluator reads `originalText`; before broader claims, expression propagation should reuse the ANTLR arithmetic expression path or have tests proving continuation text and end phrases cannot create partial-expression false positives. |
 | 3.0 | `DONE` | Write detailed Phase 3 pre-coding plan. | This document now defines the exact ordering, schemas, fixtures, tests, invariants, and risk controls for path-sensitive dynamic `CALL`/CICS facts. |
 | 3.1a | `DONE` | Add quoted alphanumeric constants to the dataflow sidecar. | `MOVE "PROG-A" TO WS-PGM` and `MOVE WS-PGM TO WS-COPY` now carry `ALPHANUMERIC` constants through the same fixed-point solver; runtime, alias, and join kills still apply. Path-sensitive target fields remain disabled. |
@@ -373,6 +373,7 @@ Secondary cleanup items:
 | 2026-05-18 | `DONE` | Added Phase 2.8 numeric PICTURE gating for stored-value constants. The dataflow pass now parses simple numeric PICTURE strings built from `S`, `9`, and `V`, and emits numeric `CONSTANT` facts only when the decimal value fits the target's integer digits, fractional digits, and sign. Unsupported PICTURE forms are treated as false negatives. `ROUNDED`, `ON SIZE ERROR`, and `NOT ON SIZE ERROR` still allow local expression facts but block dataflow seeding. The dataflow analysis version is now `1.6`. | Focused red/green check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowEmitsNumericConstantsOnlyWhenTargetPictureCanRepresentThem`, 1 test, total time 7.211s. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 48 tests, total time 27.924s. Fixture metrics: `pic-gating-phase28.cbl` has 15 node states, 14 edges, 17 entry constants, 20 exit constants, 0 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 17,559-byte pretty-printed sidecar, and a 29,390-byte pretty-printed CFG. Exact tests cover integer-scale refusal, fractional-fit success, fractional-overflow refusal, unsigned-negative refusal, signed-negative success, variable-copy overflow refusal, size-error blocking, and rounded blocking. |
 | 2026-05-20 | `DONE` | Added Phase 2.9 subscript/reference-modification refusal for propagated stored constants. The dataflow pass now refuses to produce constants from statements whose raw data reference uses COBOL parenthesized reference syntax, so table-cell writes and slice writes can still kill old aliases but cannot become whole-field or whole-table facts. The dataflow analysis version is now `1.7`. | Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowRefusesSubscriptedAndReferenceModifiedConstants`, 1 test. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 51 tests, total time 31.474s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 63 tests, 2 skipped, total time 31.780s. Fixture `subscript-refusal-phase29.cbl` proves `MOVE 5 TO WS-TBL(1)` creates no `WS-TBL` constant, `MOVE WS-TBL(2) TO WS-X` creates no stale `WS-X` constant, `MOVE "ABC" TO WS-AREA(1:3)` creates no full-field `WS-AREA` constant, and `MOVE 7 TO WS-NUM` still propagates normally. |
 | 2026-05-20 | `DONE` | Added Phase 2.10 conservative `PERFORM` transitive kills. The dataflow pass now computes transitive modified variables from paragraph summaries for kill purposes and emits `PERFORM_TRANSITIVE_KILL` at the caller when a performed paragraph, or a paragraph it performs, may modify a currently known variable. The dataflow analysis version is now `1.8`. | Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowKillsConstantsModifiedByPerformedParagraphs`, 1 test. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 52 tests, total time 32.049s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 64 tests, 2 skipped, total time 33.749s. Fixture `perform-kill-phase210.cbl` proves `PERFORM SUB-PARA` kills stale `WS-A`, transitive `PERFORM SUB-A` kills `WS-E` through `SUB-B`, and `PERFORM CLEAN-PARA` with no writes preserves `WS-C` so `MOVE WS-C TO WS-D` still propagates. Sidecar metrics: 31 nodes, 50 edges, 12 entry constants, 16 exit constants, 3 kills, 0 diagnostics, 5 paragraph summaries, convergence in 2 iterations. |
+| 2026-05-20 | `DONE` | Added Phase 2.11 negative hardening for unsupported output and kill cases. The dataflow pass now has fallback `CALL USING` kills when structured `using_parameters` metadata is absent, conservative file-record-buffer kills for `READ` without explicit `INTO`, `INSPECT ... TALLYING` output kills, SQL `RETURNING ... INTO` host-variable kills, and parent-field kills for `SET <88-level> TO TRUE`. Multi-target `MOVE` remains supported when each target is storage-safe. The dataflow analysis version is now `1.9`. | Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowHardensKnownUnsupportedOutputAndConditionCases+dataflowKillsCallUsingReferenceWhenMetadataIsMissing+dataflowKillsSqlReturningIntoHostVariablesOutsideSelectFetch`, 3 tests. Fixture `negative-hardening-phase211.cbl` has 16 nodes, 15 edges, 5 entry constants, 7 exit constants, 3 kills, 0 diagnostics, 1 paragraph summary, and convergence in 2 iterations. |
 
 ### Phase 3 Checkpoints
 
@@ -399,7 +400,7 @@ Current claim boundary:
 
 - Constant folding is implemented for closed numeric `COMPUTE` expressions. It is source-preserving and safe to claim with the documented scope.
 - Constant propagation is implemented as scoped intraprocedural, flow-sensitive CFG facts with conservative kills for the documented subset. This is now strong enough to claim "intraprocedural flow-sensitive constant propagation with conservative kills" when the limitations below are stated.
-- It is still not full production COBOL constant propagation. Phase 2.11 and Phase 2.12 remain required before RAG static-value chunks or broader claims, because unsupported output/kill cases and text-level expression parsing must be locked down before those facts are exposed to retrieval.
+- It is still not full production COBOL constant propagation. Phase 2.12 remains required before RAG static-value chunks or broader claims, because text-level expression parsing must be hardened before those facts are exposed to retrieval.
 
 #### Phase 2.9: Subscript and Reference-Modification Refusal
 
@@ -539,23 +540,58 @@ No `PERFORM_TRANSITIVE_KILL` is emitted because the performed paragraph does not
 
 Purpose:
 
-These are not new propagation features. They lock known refusals so a future change cannot accidentally turn an unsupported COBOL construct into a wrong constant.
+These are not broad new propagation features. They lock known refusals and conservative kills so a future change cannot accidentally turn an unsupported COBOL construct into a wrong constant.
 
 Required negative tests:
 
 | Case | Expected behavior |
 |---|---|
-| `CALL` node with USING variables but missing `using_parameters` metadata | Kill conservatively or emit no constant; never preserve a stale by-reference argument silently. |
-| `READ file` without explicit `INTO` | Document as record-buffer mutation; do not propagate stale constants for the record area unless the buffer is modeled exactly. |
-| `INSPECT ... TALLYING IN WS-N` | Treat `WS-N` as runtime-modified; no stale constant should survive. |
-| EXEC SQL forms outside `SELECT/FETCH ... INTO` | Keep conservative refusal or add targeted output kills; never infer output host variables. |
-| Multi-target `COMPUTE` or `MOVE` forms | Either emit one fact per safe target or refuse the statement; no partial hidden claim. |
-| `SET condition-name TO TRUE` for 88-levels | No numeric/alphanumeric storage constant should be emitted unless the data layout and parent value are explicitly modeled. |
+| `CALL` node with USING variables but missing `using_parameters` metadata | `DONE`: parse the raw `USING` phrase as a fallback, kill default/BY REFERENCE arguments, and preserve BY CONTENT/BY VALUE arguments. |
+| `READ file` without explicit `INTO` | `DONE`: conservatively kill file-descriptor record-buffer variables so stale record constants cannot be copied after the read. |
+| `INSPECT ... TALLYING WS-N ...` | `DONE`: kill the tallying output variable; `INSPECT ... REPLACING` still kills the inspected target. |
+| EXEC SQL forms outside `SELECT/FETCH ... INTO` | `DONE`: SQL `RETURNING ... INTO :HOST-VAR` now kills host variables. Other SQL output forms remain documented future work unless their output syntax is explicitly recognized. |
+| Multi-target `MOVE` forms | `DONE`: `MOVE 7 TO WS-MULTI-A WS-MULTI-B` emits both constants when each target is storage-safe. Multi-target `COMPUTE` remains a conservative non-feature unless folded facts are emitted per target. |
+| `SET condition-name TO TRUE` for 88-levels | `DONE`: condition-name parent fields are killed using data-structure condition evidence; no stale parent value survives. |
 
 Acceptance:
 
-- Each row above has an exact assertion in `JavaHardeningRegressionTest.java`.
-- Unsupported behavior is documented as either a kill, a refusal, or a future feature; not left implicit.
+- Status: `DONE`.
+- The dataflow analysis version is now `1.9`.
+- Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowHardensKnownUnsupportedOutputAndConditionCases+dataflowKillsCallUsingReferenceWhenMetadataIsMissing+dataflowKillsSqlReturningIntoHostVariablesOutsideSelectFetch`, 3 tests.
+- New fixture: `smojol-toolkit/test-code/flow-ast/negative-hardening-phase211.cbl`.
+- Exact behavior now locked:
+  - `READ IN-FILE` kills the file descriptor record `IN-REC`; `MOVE IN-REC TO WS-REC-COPY` does not copy stale `"AA"`.
+  - `INSPECT WS-TEXT TALLYING WS-TALLY FOR ALL "A"` emits `INSPECT_TALLYING_KILL@WS-TALLY`; `MOVE WS-TALLY TO WS-TALLY-COPY` does not copy stale `3`.
+  - A synthetic `EXEC SQL UPDATE ... RETURNING ... INTO :WS-SQL-RETURN` node emits `SQL_OUTPUT_KILL@WS-SQL-RETURN`; later copies do not propagate stale `4`.
+  - `SET FLAG-ON TO TRUE` emits `SET_CONDITION_PARENT_KILL@WS-FLAG`; `MOVE WS-FLAG TO WS-FLAG-COPY` does not copy stale `"N"`.
+  - A synthetic `CALL "SUBPROG" USING WS-REF BY CONTENT WS-CONTENT` node with missing structured metadata kills `WS-REF` by fallback parsing and preserves `WS-CONTENT`.
+  - `MOVE 7 TO WS-MULTI-A WS-MULTI-B` emits constants for both targets.
+
+Examples:
+
+```cobol
+MOVE "AA" TO IN-REC
+READ IN-FILE
+MOVE IN-REC TO WS-REC-COPY
+```
+
+The `READ` has no `INTO`, so the file record buffer may be overwritten. Phase 2.11 emits `READ_RECORD_BUFFER_KILL@IN-REC`; the later copy does not infer `WS-REC-COPY = "AA"`.
+
+```cobol
+MOVE 3 TO WS-TALLY
+INSPECT WS-TEXT TALLYING WS-TALLY FOR ALL "A"
+MOVE WS-TALLY TO WS-TALLY-COPY
+```
+
+The tallying variable is an output of `INSPECT`, so Phase 2.11 emits `INSPECT_TALLYING_KILL@WS-TALLY` and refuses the stale `WS-TALLY-COPY = 3` conclusion.
+
+```cobol
+MOVE "N" TO WS-FLAG
+SET FLAG-ON TO TRUE
+MOVE WS-FLAG TO WS-FLAG-COPY
+```
+
+`FLAG-ON` is an 88-level condition on `WS-FLAG`. Phase 2.11 kills the parent field with `SET_CONDITION_PARENT_KILL@WS-FLAG`; it does not try to synthesize the exact parent storage value for the condition.
 
 #### Phase 2.12: Grammar-Backed Expression Propagation
 
@@ -585,7 +621,7 @@ The project may use these claim levels:
 | "The tool has constant folding." | Yes | "Closed numeric `COMPUTE` expression folding, source-preserving, BigDecimal-safe." |
 | "The tool has scoped flow-sensitive constant facts." | Yes | "Intraprocedural CFG entry/exit constants with conservative kills and known limitations." |
 | "The tool has COBOL constant propagation." | Partially | Allowed only with scoped wording: "intraprocedural flow-sensitive constant propagation with conservative kills for the documented subset." Do not call it full production COBOL propagation or interprocedural propagation. |
-| "The RAG layer can safely summarize propagated constants." | Not yet | Blocked by Phase 2.11, Phase 2.12, and explicit Phase 4.1 RAG chunk implementation/evaluation. |
+| "The RAG layer can safely summarize propagated constants." | Not yet | Blocked by Phase 2.12 and explicit Phase 4.1 RAG chunk implementation/evaluation. |
 | "The tool does compiler-style optimization." | No | Out of scope; the tool does not rewrite COBOL or CFG text. |
 
 ### Fool-Proof Execution Rules
@@ -595,7 +631,7 @@ The project may use these claim levels:
 3. Do not silently expand scope. New supported COBOL constructs require this document to be updated first.
 4. Do not silently drop scope. Skipped work must be marked `SKIPPED` with a reason.
 5. Do not merge implementation if this ledger says `WORKING`, `PENDING`, or `BLOCKED` for the same deliverable.
-6. Do not claim full production-ready constant propagation until `static_analysis/dataflow.json`, fixed-point CFG propagation, conservative merge rules, loop handling, alias kills, runtime-input kill rules, subscript/reference-modification refusal, `PERFORM` transitive kills, the Phase 2.11 negative hardening matrix, and the Phase 2.12 expression-parser hardening are all `DONE`. Phase 2.9 and Phase 2.10 closed the two highest-priority soundness blockers. Until Phase 2.11 and Phase 2.12 are complete, describe the current solver as intraprocedural flow-sensitive constant propagation with conservative kills for the documented subset.
+6. Do not claim full production-ready constant propagation until `static_analysis/dataflow.json`, fixed-point CFG propagation, conservative merge rules, loop handling, alias kills, runtime-input kill rules, subscript/reference-modification refusal, `PERFORM` transitive kills, the Phase 2.11 negative hardening matrix, and the Phase 2.12 expression-parser hardening are all `DONE`. Phase 2.9, Phase 2.10, and Phase 2.11 closed the highest-priority soundness blockers identified so far. Until Phase 2.12 is complete, describe the current solver as intraprocedural flow-sensitive constant propagation with conservative kills for the documented subset.
 7. Do not claim dynamic CALL/CICS improvement until path-sensitive fields and accuracy measurements are `DONE`.
 8. Do not claim RAG improvement until retrieval and token metrics are `DONE`.
 
@@ -644,6 +680,15 @@ Phase 2.6b adds these kill rules:
 - `INSPECT <identifier> ...` emits `INSPECT_TARGET_KILL`.
 - `EXEC CICS ... INTO(<identifier>)` and other known CICS output arguments emit `CICS_OUTPUT_KILL`.
 - `EXEC SQL SELECT/FETCH ... INTO :<host-variable>` emits `SQL_OUTPUT_KILL`.
+
+Phase 2.11 adds these hardening kills and refusals:
+
+- `CALL ... USING ...` without structured `using_parameters` metadata falls back to raw-text parsing; default/BY REFERENCE arguments emit `CALL_USING_REFERENCE_KILL`, while BY CONTENT/BY VALUE arguments remain unchanged.
+- `READ <file>` without explicit `INTO` emits `READ_RECORD_BUFFER_KILL` for file-descriptor record variables.
+- `INSPECT ... TALLYING <identifier> ...` emits `INSPECT_TALLYING_KILL`.
+- `EXEC SQL ... RETURNING ... INTO :<host-variable>` emits `SQL_OUTPUT_KILL`.
+- `SET <88-level-condition> TO TRUE` emits `SET_CONDITION_PARENT_KILL` for the condition's parent field.
+- `MOVE <literal> TO <target-a> <target-b>` emits one storage-safe constant per target; unsupported multi-target forms remain conservative non-features.
 
 The current solver intentionally does not support function calls, string expressions, condition simplification, branch reachability pruning, interprocedural summaries, or RAG chunk generation. Phase 2.8 adds a conservative stored-value gate for simple numeric PICTURE forms (`S`, `9`, and `V`) and blocks propagation seeding for `ROUNDED` and size-error phrases. It still does not simulate COBOL rounding/truncation, edited numeric fields, `P` scaling, `COMP`, or `COMP-3`; unsupported storage forms produce no propagated numeric constant.
 
