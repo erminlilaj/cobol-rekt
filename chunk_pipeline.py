@@ -4881,7 +4881,8 @@ def generate_bm25_index(chunks_dir: Path, verbose: bool,
         for field in ("paragraph", "group_name", "program", "section",
                       "sql_tables_read", "sql_tables_updated",
                       "field_names", "cics_commands", "calls", "tables",
-                      "conditions", "cics_call_targets"):
+                      "conditions", "cics_call_targets", "keywords",
+                      "screen_key_aliases"):
             val = meta.get(field)
             if isinstance(val, str) and val:
                 structured.add(val.upper())
@@ -5801,7 +5802,14 @@ def generate_screen_interaction_chunks(report_dir: Path, chunks_dir: Path,
         facts = _screen_facts(paragraph_texts, keywords)
         if not facts:
             continue
+        alias_input = list(keywords) + [str(fact.get("evidence", "")) for fact in facts]
+        key_aliases = _screen_key_aliases(alias_input)
         lines = [f"Screen {label} facts for {program}:"]
+        if key_aliases:
+            alias_text = ", ".join(
+                f"{alias['natural_key']}={alias['cics_key']}" for alias in key_aliases
+            )
+            lines.append(f"Screen key aliases: {alias_text}.")
         for fact in facts:
             lines.append(f"- {fact['paragraph']}: {fact['evidence']}.")
         metadata = {
@@ -5811,6 +5819,7 @@ def generate_screen_interaction_chunks(report_dir: Path, chunks_dir: Path,
             "program": program,
             "interaction_kind": label,
             "keywords": list(keywords),
+            "screen_key_aliases": key_aliases,
             "facts": facts,
             "screen_interaction_source": "java_cfg_paragraph_context",
         }
@@ -5873,6 +5882,24 @@ def _unique_preserving_order(values: list[str]) -> list[str]:
         seen.add(value)
         result.append(value)
     return result
+
+
+def _screen_key_aliases(values: list[str]) -> list[dict[str, str]]:
+    aliases: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for value in values:
+        for match in re.finditer(r"\bDFH(PF\d{1,2}|PA\d|ENTER|CLEAR)\b", str(value or "").upper()):
+            natural_key = match.group(1)
+            cics_key = match.group(0)
+            key = (natural_key, cics_key)
+            if key in seen:
+                continue
+            seen.add(key)
+            aliases.append({
+                "natural_key": natural_key,
+                "cics_key": cics_key,
+            })
+    return aliases
 
 
 def _error_path_facts(report_dir: Path) -> list[dict]:

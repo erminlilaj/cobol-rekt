@@ -4,6 +4,30 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-20 — Phase 2.9 subscript/reference-modification refusal
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/subscript-refusal-phase29.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added a conservative Phase 2.9 refusal gate for subscripted and reference-modified data references in propagated stored constants. The dataflow pass now refuses to create constants from statements such as `MOVE 5 TO WS-TBL(1)` or `MOVE "ABC" TO WS-AREA(1:3)`, while still allowing conservative alias kills and preserving ordinary non-subscripted propagation such as `MOVE 7 TO WS-NUM`. The dataflow analysis version is now `1.7`, and the documentation includes the exact table-cell and slice-write examples.
+**Why:** Claude's critical review identified a soundness risk where one table occurrence or one field slice could be mistaken for a whole-table or whole-field constant. Phase 2.9 closes that false-positive path with exact Java regression tests before any broader constant-propagation or RAG static-value claims.
+
+---
+
+## 2026-05-20 — Constant propagation remaining-work plan
+
+**File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added a detailed remaining-work plan after Claude's critical review. The plan marks subscript/reference-modification refusal and `PERFORM` transitive kills as mandatory blockers before a broad constant-propagation claim, adds a negative-test matrix, and defines exact claim gates for folding, scoped flow-sensitive facts, full propagation, and RAG static-value chunks.
+**Why:** The branch already has safe local constant folding and scoped CFG constant facts, but the project should not overclaim full COBOL constant propagation until the remaining soundness blockers are handled with exact tests.
+
+---
+
+## 2026-05-20 — Screen-key synonym retrieval support
+
+**File(s):** `chunk_pipeline.py`, `test_chunk_pipeline.py`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added explicit natural/exact screen-key aliases such as `PF7=DFHPF7` to generated screen interaction chunks and BM25 structured terms. The chunk-pipeline test now proves `PF7`/`PF8` aliases are present in `screen.key_dispatch` text, metadata, term frequencies, and structured terms.
+**Why:** The PDCBVC RAG benchmark showed that exact `DFHPF7`/`DFHPF8` retrieval worked but natural `PF7`/`PF8` wording was weak. This additive retrieval fix improves natural screen-key recall without changing source artifacts, Java analysis facts, or static-value propagation.
+
+---
+
 ## 2026-05-19 — Phase 3.3 target-resolution measurement
 
 **File(s):** `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

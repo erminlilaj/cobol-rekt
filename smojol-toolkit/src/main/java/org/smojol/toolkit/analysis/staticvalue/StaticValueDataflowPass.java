@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.6";
+    private static final String ANALYSIS_VERSION = "1.7";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -41,6 +41,8 @@ public class StaticValueDataflowPass {
             "^\\s*INSPECT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern PICTURE_X_RUN = Pattern.compile("X(?:\\((\\d+)\\))?", Pattern.CASE_INSENSITIVE);
     private static final Pattern PICTURE_NUMERIC_TOKEN = Pattern.compile("([S9V])(?:\\((\\d+)\\))?",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern DATA_REFERENCE_WITH_PARENS = Pattern.compile("\\b[A-Z][A-Z0-9-]*\\s*\\([^)]*\\)",
             Pattern.CASE_INSENSITIVE);
     private static final Set<String> CICS_OUTPUT_ARGUMENTS = Set.of("INTO", "SET", "RESP", "RESP2");
 
@@ -477,9 +479,11 @@ public class StaticValueDataflowPass {
         List<String> modifiedVariables = sortedStrings(node.getVariablesModified());
         if (modifiedVariables.size() != 1) return;
         if (hasUnsupportedComputeSemantics(node.getOriginalText())) return;
+        if (hasSubscriptOrReferenceModification(node.getOriginalText())) return;
         String expression = computeExpression(node.getOriginalText());
         if (expression == null) return;
         String target = modifiedVariables.getFirst();
+        if (hasSubscriptOrReferenceModification(target)) return;
         new DataflowExpressionEvaluator(expression, entry).evaluate().ifPresent(value -> {
             Map<String, Object> valueMap = ConstantStaticValue.numeric(value, value.toPlainString()).toJsonMap();
             if (fitsNumericTarget(target, valueMap, numericPictures, numericPictureGatingEnabled)) {
@@ -509,11 +513,14 @@ public class StaticValueDataflowPass {
                                       Map<String, NumericPicture> numericPictures,
                                       boolean numericPictureGatingEnabled) {
         if (node.getType() != FlowNodeType.MOVE) return;
+        if (hasSubscriptOrReferenceModification(node.getOriginalText())) return;
         List<String> sourceVariables = sortedStrings(node.getVariablesRead());
         if (sourceVariables.size() != 1) return;
+        if (hasSubscriptOrReferenceModification(sourceVariables.get(0))) return;
         Map<String, Object> sourceValue = entry.get(canonicalVariable(sourceVariables.get(0)));
         if (sourceValue == null || !isSupportedCopyConstant(sourceValue)) return;
         for (String targetVariable : sortedStrings(node.getVariablesModified())) {
+            if (hasSubscriptOrReferenceModification(targetVariable)) continue;
             if (!fitsAlphanumericTarget(targetVariable, sourceValue, alphanumericLengths)) continue;
             if (!fitsNumericTarget(targetVariable, sourceValue, numericPictures, numericPictureGatingEnabled)) continue;
             constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(sourceValue));
@@ -529,6 +536,7 @@ public class StaticValueDataflowPass {
         Object target = foldedFact.get("target_variable");
         Object value = foldedFact.get("value");
         if (!(target instanceof String targetVariable) || !(value instanceof Map<?, ?> rawValue)) return;
+        if (hasSubscriptOrReferenceModification(targetVariable)) return;
         Map<String, Object> valueMap = stringKeyMap(rawValue);
         if (!isNumericConstant(valueMap)) return;
         if (!fitsNumericTarget(targetVariable, valueMap, numericPictures, numericPictureGatingEnabled)) return;
@@ -545,6 +553,7 @@ public class StaticValueDataflowPass {
         Object target = assignmentFact.get("target_variable");
         Object sourceValue = assignmentFact.get("source_value");
         if (!(target instanceof String targetVariable) || !(sourceValue instanceof String literal)) return;
+        if (hasSubscriptOrReferenceModification(targetVariable) || hasSubscriptOrReferenceModification(literal)) return;
         numericLiteralValue(literal).ifPresent(value -> {
             if (fitsNumericTarget(targetVariable, value, numericPictures, numericPictureGatingEnabled)) {
                 constants.put(canonicalVariable(targetVariable), value);
@@ -560,6 +569,10 @@ public class StaticValueDataflowPass {
             return;
         }
         constants.put(canonicalVariable(targetVariable), new LinkedHashMap<>(entry.get(canonicalSource)));
+    }
+
+    private boolean hasSubscriptOrReferenceModification(String text) {
+        return text != null && DATA_REFERENCE_WITH_PARENS.matcher(text).find();
     }
 
     private java.util.Optional<Map<String, Object>> numericLiteralValue(String literal) {

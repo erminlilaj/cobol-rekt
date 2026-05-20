@@ -1777,7 +1777,16 @@ class ChunkPipelineTest(unittest.TestCase):
                     {"id": "n1", "type": "PARAGRAPH", "name": "CALCOLA-NPAG", "originalText": "DIVIDE MAX-RIGHE INTO PD1VOCI-TABVOX-NUMERO GIVING NPAGT REMAINDER RESTO. MOVE WCTPAG TO TWCOB-VARCONT-NPAGINA."},
                     {"id": "n2", "type": "PARAGRAPH", "name": "BROWSE-FASE2-SEL-10", "originalText": "IF SCELTAI = WPROGR THEN MOVE WPROGREC TO TWCOB-VARCONT-PROGVOCE GO TO XCTL-LIV5."},
                     {"id": "n3", "type": "PARAGRAPH", "name": "PREP-RIGA", "originalText": "MOVE SPACES TO RIGA-MAPPA. MOVE PD1VOCI-TABVOX-DESCRIZ TO WDESCVO. MOVE PDRUTI01-F05-IMPOX11 TO IMPORTO-RATA. MOVE RIGA-MAPPA TO MRIGAO(WCTRIG)."},
-                    {"id": "n4", "type": "PARAGRAPH", "name": "BROWSE-FASE2", "originalText": "IF EIBAID = DFHPF1 THEN GO TO XCTL-LIV1. IF EIBAID = DFHPF9 THEN GO TO XCTL-LIV0."},
+                    {
+                        "id": "n4",
+                        "type": "PARAGRAPH",
+                        "name": "BROWSE-FASE2",
+                        "originalText": (
+                            "IF EIBAID = DFHPF7 THEN GO TO PAGE-BACK. "
+                            "IF EIBAID = DFHPF8 THEN GO TO PAGE-FORWARD. "
+                            "IF EIBAID = DFHPF9 THEN GO TO XCTL-LIV0."
+                        ),
+                    },
                 ],
                 "edges": [],
             })
@@ -1789,6 +1798,32 @@ class ChunkPipelineTest(unittest.TestCase):
             self.assertTrue((chunks_dir / "SCREEN.CBL__screen_selection.json").exists())
             self.assertTrue((chunks_dir / "SCREEN.CBL__screen_row_build.json").exists())
             self.assertTrue((chunks_dir / "SCREEN.CBL__screen_key_dispatch.json").exists())
+            key_dispatch = chunk_pipeline.load_json(chunks_dir / "SCREEN.CBL__screen_key_dispatch.json")
+            self.assertIn("PF7=DFHPF7", key_dispatch["text"])
+            self.assertIn("PF8=DFHPF8", key_dispatch["text"])
+            self.assertEqual(
+                [
+                    {"natural_key": "PF1", "cics_key": "DFHPF1"},
+                    {"natural_key": "PF2", "cics_key": "DFHPF2"},
+                    {"natural_key": "PF3", "cics_key": "DFHPF3"},
+                    {"natural_key": "PF4", "cics_key": "DFHPF4"},
+                    {"natural_key": "PF7", "cics_key": "DFHPF7"},
+                    {"natural_key": "PF8", "cics_key": "DFHPF8"},
+                    {"natural_key": "PF9", "cics_key": "DFHPF9"},
+                ],
+                key_dispatch["metadata"]["screen_key_aliases"],
+            )
+
+            generate_bm25_index(chunks_dir, False)
+            index = chunk_pipeline.load_json(chunks_dir / "bm25_index.json")
+            key_entry = next(
+                entry for entry in index["entries"]
+                if entry["chunk_type"] == "screen.key_dispatch"
+            )
+            self.assertIn("PF7", key_entry["term_freq"])
+            self.assertIn("PF8", key_entry["term_freq"])
+            self.assertIn("PF7", key_entry["structured_terms"])
+            self.assertIn("PF8", key_entry["structured_terms"])
 
     def test_datasets_tables_resources_chunk_separates_resource_kinds(self) -> None:
         with tempfile.TemporaryDirectory() as td:

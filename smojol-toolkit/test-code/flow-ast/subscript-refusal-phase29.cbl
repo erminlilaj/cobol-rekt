@@ -1,0 +1,18 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. SUBREF29.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-TABLE.
+          05 WS-TBL PIC 9 OCCURS 2.
+       01 WS-X PIC 9.
+       01 WS-AREA PIC X(5).
+       01 WS-AREA-COPY PIC X(5).
+       01 WS-NUM PIC 9.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           MOVE 5 TO WS-TBL(1)
+           MOVE WS-TBL(2) TO WS-X
+           MOVE "ABC" TO WS-AREA(1:3)
+           MOVE WS-AREA TO WS-AREA-COPY
+           MOVE 7 TO WS-NUM
+           GOBACK.
