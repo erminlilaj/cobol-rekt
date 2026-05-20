@@ -6,7 +6,9 @@ import org.smojol.common.staticanalysis.value.StaticValue;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class StaticExpressionFolder {
@@ -19,6 +21,96 @@ public class StaticExpressionFolder {
         }
         ConstantStaticValue foldedValue = ConstantStaticValue.numeric(evaluation.value(), evaluation.value().toPlainString());
         return new FoldingResult(foldedValue, foldedValue.displayValue(), List.of());
+    }
+
+    public ExpressionSerialization serializeDataflowExpression(CobolParser.ArithmeticExpressionContext expression) {
+        return serializeArithmetic(expression);
+    }
+
+    private ExpressionSerialization serializeArithmetic(CobolParser.ArithmeticExpressionContext expression) {
+        ExpressionSerialization current = serializeMultDivs(expression.multDivs());
+        if (!current.serialized()) return current;
+        for (CobolParser.PlusMinusContext plusMinus : expression.plusMinus()) {
+            ExpressionSerialization next = serializeMultDivs(plusMinus.multDivs());
+            if (!next.serialized()) return next;
+            current = ExpressionSerialization.expression(binaryNode(
+                    plusMinus.MINUSCHAR() != null ? "SUBTRACT" : "ADD",
+                    current.expression(), next.expression(), plusMinus.getText()));
+        }
+        return current;
+    }
+
+    private ExpressionSerialization serializeMultDivs(CobolParser.MultDivsContext multDivs) {
+        ExpressionSerialization current = serializePowers(multDivs.powers());
+        if (!current.serialized()) return current;
+        for (CobolParser.MultDivContext multDiv : multDivs.multDiv()) {
+            ExpressionSerialization next = serializePowers(multDiv.powers());
+            if (!next.serialized()) return next;
+            current = ExpressionSerialization.expression(binaryNode(
+                    multDiv.ASTERISKCHAR() != null ? "MULTIPLY" : "DIVIDE",
+                    current.expression(), next.expression(), multDiv.getText()));
+        }
+        return current;
+    }
+
+    private ExpressionSerialization serializePowers(CobolParser.PowersContext powers) {
+        if (!powers.power().isEmpty()) return ExpressionSerialization.unsupported();
+        ExpressionSerialization base = serializeBasis(powers.basis());
+        if (!base.serialized()) return base;
+        if (powers.MINUSCHAR() != null) {
+            Map<String, Object> node = new LinkedHashMap<>();
+            node.put("kind", "unary");
+            node.put("operator", "NEGATE");
+            node.put("operand", base.expression());
+            node.put("source_text", powers.getText());
+            return ExpressionSerialization.expression(node);
+        }
+        return base;
+    }
+
+    private ExpressionSerialization serializeBasis(CobolParser.BasisContext basis) {
+        if (basis.arithmeticExpression() != null) return serializeArithmetic(basis.arithmeticExpression());
+        if (basis.literal() != null) {
+            StaticValueLiteralExtractor.LiteralExtractionResult literal =
+                    literalExtractor.extractNumeric(basis.literal());
+            if (!literal.folded()) return ExpressionSerialization.unsupported();
+            ConstantStaticValue constant = (ConstantStaticValue) literal.value();
+            Map<String, Object> node = new LinkedHashMap<>();
+            node.put("kind", "numeric_literal");
+            node.put("raw_lexeme", basis.literal().getText());
+            node.put("normalized_value", constant.normalizedValue());
+            node.put("source_text", basis.getText());
+            return ExpressionSerialization.expression(node);
+        }
+        if (basis.generalIdentifier() != null) return serializeGeneralIdentifier(basis.generalIdentifier());
+        return ExpressionSerialization.unsupported();
+    }
+
+    private ExpressionSerialization serializeGeneralIdentifier(CobolParser.GeneralIdentifierContext generalIdentifier) {
+        if (generalIdentifier.functionCall() != null || generalIdentifier.specialRegister() != null) {
+            return ExpressionSerialization.unsupported();
+        }
+        CobolParser.QualifiedDataNameContext qualifiedDataName = generalIdentifier.qualifiedDataName();
+        if (qualifiedDataName == null || qualifiedDataName.tableCall() != null
+                || qualifiedDataName.referenceModifier() != null) {
+            return ExpressionSerialization.unsupported();
+        }
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("kind", "variable");
+        node.put("name", generalIdentifier.getText().toUpperCase(Locale.ROOT));
+        node.put("source_text", generalIdentifier.getText());
+        return ExpressionSerialization.expression(node);
+    }
+
+    private Map<String, Object> binaryNode(String operator, Map<String, Object> left,
+                                           Map<String, Object> right, String sourceText) {
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("kind", "binary");
+        node.put("operator", operator);
+        node.put("left", left);
+        node.put("right", right);
+        node.put("source_text", sourceText);
+        return node;
     }
 
     private Evaluation evaluateArithmetic(CobolParser.ArithmeticExpressionContext expression) {
@@ -161,6 +253,20 @@ public class StaticExpressionFolder {
             List<Map<String, Object>> json = new ArrayList<>();
             diagnostics.forEach(diagnostic -> json.add(diagnostic.toJsonMap()));
             return json;
+        }
+    }
+
+    public record ExpressionSerialization(Map<String, Object> expression) {
+        static ExpressionSerialization expression(Map<String, Object> expression) {
+            return new ExpressionSerialization(expression);
+        }
+
+        static ExpressionSerialization unsupported() {
+            return new ExpressionSerialization(null);
+        }
+
+        public boolean serialized() {
+            return expression != null;
         }
     }
 }

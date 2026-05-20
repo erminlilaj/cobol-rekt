@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-20 — Phase 2.12 grammar-backed expression propagation
+
+**File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/folding/StaticExpressionFolder.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/ComputeFlowNode.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added additive `dataflow_expression_facts` for `COMPUTE` nodes from the ANTLR arithmetic-expression tree and changed dataflow expression propagation to evaluate those serialized trees instead of reparsing `originalText`. The old text-level `DataflowExpressionEvaluator` was removed, and the dataflow analysis version is now `1.10`.
+**Why:** Phase 2.12 closes the brittle text-parser boundary before broader constant-propagation claims or any future RAG static-value chunks. Expression propagation now uses grammar-derived evidence while preserving source text, CFG shape, legacy facts, and existing local folding diagnostics.
+
+---
+
 ## 2026-05-20 — Phase 2.11 negative propagation hardening
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/negative-hardening-phase211.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

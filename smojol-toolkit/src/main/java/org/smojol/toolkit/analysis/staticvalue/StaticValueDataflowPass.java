@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.9";
+    private static final String ANALYSIS_VERSION = "1.10";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -495,38 +495,99 @@ public class StaticValueDataflowPass {
         }
         addMoveCopyConstants(constants, node, entry, alphanumericLengths, numericPictures,
                 numericPictureGatingEnabled);
-        addComputeExpressionConstants(constants, node, entry, numericPictures, numericPictureGatingEnabled);
+        addDataflowExpressionConstants(constants, node, entry, numericPictures, numericPictureGatingEnabled);
         return constants;
     }
 
-    private void addComputeExpressionConstants(Map<String, Map<String, Object>> constants, SerialisableCFGFlowNode node,
-                                               Map<String, Map<String, Object>> entry,
-                                               Map<String, NumericPicture> numericPictures,
-                                               boolean numericPictureGatingEnabled) {
+    private void addDataflowExpressionConstants(Map<String, Map<String, Object>> constants,
+                                                SerialisableCFGFlowNode node,
+                                                Map<String, Map<String, Object>> entry,
+                                                Map<String, NumericPicture> numericPictures,
+                                                boolean numericPictureGatingEnabled) {
         if (node.getType() != FlowNodeType.COMPUTE || node.getOriginalText() == null) return;
         List<String> modifiedVariables = sortedStrings(node.getVariablesModified());
         if (modifiedVariables.size() != 1) return;
         if (hasUnsupportedComputeSemantics(node.getOriginalText())) return;
         if (hasSubscriptOrReferenceModification(node.getOriginalText())) return;
-        String expression = computeExpression(node.getOriginalText());
-        if (expression == null) return;
-        String target = modifiedVariables.getFirst();
-        if (hasSubscriptOrReferenceModification(target)) return;
-        new DataflowExpressionEvaluator(expression, entry).evaluate().ifPresent(value -> {
-            Map<String, Object> valueMap = ConstantStaticValue.numeric(value, value.toPlainString()).toJsonMap();
-            if (fitsNumericTarget(target, valueMap, numericPictures, numericPictureGatingEnabled)) {
-                constants.put(canonicalVariable(target), valueMap);
+        Object expressionFacts = node.getMetadata().get("dataflow_expression_facts");
+        if (!(expressionFacts instanceof List<?> facts)) return;
+        for (Object fact : facts) {
+            if (!(fact instanceof Map<?, ?> rawFact)) continue;
+            Map<String, Object> expressionFact = stringKeyMap(rawFact);
+            Object target = expressionFact.get("target_variable");
+            Object expression = expressionFact.get("expression");
+            if (!(target instanceof String targetVariable) || !(expression instanceof Map<?, ?> rawExpression)) {
+                continue;
             }
-        });
+            if (hasSubscriptOrReferenceModification(targetVariable)) continue;
+            evaluateDataflowExpression(stringKeyMap(rawExpression), entry).ifPresent(value -> {
+                Map<String, Object> valueMap = ConstantStaticValue.numeric(value, value.toPlainString()).toJsonMap();
+                if (fitsNumericTarget(targetVariable, valueMap, numericPictures, numericPictureGatingEnabled)) {
+                    constants.put(canonicalVariable(targetVariable), valueMap);
+                }
+            });
+        }
     }
 
-    private String computeExpression(String originalText) {
-        int equals = originalText.indexOf('=');
-        if (equals < 0) return null;
-        String prefix = originalText.substring(0, equals).trim().toUpperCase(Locale.ROOT);
-        if (!prefix.startsWith("COMPUTE ")) return null;
-        String expression = originalText.substring(equals + 1).trim();
-        return expression.isEmpty() ? null : expression;
+    private java.util.Optional<BigDecimal> evaluateDataflowExpression(Map<String, Object> expression,
+                                                                      Map<String, Map<String, Object>> entry) {
+        Object kind = expression.get("kind");
+        if ("numeric_literal".equals(kind)) {
+            Object normalized = expression.get("normalized_value");
+            if (!(normalized instanceof String text)) return java.util.Optional.empty();
+            return decimalValue(text);
+        }
+        if ("variable".equals(kind)) {
+            Object name = expression.get("name");
+            if (!(name instanceof String variable)) return java.util.Optional.empty();
+            Map<String, Object> value = entry.get(canonicalVariable(variable));
+            if (value == null || !"CONSTANT".equals(value.get("state")) || !"NUMERIC".equals(value.get("kind"))) {
+                return java.util.Optional.empty();
+            }
+            Object normalized = value.get("normalized_value");
+            if (!(normalized instanceof String text)) return java.util.Optional.empty();
+            return decimalValue(text);
+        }
+        if ("unary".equals(kind)) {
+            Object operator = expression.get("operator");
+            Object operand = expression.get("operand");
+            if (!"NEGATE".equals(operator) || !(operand instanceof Map<?, ?> rawOperand)) {
+                return java.util.Optional.empty();
+            }
+            return evaluateDataflowExpression(stringKeyMap(rawOperand), entry).map(BigDecimal::negate);
+        }
+        if ("binary".equals(kind)) {
+            Object operator = expression.get("operator");
+            Object left = expression.get("left");
+            Object right = expression.get("right");
+            if (!(operator instanceof String op) || !(left instanceof Map<?, ?> rawLeft)
+                    || !(right instanceof Map<?, ?> rawRight)) {
+                return java.util.Optional.empty();
+            }
+            java.util.Optional<BigDecimal> leftValue = evaluateDataflowExpression(stringKeyMap(rawLeft), entry);
+            java.util.Optional<BigDecimal> rightValue = evaluateDataflowExpression(stringKeyMap(rawRight), entry);
+            if (leftValue.isEmpty() || rightValue.isEmpty()) return java.util.Optional.empty();
+            return evaluateBinaryDataflowExpression(op, leftValue.get(), rightValue.get());
+        }
+        return java.util.Optional.empty();
+    }
+
+    private java.util.Optional<BigDecimal> evaluateBinaryDataflowExpression(String operator, BigDecimal left,
+                                                                           BigDecimal right) {
+        return switch (operator) {
+            case "ADD" -> java.util.Optional.of(left.add(right));
+            case "SUBTRACT" -> java.util.Optional.of(left.subtract(right));
+            case "MULTIPLY" -> java.util.Optional.of(left.multiply(right));
+            case "DIVIDE" -> {
+                if (right.compareTo(BigDecimal.ZERO) == 0) yield java.util.Optional.empty();
+                try {
+                    yield java.util.Optional.of(left.divide(right));
+                } catch (ArithmeticException ignored) {
+                    yield java.util.Optional.empty();
+                }
+            }
+            default -> java.util.Optional.empty();
+        };
     }
 
     private boolean hasUnsupportedComputeSemantics(String statementText) {
@@ -1501,140 +1562,4 @@ public class StaticValueDataflowPass {
                                      boolean converged, List<Map<String, Object>> diagnostics) {
     }
 
-    private static class DataflowExpressionEvaluator {
-        private final String expression;
-        private final Map<String, Map<String, Object>> entry;
-        private int position = 0;
-
-        DataflowExpressionEvaluator(String expression, Map<String, Map<String, Object>> entry) {
-            this.expression = expression;
-            this.entry = entry;
-        }
-
-        java.util.Optional<BigDecimal> evaluate() {
-            Evaluation evaluation = parseExpression();
-            skipWhitespace();
-            if (!evaluation.folded() || position != expression.length()) return java.util.Optional.empty();
-            return java.util.Optional.of(evaluation.value());
-        }
-
-        private Evaluation parseExpression() {
-            Evaluation current = parseTerm();
-            if (!current.folded()) return current;
-            while (true) {
-                skipWhitespace();
-                if (match('+')) {
-                    Evaluation next = parseTerm();
-                    if (!next.folded()) return next;
-                    current = new Evaluation(current.value().add(next.value()));
-                } else if (match('-')) {
-                    Evaluation next = parseTerm();
-                    if (!next.folded()) return next;
-                    current = new Evaluation(current.value().subtract(next.value()));
-                } else {
-                    return current;
-                }
-            }
-        }
-
-        private Evaluation parseTerm() {
-            Evaluation current = parseFactor();
-            if (!current.folded()) return current;
-            while (true) {
-                skipWhitespace();
-                if (match('*')) {
-                    Evaluation next = parseFactor();
-                    if (!next.folded()) return next;
-                    current = new Evaluation(current.value().multiply(next.value()));
-                } else if (match('/')) {
-                    Evaluation next = parseFactor();
-                    if (!next.folded() || next.value().compareTo(BigDecimal.ZERO) == 0) return Evaluation.unsupported();
-                    try {
-                        current = new Evaluation(current.value().divide(next.value()));
-                    } catch (ArithmeticException ignored) {
-                        return Evaluation.unsupported();
-                    }
-                } else {
-                    return current;
-                }
-            }
-        }
-
-        private Evaluation parseFactor() {
-            skipWhitespace();
-            if (match('+')) return parseFactor();
-            if (match('-')) {
-                Evaluation value = parseFactor();
-                return value.folded() ? new Evaluation(value.value().negate()) : value;
-            }
-            if (match('(')) {
-                Evaluation nested = parseExpression();
-                if (!nested.folded() || !match(')')) return Evaluation.unsupported();
-                return nested;
-            }
-            if (position >= expression.length()) return Evaluation.unsupported();
-            char current = expression.charAt(position);
-            if (Character.isDigit(current)) return parseNumber();
-            if (Character.isLetter(current)) return parseIdentifier();
-            return Evaluation.unsupported();
-        }
-
-        private Evaluation parseNumber() {
-            int start = position;
-            while (position < expression.length() && Character.isDigit(expression.charAt(position))) position++;
-            if (position < expression.length() && expression.charAt(position) == '.') {
-                position++;
-                int fractionalStart = position;
-                while (position < expression.length() && Character.isDigit(expression.charAt(position))) position++;
-                if (fractionalStart == position) return Evaluation.unsupported();
-            }
-            try {
-                return new Evaluation(new BigDecimal(expression.substring(start, position)));
-            } catch (NumberFormatException ignored) {
-                return Evaluation.unsupported();
-            }
-        }
-
-        private Evaluation parseIdentifier() {
-            int start = position;
-            while (position < expression.length()) {
-                char current = expression.charAt(position);
-                if (!Character.isLetterOrDigit(current) && current != '-') break;
-                position++;
-            }
-            String variable = canonicalVariable(expression.substring(start, position));
-            Map<String, Object> value = entry.get(variable);
-            if (value == null || !"CONSTANT".equals(value.get("state")) || !"NUMERIC".equals(value.get("kind"))) {
-                return Evaluation.unsupported();
-            }
-            Object normalized = value.get("normalized_value");
-            if (!(normalized instanceof String text)) return Evaluation.unsupported();
-            try {
-                return new Evaluation(new BigDecimal(text));
-            } catch (NumberFormatException ignored) {
-                return Evaluation.unsupported();
-            }
-        }
-
-        private boolean match(char expected) {
-            skipWhitespace();
-            if (position >= expression.length() || expression.charAt(position) != expected) return false;
-            position++;
-            return true;
-        }
-
-        private void skipWhitespace() {
-            while (position < expression.length() && Character.isWhitespace(expression.charAt(position))) position++;
-        }
-
-        private record Evaluation(BigDecimal value) {
-            static Evaluation unsupported() {
-                return new Evaluation(null);
-            }
-
-            boolean folded() {
-                return value != null;
-            }
-        }
-    }
 }

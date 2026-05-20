@@ -253,6 +253,17 @@ class JavaHardeningRegressionTest {
         JsonObject metadata = computeNode.getAsJsonObject("metadata");
         assertFalse(metadata.has("assignment_facts"));
         assertFalse(metadata.has("folded_value_facts"));
+        JsonObject expressionFact = firstDataflowExpressionFact(computeNode);
+        assertEquals("dataflow_expression", expressionFact.get("fact_type").getAsString());
+        assertEquals("java_antlr_arithmetic_expression", expressionFact.get("provenance_source").getAsString());
+        assertEquals("WS-B", expressionFact.get("target_variable").getAsString());
+        JsonObject expression = expressionFact.getAsJsonObject("expression");
+        assertEquals("binary", expression.get("kind").getAsString());
+        assertEquals("ADD", expression.get("operator").getAsString());
+        assertEquals("variable", expression.getAsJsonObject("left").get("kind").getAsString());
+        assertEquals("WS-A", expression.getAsJsonObject("left").get("name").getAsString());
+        assertEquals("numeric_literal", expression.getAsJsonObject("right").get("kind").getAsString());
+        assertEquals("1", expression.getAsJsonObject("right").get("normalized_value").getAsString());
 
         JsonObject diagnostic = firstFoldingDiagnostic(computeNode);
         assertEquals("FOLD_UNSUPPORTED_VARIABLE_REFERENCE", diagnostic.get("code").getAsString());
@@ -364,7 +375,7 @@ class JavaHardeningRegressionTest {
         assertEquals("constant-folding-phase1.cbl", dataflow.get("program").getAsString());
         assertEquals("1.0", dataflow.get("schema_version").getAsString());
         assertEquals("static_value_dataflow", dataflow.get("analysis").getAsString());
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject config = dataflow.getAsJsonObject("config");
@@ -513,7 +524,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json");
         JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject childWrite = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -608,7 +619,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("constant-propagation-phase2.cbl.report/cfg/cfg-constant-propagation-phase2.cbl.json");
         JsonObject dataflow = readJson("constant-propagation-phase2.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("constant_propagation_enabled").getAsBoolean());
         assertTrue(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
@@ -634,6 +645,13 @@ class JavaHardeningRegressionTest {
                 "COMPUTE WS-E = WS-A + 5", "COMPUTE"));
         assertNumericConstant(computeE.getAsJsonObject("entry_constants"), "WS-A", "10", "10", 0, 2, "POSITIVE");
         assertNumericConstant(computeE.getAsJsonObject("exit_constants"), "WS-E", "15", "15", 0, 2, "POSITIVE");
+
+        JsonObject computeENode = findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
+                "COMPUTE WS-E = WS-A + 5", "COMPUTE");
+        JsonObject expressionFact = firstDataflowExpressionFact(computeENode);
+        assertEquals("WS-E", expressionFact.get("target_variable").getAsString());
+        assertEquals("WS-A+5", expressionFact.get("original_expression").getAsString());
+        assertEquals("java_antlr_arithmetic_expression", expressionFact.get("provenance_source").getAsString());
     }
 
     @Test
@@ -643,7 +661,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("pic-gating-phase28.cbl.report/cfg/cfg-pic-gating-phase28.cbl.json");
         JsonObject dataflow = readJson("pic-gating-phase28.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject intCompute = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -695,7 +713,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("subscript-refusal-phase29.cbl.report/cfg/cfg-subscript-refusal-phase29.cbl.json");
         JsonObject dataflow = readJson("subscript-refusal-phase29.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject tableWrite = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -738,7 +756,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("perform-kill-phase210.cbl.report/cfg/cfg-perform-kill-phase210.cbl.json");
         JsonObject dataflow = readJson("perform-kill-phase210.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject moveA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -804,7 +822,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("path-sensitive-targets-phase3.cbl.report/cfg/cfg-path-sensitive-targets-phase3.cbl.json");
         JsonObject dataflow = readJson("path-sensitive-targets-phase3.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
         assertTrue(dataflow.getAsJsonObject("config").get("path_sensitive_targets_enabled").getAsBoolean());
 
@@ -1069,7 +1087,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("runtime-kills-phase26a.cbl.report/cfg/cfg-runtime-kills-phase26a.cbl.json");
         JsonObject dataflow = readJson("runtime-kills-phase26a.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject acceptA = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -1141,7 +1159,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("output-kills-phase26b.cbl.report/cfg/cfg-output-kills-phase26b.cbl.json");
         JsonObject dataflow = readJson("output-kills-phase26b.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
         assertEquals("flow_sensitive_call_cics_targets", dataflow.get("status").getAsString());
 
         JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
@@ -1210,7 +1228,7 @@ class JavaHardeningRegressionTest {
 
         JsonObject cfg = readJson("negative-hardening-phase211.cbl.report/cfg/cfg-negative-hardening-phase211.cbl.json");
         JsonObject dataflow = readJson("negative-hardening-phase211.cbl.report/static_analysis/dataflow.json");
-        assertEquals("1.9", dataflow.get("analysis_version").getAsString());
+        assertEquals("1.10", dataflow.get("analysis_version").getAsString());
 
         JsonObject read = nodeStateFor(dataflow, findNodeByOriginalTextAndType(cfg.getAsJsonArray("nodes"),
                 "READ IN-FILE", "READ"));
@@ -2081,6 +2099,14 @@ class JavaHardeningRegressionTest {
         assertTrue(metadata.has("folding_diagnostics"));
         assertEquals(1, metadata.getAsJsonArray("folding_diagnostics").size());
         return metadata.getAsJsonArray("folding_diagnostics").get(0).getAsJsonObject();
+    }
+
+    private JsonObject firstDataflowExpressionFact(JsonObject node) {
+        JsonObject metadata = node.getAsJsonObject("metadata");
+        assertNotNull(metadata);
+        assertTrue(metadata.has("dataflow_expression_facts"));
+        assertEquals(1, metadata.getAsJsonArray("dataflow_expression_facts").size());
+        return metadata.getAsJsonArray("dataflow_expression_facts").get(0).getAsJsonObject();
     }
 
     private List<String> executableStatementTexts(JsonArray nodes) {

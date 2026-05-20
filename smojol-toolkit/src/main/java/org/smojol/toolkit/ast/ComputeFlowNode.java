@@ -99,6 +99,11 @@ public class ComputeFlowNode extends CobolFlowNode {
         } else if (!folded.diagnostics().isEmpty()) {
             metadata.put("folding_diagnostics", folded.diagnosticJson());
         }
+        StaticExpressionFolder.ExpressionSerialization expression =
+                new StaticExpressionFolder().serializeDataflowExpression(rhs);
+        if (expression.serialized()) {
+            metadata.put("dataflow_expression_facts", dataflowExpressionFacts(expression));
+        }
 
         return metadata.isEmpty() ? Map.of() : metadata;
     }
@@ -142,6 +147,30 @@ public class ComputeFlowNode extends CobolFlowNode {
                     line
             );
             facts.add(fact.toJsonMap());
+        }
+        return facts;
+    }
+
+    private List<Map<String, Object>> dataflowExpressionFacts(
+            StaticExpressionFolder.ExpressionSerialization expression) {
+        List<Map<String, Object>> facts = new ArrayList<>();
+        String paragraph = enclosingName(FlowNodeType.PARAGRAPH);
+        String section = enclosingName(FlowNodeType.SECTION);
+        Integer line = sourceLine();
+        for (CobolParser.ComputeStoreContext destination : destinations) {
+            Map<String, Object> fact = new LinkedHashMap<>();
+            fact.put("schema_version", "1.0");
+            fact.put("fact_type", "dataflow_expression");
+            fact.put("statement_type", "COMPUTE");
+            fact.put("target_variable", destination.generalIdentifier().getText().toUpperCase());
+            fact.put("original_expression", rhs.getText());
+            fact.put("expression", expression.expression());
+            fact.put("statement_text", originalText());
+            if (paragraph != null) fact.put("paragraph", paragraph);
+            if (section != null) fact.put("section", section);
+            if (line != null) fact.put("source_line", line);
+            fact.put("provenance_source", "java_antlr_arithmetic_expression");
+            facts.add(fact);
         }
         return facts;
     }
