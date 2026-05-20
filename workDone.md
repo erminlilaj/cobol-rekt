@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-05-20 — Phase 2.10 PERFORM transitive kills
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/perform-kill-phase210.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
+**What changed:** Added conservative caller-side kills for variables modified by performed paragraphs. The dataflow pass now computes transitive modified-variable sets from paragraph summaries for kill purposes and emits `PERFORM_TRANSITIVE_KILL` at `PERFORM` nodes, while preserving source text, CFG shape, `assignment_facts`, and paragraph-summary sidecar fields. The dataflow analysis version is now `1.8`, and the documentation includes direct, transitive, and no-write `PERFORM` examples.
+**Why:** Claude's review identified a soundness risk where constants could survive a `PERFORM` if the CFG did not expose callee writes at the call site. Phase 2.10 closes that stale-constant path with exact tests before broader constant-propagation or RAG static-value claims.
+
+---
+
 ## 2026-05-20 — Phase 2.9 subscript/reference-modification refusal
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/test-code/flow-ast/subscript-refusal-phase29.cbl`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`

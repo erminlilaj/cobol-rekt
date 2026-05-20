@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.7";
+    private static final String ANALYSIS_VERSION = "1.8";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
@@ -65,8 +65,8 @@ public class StaticValueDataflowPass {
         Map<String, AliasSetSummary> aliasSets = aliasSets(dataStructures);
         Map<String, Integer> alphanumericLengths = alphanumericLengths(dataStructures);
         Map<String, NumericPicture> numericPictures = numericPictures(dataStructures);
-        PropagationResult propagationResult = propagate(nodes, edges, aliasSets, alphanumericLengths,
-                numericPictures, dataStructures != null);
+        PropagationResult propagationResult = propagate(nodes, edges, aliasSets, paragraphSummaries,
+                alphanumericLengths, numericPictures, dataStructures != null);
         Map<String, DataflowNodeState> nodeStates = propagationResult.nodeStates();
         int killCount = nodeStates.values().stream().mapToInt(state -> state.kills().size()).sum();
         String status = pathSensitiveTargetsEnabled
@@ -124,10 +124,14 @@ public class StaticValueDataflowPass {
 
     private PropagationResult propagate(List<SerialisableCFGFlowNode> nodes, List<SerialisableEdge> edges,
                                         Map<String, AliasSetSummary> aliasSets,
+                                        Map<String, ParagraphSummary> paragraphSummaries,
                                         Map<String, Integer> alphanumericLengths,
                                         Map<String, NumericPicture> numericPictures,
                                         boolean numericPictureGatingEnabled) {
-        Map<String, List<Map<String, Object>>> killsByNode = killsByNode(nodes, aliasSets);
+        Map<String, List<String>> transitiveModifiedVariablesByParagraph =
+                transitiveModifiedVariablesByParagraph(paragraphSummaries);
+        Map<String, List<Map<String, Object>>> killsByNode =
+                killsByNode(nodes, aliasSets, transitiveModifiedVariablesByParagraph);
         Map<String, List<String>> predecessors = predecessors(nodes, edges);
         Map<String, Map<String, Map<String, Object>>> entryStates = emptyStates(nodes);
         Map<String, Map<String, Map<String, Object>>> exitStates = emptyStates(nodes);
@@ -374,19 +378,25 @@ public class StaticValueDataflowPass {
     }
 
     private Map<String, List<Map<String, Object>>> killsByNode(List<SerialisableCFGFlowNode> nodes,
-                                                               Map<String, AliasSetSummary> aliasSets) {
+                                                               Map<String, AliasSetSummary> aliasSets,
+                                                               Map<String, List<String>>
+                                                                       transitiveModifiedVariablesByParagraph) {
         Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
         for (SerialisableCFGFlowNode node : nodes) {
-            result.put(node.getId(), killFacts(node, aliasSets));
+            result.put(node.getId(), killFacts(node, aliasSets, transitiveModifiedVariablesByParagraph));
         }
         return result;
     }
 
     private List<Map<String, Object>> killFacts(SerialisableCFGFlowNode node,
-                                                Map<String, AliasSetSummary> aliasSets) {
+                                                Map<String, AliasSetSummary> aliasSets,
+                                                Map<String, List<String>>
+                                                        transitiveModifiedVariablesByParagraph) {
         Map<String, Map<String, Object>> kills = new TreeMap<>();
         for (Map<String, Object> kill : aliasKills(node, aliasSets)) kills.put(killKey(kill), kill);
-        for (Map<String, Object> kill : dataflowKills(node)) kills.put(killKey(kill), kill);
+        for (Map<String, Object> kill : dataflowKills(node, transitiveModifiedVariablesByParagraph)) {
+            kills.put(killKey(kill), kill);
+        }
         return new ArrayList<>(kills.values());
     }
 
@@ -677,7 +687,9 @@ public class StaticValueDataflowPass {
         return List.of(diagnostic);
     }
 
-    private List<Map<String, Object>> dataflowKills(SerialisableCFGFlowNode node) {
+    private List<Map<String, Object>> dataflowKills(SerialisableCFGFlowNode node,
+                                                    Map<String, List<String>>
+                                                            transitiveModifiedVariablesByParagraph) {
         return switch (node.getType()) {
             case ACCEPT -> acceptKills(node);
             case CALL -> callUsingKills(node);
@@ -687,8 +699,35 @@ public class StaticValueDataflowPass {
             case READ -> originalTextTargetKills(node, READ_INTO_TARGET, "READ_INTO_KILL", "read_into");
             case STRING -> originalTextTargetKills(node, STRING_INTO_TARGET, "STRING_OUTPUT_KILL", "string_into");
             case UNSTRING -> originalTextTargetKills(node, UNSTRING_INTO_TARGET, "UNSTRING_OUTPUT_KILL", "unstring_into");
+            case PERFORM -> performTransitiveKills(node, transitiveModifiedVariablesByParagraph);
             default -> List.of();
         };
+    }
+
+    private List<Map<String, Object>> performTransitiveKills(SerialisableCFGFlowNode node,
+            Map<String, List<String>> transitiveModifiedVariablesByParagraph) {
+        Set<String> targets = new TreeSet<>();
+        collectParagraphCalls(node, targets);
+        if (targets.isEmpty()) return List.of();
+
+        Map<String, Map<String, Object>> kills = new TreeMap<>();
+        for (String target : targets) {
+            for (String variable : transitiveModifiedVariablesByParagraph.getOrDefault(paragraphName(target),
+                    List.of())) {
+                Map<String, Object> kill = performTransitiveKill(node, variable, target);
+                kills.put(killKey(kill), kill);
+            }
+        }
+        return new ArrayList<>(kills.values());
+    }
+
+    private Map<String, Object> performTransitiveKill(SerialisableCFGFlowNode node, String variable,
+                                                      String performedParagraph) {
+        Map<String, Object> kill = dataflowKill(node, variable,
+                "PERFORM_TRANSITIVE_KILL", "perform_transitive_modified_variable");
+        kill.put("kill_scope", "paragraph_transitive");
+        kill.put("performed_paragraph", paragraphName(performedParagraph));
+        return kill;
     }
 
     private List<Map<String, Object>> acceptKills(SerialisableCFGFlowNode node) {
@@ -1186,6 +1225,49 @@ public class StaticValueDataflowPass {
             ));
         }
         return result;
+    }
+
+    private Map<String, List<String>> transitiveModifiedVariablesByParagraph(
+            Map<String, ParagraphSummary> paragraphSummaries) {
+        Map<String, Set<String>> modified = new TreeMap<>();
+        Map<String, List<String>> calls = new TreeMap<>();
+
+        for (ParagraphSummary summary : paragraphSummaries.values()) {
+            String paragraph = paragraphName(summary.paragraph());
+            Set<String> directModified = new TreeSet<>();
+            for (String variable : summary.variablesModifiedDirect()) {
+                directModified.add(canonicalVariable(variable));
+            }
+            modified.put(paragraph, directModified);
+            calls.put(paragraph, summary.callsParagraphs().stream()
+                    .map(this::paragraphName)
+                    .filter(target -> !target.isBlank())
+                    .sorted()
+                    .toList());
+        }
+
+        boolean changed;
+        do {
+            changed = false;
+            for (Map.Entry<String, List<String>> entry : calls.entrySet()) {
+                Set<String> paragraphModified = modified.get(entry.getKey());
+                for (String targetParagraph : entry.getValue()) {
+                    Set<String> targetModified = modified.get(targetParagraph);
+                    if (targetModified == null) continue;
+                    changed |= paragraphModified.addAll(targetModified);
+                }
+            }
+        } while (changed);
+
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        for (String paragraph : modified.keySet()) {
+            result.put(paragraph, modified.get(paragraph).stream().toList());
+        }
+        return result;
+    }
+
+    private String paragraphName(String paragraph) {
+        return paragraph == null ? "" : paragraph.trim().toUpperCase(Locale.ROOT);
     }
 
     private List<SerialisableCFGFlowNode> containedNodes(SerialisableCFGFlowNode paragraph,

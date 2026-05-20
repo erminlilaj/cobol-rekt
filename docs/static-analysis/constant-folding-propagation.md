@@ -331,7 +331,7 @@ Secondary cleanup items:
 | 2.7 | `DONE` | Record Phase 2 accuracy/performance stats. | This document now consolidates the Phase 2 examples, fixture metrics, supported transfer rules, diagnostics, limitations, and reproducibility commands. Memory profiling remains deferred to a corpus benchmark because the current Java hardening tests do not expose stable per-fixture heap measurements. |
 | 2.8 | `DONE` | Add PIC-aware value gating for propagated numeric constants. | Dataflow does not seed or emit a `CONSTANT` for `MOVE`, folded `COMPUTE`, or expression propagation unless the target field's PICTURE makes the value provably representable; `ROUNDED` and `ON SIZE ERROR` block propagation seeding even if local expression folding still emits an expression fact. |
 | 2.9 | `DONE` | Refuse subscripted and reference-modified propagation targets. | `subscript-refusal-phase29.cbl` proves `MOVE 5 TO WS-TBL(1)` does not create a whole-table `WS-TBL = 5` constant, `MOVE WS-TBL(2) TO WS-X` does not copy a stale table-cell value, `MOVE "ABC" TO WS-AREA(1:3)` does not create a full-field `WS-AREA = "ABC"` constant, and ordinary non-subscripted moves still propagate. |
-| 2.10 | `PENDING` | Add conservative `PERFORM` transitive kills or prove CFG traversal covers callee writes. | Mandatory before a broad constant-propagation claim: constants must not survive `PERFORM SUB-PARA` when the performed paragraph can modify the same variable. |
+| 2.10 | `DONE` | Add conservative `PERFORM` transitive kills. | `perform-kill-phase210.cbl` proves constants do not survive `PERFORM SUB-PARA` when the performed paragraph modifies the same variable, transitive `PERFORM SUB-A` -> `SUB-B` writes are killed at the caller, and no-write performed paragraphs preserve safe constants. |
 | 2.11 | `PENDING` | Expand negative hardening tests for unsupported output/kill cases. | Lock false-negative behavior for CALL metadata absence, READ record-buffer mutation, INSPECT TALLYING targets, SQL output forms outside SELECT/FETCH INTO, multi-target COMPUTE/MOVE, and SET 88-level conditions. |
 | 2.12 | `PENDING` | Replace text-level dataflow expression parsing with grammar-backed evaluation or prove it is fail-closed. | The current evaluator reads `originalText`; before broader claims, expression propagation should reuse the ANTLR arithmetic expression path or have tests proving continuation text and end phrases cannot create partial-expression false positives. |
 | 3.0 | `DONE` | Write detailed Phase 3 pre-coding plan. | This document now defines the exact ordering, schemas, fixtures, tests, invariants, and risk controls for path-sensitive dynamic `CALL`/CICS facts. |
@@ -372,6 +372,7 @@ Secondary cleanup items:
 | 2026-05-15 | `DONE` | Completed the Phase 2.7 evaluation cleanup. The implementation scope is now described in plain language with examples for literal propagation, variable-copy propagation, expression propagation, runtime kills, joins, loops, and alias kills. The document also records what the tool still does not support, so the project does not overclaim full compiler-style constant propagation. | Documentation-only checkpoint. It reuses the last passed implementation verification: targeted `JavaHardeningRegressionTest`, 39 tests, 13.351s; broader `smojol-toolkit` suite, 51 tests, 2 skipped, 14.507s. Reproducibility commands are listed in Section 20. |
 | 2026-05-18 | `DONE` | Added Phase 2.8 numeric PICTURE gating for stored-value constants. The dataflow pass now parses simple numeric PICTURE strings built from `S`, `9`, and `V`, and emits numeric `CONSTANT` facts only when the decimal value fits the target's integer digits, fractional digits, and sign. Unsupported PICTURE forms are treated as false negatives. `ROUNDED`, `ON SIZE ERROR`, and `NOT ON SIZE ERROR` still allow local expression facts but block dataflow seeding. The dataflow analysis version is now `1.6`. | Focused red/green check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowEmitsNumericConstantsOnlyWhenTargetPictureCanRepresentThem`, 1 test, total time 7.211s. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 48 tests, total time 27.924s. Fixture metrics: `pic-gating-phase28.cbl` has 15 node states, 14 edges, 17 entry constants, 20 exit constants, 0 kill facts, 0 diagnostics, 0 alias sets, 1 paragraph summary, convergence in 2 iterations, a 17,559-byte pretty-printed sidecar, and a 29,390-byte pretty-printed CFG. Exact tests cover integer-scale refusal, fractional-fit success, fractional-overflow refusal, unsigned-negative refusal, signed-negative success, variable-copy overflow refusal, size-error blocking, and rounded blocking. |
 | 2026-05-20 | `DONE` | Added Phase 2.9 subscript/reference-modification refusal for propagated stored constants. The dataflow pass now refuses to produce constants from statements whose raw data reference uses COBOL parenthesized reference syntax, so table-cell writes and slice writes can still kill old aliases but cannot become whole-field or whole-table facts. The dataflow analysis version is now `1.7`. | Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowRefusesSubscriptedAndReferenceModifiedConstants`, 1 test. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 51 tests, total time 31.474s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 63 tests, 2 skipped, total time 31.780s. Fixture `subscript-refusal-phase29.cbl` proves `MOVE 5 TO WS-TBL(1)` creates no `WS-TBL` constant, `MOVE WS-TBL(2) TO WS-X` creates no stale `WS-X` constant, `MOVE "ABC" TO WS-AREA(1:3)` creates no full-field `WS-AREA` constant, and `MOVE 7 TO WS-NUM` still propagates normally. |
+| 2026-05-20 | `DONE` | Added Phase 2.10 conservative `PERFORM` transitive kills. The dataflow pass now computes transitive modified variables from paragraph summaries for kill purposes and emits `PERFORM_TRANSITIVE_KILL` at the caller when a performed paragraph, or a paragraph it performs, may modify a currently known variable. The dataflow analysis version is now `1.8`. | Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowKillsConstantsModifiedByPerformedParagraphs`, 1 test. Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 52 tests, total time 32.049s. Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 64 tests, 2 skipped, total time 33.749s. Fixture `perform-kill-phase210.cbl` proves `PERFORM SUB-PARA` kills stale `WS-A`, transitive `PERFORM SUB-A` kills `WS-E` through `SUB-B`, and `PERFORM CLEAN-PARA` with no writes preserves `WS-C` so `MOVE WS-C TO WS-D` still propagates. Sidecar metrics: 31 nodes, 50 edges, 12 entry constants, 16 exit constants, 3 kills, 0 diagnostics, 5 paragraph summaries, convergence in 2 iterations. |
 
 ### Phase 3 Checkpoints
 
@@ -397,8 +398,8 @@ This section is the current plan after Claude's critical review of the constant 
 Current claim boundary:
 
 - Constant folding is implemented for closed numeric `COMPUTE` expressions. It is source-preserving and safe to claim with the documented scope.
-- Constant propagation is implemented as scoped intraprocedural, flow-sensitive CFG facts, but it is not yet complete enough to claim broad COBOL constant propagation.
-- Before static-value RAG chunks or a broad propagation claim, Phase 2.10 must be completed. Phase 2.11 remains required before RAG static-value chunks so future unsupported output/kill cases stay locked by tests.
+- Constant propagation is implemented as scoped intraprocedural, flow-sensitive CFG facts with conservative kills for the documented subset. This is now strong enough to claim "intraprocedural flow-sensitive constant propagation with conservative kills" when the limitations below are stated.
+- It is still not full production COBOL constant propagation. Phase 2.11 and Phase 2.12 remain required before RAG static-value chunks or broader claims, because unsupported output/kill cases and text-level expression parsing must be locked down before those facts are exposed to retrieval.
 
 #### Phase 2.9: Subscript and Reference-Modification Refusal
 
@@ -467,32 +468,72 @@ SUB-PARA.
 
 If the CFG explicitly routes execution through `SUB-PARA` before returning, the solver may already see the `MOVE 99 TO WS-A` node and kill `WS-A`. If the CFG models `PERFORM SUB-PARA` as a call-like node followed directly by the next statement, the callee write is invisible and `WS-A = 10` can survive incorrectly. The plan must not depend on an undocumented CFG-shape assumption.
 
-Implementation plan:
+Implementation:
 
-- First add a focused fixture and test that exposes the actual current CFG behavior for a `PERFORM` whose callee writes a previously constant variable.
-- If the existing CFG traversal already makes the callee write visible, keep that test as the contract and document the CFG dependency explicitly.
-- If the write is not visible at the call site, add a conservative fallback in `StaticValueDataflowPass.java`:
-  - Build a map from paragraph name to direct modified variables using the existing paragraph summaries.
-  - Build a map from paragraph name to directly performed paragraph targets using the existing `calls_paragraphs` summary evidence.
-  - Compute transitive modified variables with a deterministic fixed-point pass over paragraph calls.
-  - At a `PERFORM <paragraph>` node, emit kill facts for every variable in the performed paragraph's transitive modified set.
-  - If a paragraph-call cycle is detected, kill the union of variables written by every paragraph in the cycle and emit a diagnostic such as `DATAFLOW_PERFORM_TRANSITIVE_KILL_RECURSIVE`.
-- The fallback should only remove constants. It must not propagate constants through paragraph summaries.
+- `StaticValueDataflowPass.java` now builds paragraph summaries before propagation and computes an internal map of paragraph name to transitive modified variables.
+- The transitive map uses direct `variables_modified_direct` plus `calls_paragraphs` and reaches a deterministic fixed point over the paragraph-call graph.
+- At a `PERFORM <paragraph>` node, the solver emits `PERFORM_TRANSITIVE_KILL` for every variable in the performed paragraph's transitive modified set.
+- These kills only remove constants. They do not propagate constants through paragraph summaries.
+- Existing paragraph-summary JSON remains source-preserving and conservative: transitive summary fields for paragraphs with performed targets are not rewritten into a completed summary. Phase 2.10 uses the same evidence internally for kills but does not pretend paragraph summaries are complete interprocedural summaries.
 
 Tests:
 
 - Add fixture `smojol-toolkit/test-code/flow-ast/perform-kill-phase210.cbl`.
 - Add exact assertions in `JavaHardeningRegressionTest.java`:
   - `MOVE 10 TO WS-A; PERFORM SUB-PARA; MOVE WS-A TO WS-B` does not propagate `WS-A = 10` past the `PERFORM` when `SUB-PARA` writes `WS-A`.
-  - Transitive case: `MAIN` performs `SUB-A`, `SUB-A` performs `SUB-B`, and `SUB-B` writes `WS-A`; the `PERFORM SUB-A` site kills `WS-A`.
-  - No-write case: if the performed paragraph does not modify `WS-A`, `WS-A = 10` survives.
-  - Recursive paragraph-call case emits a deterministic diagnostic and chooses a conservative kill set.
+  - Transitive case: `MAIN` performs `SUB-A`, `SUB-A` performs `SUB-B`, and `SUB-B` writes `WS-E`; the `PERFORM SUB-A` site kills `WS-E`.
+  - No-write case: if the performed paragraph does not modify `WS-C`, `WS-C = 20` survives.
+  - Paragraph-call cycles are handled by the same monotone fixed-point union of modified variables. Phase 2.10 does not emit a separate recursion diagnostic yet.
 
 Acceptance:
 
-- The test proves constants cannot survive a performed paragraph that may write the variable.
-- The sidecar records kill evidence or a documented CFG traversal contract.
-- The document can then mark Phase 2.10 `DONE`.
+- Status: `DONE`.
+- The dataflow analysis version is now `1.8`.
+- Focused check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest#dataflowKillsConstantsModifiedByPerformedParagraphs`, 1 test.
+- Targeted check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true -Dtest=JavaHardeningRegressionTest`, 52 tests.
+- Broader check passed: `mvn -pl smojol-toolkit test -Dcheckstyle.skip=true`, 64 tests with 2 skipped.
+- New fixture: `smojol-toolkit/test-code/flow-ast/perform-kill-phase210.cbl`.
+- Exact behavior now locked:
+  - `MOVE 10 TO WS-A; PERFORM SUB-PARA; MOVE WS-A TO WS-B` emits `PERFORM_TRANSITIVE_KILL@WS-A`, clears `WS-A`, and does not create `WS-B = 10`.
+  - `MOVE 30 TO WS-E; PERFORM SUB-A; MOVE WS-E TO WS-F`, where `SUB-A` performs `SUB-B` and `SUB-B` writes `WS-E`, emits `PERFORM_TRANSITIVE_KILL@WS-E` and does not create `WS-F = 30`.
+  - `MOVE 20 TO WS-C; PERFORM CLEAN-PARA; MOVE WS-C TO WS-D`, where `CLEAN-PARA` has no writes, emits no perform kill and still propagates `WS-D = 20`.
+
+Examples:
+
+```cobol
+MOVE 10 TO WS-A
+PERFORM SUB-PARA
+MOVE WS-A TO WS-B
+
+SUB-PARA.
+    MOVE 99 TO WS-A.
+```
+
+The `PERFORM SUB-PARA` node now records `PERFORM_TRANSITIVE_KILL@WS-A`. `WS-A = 10` is present at the `PERFORM` entry, absent at its exit, and therefore cannot be copied into `WS-B`.
+
+```cobol
+MOVE 30 TO WS-E
+PERFORM SUB-A
+MOVE WS-E TO WS-F
+
+SUB-A.
+    PERFORM SUB-B.
+SUB-B.
+    MOVE 77 TO WS-E.
+```
+
+The kill is transitive: `SUB-A` itself only performs `SUB-B`, but `SUB-B` writes `WS-E`, so `PERFORM SUB-A` removes `WS-E` and `WS-F` is not inferred.
+
+```cobol
+MOVE 20 TO WS-C
+PERFORM CLEAN-PARA
+MOVE WS-C TO WS-D
+
+CLEAN-PARA.
+    DISPLAY "NO WRITE".
+```
+
+No `PERFORM_TRANSITIVE_KILL` is emitted because the performed paragraph does not modify `WS-C`; the known value survives and `WS-D = 20` can still be propagated.
 
 #### Phase 2.11: Negative Hardening Matrix
 
@@ -543,8 +584,8 @@ The project may use these claim levels:
 |---|---|---|
 | "The tool has constant folding." | Yes | "Closed numeric `COMPUTE` expression folding, source-preserving, BigDecimal-safe." |
 | "The tool has scoped flow-sensitive constant facts." | Yes | "Intraprocedural CFG entry/exit constants with conservative kills and known limitations." |
-| "The tool has COBOL constant propagation." | Not yet | Blocked by Phase 2.10. After that, the honest wording should still be "intraprocedural flow-sensitive propagation with conservative kills" unless later interprocedural work is added. |
-| "The RAG layer can safely summarize propagated constants." | Not yet | Blocked by Phase 2.10 and Phase 2.11. |
+| "The tool has COBOL constant propagation." | Partially | Allowed only with scoped wording: "intraprocedural flow-sensitive constant propagation with conservative kills for the documented subset." Do not call it full production COBOL propagation or interprocedural propagation. |
+| "The RAG layer can safely summarize propagated constants." | Not yet | Blocked by Phase 2.11, Phase 2.12, and explicit Phase 4.1 RAG chunk implementation/evaluation. |
 | "The tool does compiler-style optimization." | No | Out of scope; the tool does not rewrite COBOL or CFG text. |
 
 ### Fool-Proof Execution Rules
@@ -554,7 +595,7 @@ The project may use these claim levels:
 3. Do not silently expand scope. New supported COBOL constructs require this document to be updated first.
 4. Do not silently drop scope. Skipped work must be marked `SKIPPED` with a reason.
 5. Do not merge implementation if this ledger says `WORKING`, `PENDING`, or `BLOCKED` for the same deliverable.
-6. Do not claim full production-ready constant propagation until `static_analysis/dataflow.json`, fixed-point CFG propagation, conservative merge rules, loop handling, alias kills, runtime-input kill rules, subscript/reference-modification refusal, and `PERFORM` transitive kills are all `DONE`. Phase 2.9 completed the subscript/reference-modification refusal; `PERFORM` transitive kills remain the main soundness blocker. Until then, describe the current solver as scoped flow-sensitive constant facts and list its exact supported transfer rules.
+6. Do not claim full production-ready constant propagation until `static_analysis/dataflow.json`, fixed-point CFG propagation, conservative merge rules, loop handling, alias kills, runtime-input kill rules, subscript/reference-modification refusal, `PERFORM` transitive kills, the Phase 2.11 negative hardening matrix, and the Phase 2.12 expression-parser hardening are all `DONE`. Phase 2.9 and Phase 2.10 closed the two highest-priority soundness blockers. Until Phase 2.11 and Phase 2.12 are complete, describe the current solver as intraprocedural flow-sensitive constant propagation with conservative kills for the documented subset.
 7. Do not claim dynamic CALL/CICS improvement until path-sensitive fields and accuracy measurements are `DONE`.
 8. Do not claim RAG improvement until retrieval and token metrics are `DONE`.
 
@@ -576,7 +617,7 @@ Phase 1 includes:
 
 Phase 2 now has a committed sidecar with paragraph summaries, conservative alias-set summaries, conservative alias kill facts, a first narrow propagation solver, runtime/input/output kill facts, variable-copy propagation, expression propagation, join diagnostics, and loop-carried constant diagnostics. This is not full COBOL constant propagation. It is a safe checkpoint that proves the artifact can carry node entry/exit constants, remove stale runtime-overwritten constants, and explain some conservative drops without changing CFG text, `assignment_facts`, dynamic CALL/CICS behavior, or RAG chunks.
 
-The current Phase 2.9 solver supports only these value-producing rules:
+The current Phase 2.10 solver supports only these value-producing rules:
 
 - `MOVE <numeric-literal> TO <variable>` produces a numeric constant for the target.
 - `MOVE <known-variable> TO <variable>` copies the source numeric constant from the node entry state when the source survived all kill rules.
@@ -606,10 +647,6 @@ Phase 2.6b adds these kill rules:
 
 The current solver intentionally does not support function calls, string expressions, condition simplification, branch reachability pruning, interprocedural summaries, or RAG chunk generation. Phase 2.8 adds a conservative stored-value gate for simple numeric PICTURE forms (`S`, `9`, and `V`) and blocks propagation seeding for `ROUNDED` and size-error phrases. It still does not simulate COBOL rounding/truncation, edited numeric fields, `P` scaling, `COMP`, or `COMP-3`; unsupported storage forms produce no propagated numeric constant.
 
-One propagation soundness blocker remains before a broad "constant propagation" claim:
-
-- `PERFORM` transitive writes are not yet guaranteed to kill caller constants unless the CFG shape already exposes the performed paragraph's writes to the solver. Phase 2.10 will either lock that CFG behavior with exact tests or add a conservative kill at the `PERFORM` node.
-
 The former subscript/reference-modification blocker is now closed by Phase 2.9. For example:
 
 ```cobol
@@ -621,6 +658,34 @@ MOVE 7 TO WS-NUM
 ```
 
 The first statement may emit alias kills for `WS-TABLE`/`WS-TBL`, but it does not emit `WS-TBL = 5`, `WS-TBL(1) = 5`, or `WS-TBL(2) = 5`. The second statement therefore cannot copy a stale table-cell fact into `WS-X`. The third statement writes only a slice, so it does not emit `WS-AREA = "ABC"` and the fourth statement does not copy that partial write into `WS-AREA-COPY`. The final non-subscripted statement still emits `WS-NUM = 7`, proving the rule is a targeted safety refusal rather than a shutdown of ordinary propagation.
+
+The former `PERFORM` transitive-write blocker is now closed by Phase 2.10. For example:
+
+```cobol
+MOVE 10 TO WS-A
+PERFORM SUB-PARA
+MOVE WS-A TO WS-B
+
+SUB-PARA.
+    MOVE 99 TO WS-A.
+```
+
+`PERFORM SUB-PARA` now emits a direct sidecar kill fact with `code: "PERFORM_TRANSITIVE_KILL"`, `variable: "WS-A"`, `kill_scope: "paragraph_transitive"`, and `performed_paragraph: "SUB-PARA"`. That removes `WS-A = 10` before the following `MOVE WS-A TO WS-B`, so the analyzer refuses the stale `WS-B = 10` conclusion.
+
+The same rule follows paragraph-call chains:
+
+```cobol
+MOVE 30 TO WS-E
+PERFORM SUB-A
+MOVE WS-E TO WS-F
+
+SUB-A.
+    PERFORM SUB-B.
+SUB-B.
+    MOVE 77 TO WS-E.
+```
+
+Because `SUB-B` modifies `WS-E`, `SUB-A` is treated as transitively modifying `WS-E`, and the caller-side `PERFORM SUB-A` kills the old `WS-E = 30` fact. If the performed paragraph has no writes, no perform kill is emitted and ordinary propagation continues.
 
 Join diagnostics are deliberately narrow in Phase 2.6e. They describe a real dataflow merge where a node has at least two CFG predecessors and every predecessor proves the same variable to a different constant. They do not yet repair or reinterpret CFG shapes where branch bodies are nested under an `IF_BRANCH` node but are not direct predecessors of the following statement. In that shape, the current solver still behaves conservatively by not carrying the branch-local value forward.
 
