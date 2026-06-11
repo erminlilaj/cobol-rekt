@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-06-11 — Attribute flow-sensitive target-resolution failures
+
+**File(s):** `scripts/flow_sensitive_attribution.py`, `docs/analysis/flow_sensitive_attribution.md`, `docs/analysis/flow_sensitive_attribution.json`, `out/report/PDB305.CBL.report/static_analysis/flow_sensitive_attribution.json`, `out/report/PDCBVC.CBL.report/static_analysis/flow_sensitive_attribution.json`, `docs/handoff.md`, `workDone.md`
+**What changed:** Added a deterministic attribution generator and produced per-report plus combined evidence for dynamic CALL/CICS sites. The report keeps the compatibility note that source metadata still uses `path_sensitive_*` names while the semantics are flow-sensitive CFG entry-state resolution.
+**Why:** Task 4 required distinguishing whether the real-program 0-flow-sensitive-target result is because constants are genuinely unavailable, killed, or hidden by metadata gaps. PDB305 has one unresolved CICS QUEUE site caused by no assignment evidence; PDCBVC has one unresolved dynamic CALL target where static VALUE evidence exists but declaration VALUEs are not seeded into the flow-sensitive entry map.
+
+---
+
 ## 2026-06-11 — Fix CICS benchmark retention comparator
 
 **File(s):** `scripts/rag_bundle_benchmark.py`, `scripts/rag_queries/pdb305.json`, `scripts/rag_queries/pdcbvc.json`, `test_rag_bundle_benchmark.py`, `docs/static-analysis/pdb305-rag-benchmark-2026-05-21.md`, `docs/static-analysis/pdb305-rag-benchmark-2026-05-21.json`, `docs/static-analysis/pdcbvc-rag-benchmark-2026-05-21.md`, `docs/static-analysis/pdcbvc-rag-benchmark-2026-05-21.json`, `docs/handoff.md`, `workDone.md`

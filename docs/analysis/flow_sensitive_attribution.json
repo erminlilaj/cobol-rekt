@@ -1,0 +1,274 @@
+{
+  "combined_cause_distribution": {
+    "missing_cfg_metadata": 1,
+    "no_assignment_found": 1
+  },
+  "programs": [
+    {
+      "cause_distribution": {
+        "no_assignment_found": 1
+      },
+      "cfg_artifact": "out/report/PDB305.CBL.report/cfg/cfg-PDB305.CBL.json",
+      "dataflow_artifact": "out/report/PDB305.CBL.report/static_analysis/dataflow.json",
+      "program": "PDB305.CBL",
+      "report_dir": "out/report/PDB305.CBL.report",
+      "schema_version": "1.0",
+      "semantics": "flow-sensitive",
+      "site_count": 1,
+      "sites": [
+        {
+          "argument_name": "QUEUE",
+          "cause": "no_assignment_found",
+          "detail": "No entry constant and no static VALUE/assignment evidence for this identifier was found in the report artifacts.",
+          "entry_value": null,
+          "identifier": "TWCOB-TS-CODA",
+          "node_id": "73db62df-3433-4336-804f-10e3c37e8215",
+          "node_transfer_kills": [
+            {
+              "code": "UNMODELED_STATEMENT_KILL_ALL",
+              "confidence": "conservative",
+              "kill_scope": "all_constants",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "unmodeled_statement",
+              "rule_id": "K005430",
+              "source_column": 11,
+              "source_line": 3094,
+              "statement_classification": "mutating_but_unmodeled",
+              "statement_text": "EXEC  CICS  WRITEQ TS QUEUE(TWCOB-TS-CODA)\n               FROM(TWCOB-INIZIO) LENGTH(TWCOB-LLTS)\n               ITEM(TWCOB-TS-ITEM)  END-EXEC.",
+              "statement_type": "DIALECT"
+            }
+          ],
+          "operation": "WRITEQ",
+          "prior_kills": [
+            {
+              "alias_kind": "REDEFINES_OVERLAP",
+              "alias_set_id": "redefines:TWCOB-PARTE-SECONDA",
+              "code": "ALIAS_CONSERVATIVE_KILL",
+              "confidence": "conservative",
+              "kill_scope": "all_overlapping_members",
+              "killed_alias_set_id": "redefines:TWCOB-PARTE-SECONDA",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "redefines_overlap",
+              "rule_id": "K005132",
+              "source_column": 11,
+              "source_line": 3092,
+              "statement_text": "MOVE  3000      TO TWCOB-LLTS-VALORE",
+              "statement_type": "MOVE",
+              "written_variable": "TWCOB-LLTS-VALORE"
+            },
+            {
+              "alias_kind": "REDEFINES_OVERLAP",
+              "alias_set_id": "redefines:TWCOB-PARTE-TERZA",
+              "code": "ALIAS_CONSERVATIVE_KILL",
+              "confidence": "conservative",
+              "kill_scope": "all_overlapping_members",
+              "killed_alias_set_id": "redefines:TWCOB-PARTE-TERZA",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "redefines_overlap",
+              "rule_id": "K005190",
+              "source_column": 11,
+              "source_line": 3092,
+              "statement_text": "MOVE  3000      TO TWCOB-LLTS-VALORE",
+              "statement_type": "MOVE",
+              "written_variable": "TWCOB-LLTS-VALORE"
+            },
+            {
+              "alias_kind": "REDEFINES_OVERLAP",
+              "alias_set_id": "redefines:TWCOB-RISCATTI",
+              "code": "ALIAS_CONSERVATIVE_KILL",
+              "confidence": "conservative",
+              "kill_scope": "all_overlapping_members",
+              "killed_alias_set_id": "redefines:TWCOB-RISCATTI",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "redefines_overlap",
+              "rule_id": "K005248",
+              "source_column": 11,
+              "source_line": 3092,
+              "statement_text": "MOVE  3000      TO TWCOB-LLTS-VALORE",
+              "statement_type": "MOVE",
+              "written_variable": "TWCOB-LLTS-VALORE"
+            },
+            {
+              "alias_kind": "REDEFINES_OVERLAP",
+              "alias_set_id": "redefines:TWCOB-STAMPANTI",
+              "code": "ALIAS_CONSERVATIVE_KILL",
+              "confidence": "conservative",
+              "kill_scope": "all_overlapping_members",
+              "killed_alias_set_id": "redefines:TWCOB-STAMPANTI",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "redefines_overlap",
+              "rule_id": "K005306",
+              "source_column": 11,
+              "source_line": 3092,
+              "statement_text": "MOVE  3000      TO TWCOB-LLTS-VALORE",
+              "statement_type": "MOVE",
+              "written_variable": "TWCOB-LLTS-VALORE"
+            },
+            {
+              "alias_kind": "REDEFINES_OVERLAP",
+              "alias_set_id": "redefines:X1DUMMYF",
+              "code": "ALIAS_CONSERVATIVE_KILL",
+              "confidence": "conservative",
+              "kill_scope": "all_overlapping_members",
+              "killed_alias_set_id": "redefines:X1DUMMYF",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "redefines_overlap",
+              "rule_id": "K005364",
+              "source_column": 11,
+              "source_line": 3092,
+              "statement_text": "MOVE  3000      TO TWCOB-LLTS-VALORE",
+              "statement_type": "MOVE",
+              "written_variable": "TWCOB-LLTS-VALORE"
+            }
+          ],
+          "resolution_note": "No proven alphanumeric constant for TWCOB-TS-CODA at CICS node entry.",
+          "resolution_status": "unresolved",
+          "resolved_value": null,
+          "site_id": "73db62df-3433-4336-804f-10e3c37e8215:cics_arg:QUEUE:TWCOB-TS-CODA",
+          "site_kind": "cics_resource_argument",
+          "source_column": 11,
+          "source_line": 3094,
+          "statement_text": "EXEC CICS WRITEQ TS QUEUE(TWCOB-TS-CODA) FROM(TWCOB-INIZIO) LENGTH(TWCOB-LLTS) ITEM(TWCOB-TS-ITEM) END-EXEC.",
+          "statement_type": "DIALECT",
+          "static_value_evidence": null,
+          "target_kind": "QUEUE"
+        }
+      ]
+    },
+    {
+      "cause_distribution": {
+        "missing_cfg_metadata": 1
+      },
+      "cfg_artifact": "out/report/PDCBVC.CBL.report/cfg/cfg-PDCBVC.CBL.json",
+      "dataflow_artifact": "out/report/PDCBVC.CBL.report/static_analysis/dataflow.json",
+      "program": "PDCBVC.CBL",
+      "report_dir": "out/report/PDCBVC.CBL.report",
+      "schema_version": "1.0",
+      "semantics": "flow-sensitive",
+      "site_count": 1,
+      "sites": [
+        {
+          "argument_name": "CALL_TARGET",
+          "cause": "missing_cfg_metadata",
+          "detail": "Static-value chunks show a declaration/static value, but the flow-sensitive entry map does not seed that value at this CFG node.",
+          "entry_value": null,
+          "identifier": "PXRSEMAF",
+          "node_id": "b03e506d-2a89-432a-9edb-74c6a71c22e0",
+          "node_transfer_kills": [
+            {
+              "code": "CALL_USING_REFERENCE_KILL",
+              "confidence": "conservative",
+              "kill_scope": "direct_variable",
+              "killed_variables": [
+                "PXCSEMAF-AREA"
+              ],
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "call_using_reference",
+              "rule_id": "K009819",
+              "source_column": 11,
+              "source_line": 2861,
+              "statement_text": "CALL PXRSEMAF USING PXCSEMAF-AREA",
+              "statement_type": "CALL"
+            }
+          ],
+          "operation": "CALL",
+          "prior_kills": [
+            {
+              "code": "UNMODELED_STATEMENT_KILL_ALL",
+              "confidence": "conservative",
+              "kill_scope": "all_constants",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "unmodeled_statement",
+              "rule_id": "K009890",
+              "source_column": 90,
+              "source_line": 2318,
+              "statement_classification": "mutating_but_unmodeled",
+              "statement_text": "EXEC SQL WHENEVER SQLERROR GO TO ERRORE-SQL END-EXEC",
+              "statement_type": "DIALECT"
+            },
+            {
+              "code": "UNMODELED_STATEMENT_KILL_ALL",
+              "confidence": "conservative",
+              "kill_scope": "all_constants",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "unmodeled_statement",
+              "rule_id": "K009870",
+              "source_column": 11,
+              "source_line": 2587,
+              "statement_classification": "mutating_but_unmodeled",
+              "statement_text": "EXEC CICS LINK PROGRAM('PD1VOCI') COMMAREA(WPD1VOCI)\n               LENGTH(32000) END-EXEC.",
+              "statement_type": "DIALECT"
+            },
+            {
+              "code": "UNMODELED_STATEMENT_KILL_ALL",
+              "confidence": "conservative",
+              "kill_scope": "all_constants",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "unmodeled_statement",
+              "rule_id": "K009871",
+              "source_column": 11,
+              "source_line": 2601,
+              "statement_classification": "mutating_but_unmodeled",
+              "statement_text": "EXEC CICS LINK PROGRAM('PD1FS00') COMMAREA(WPD1FS00)\n               LENGTH(PD1FS00-LUNGH) END-EXEC.",
+              "statement_type": "DIALECT"
+            },
+            {
+              "code": "UNMODELED_STATEMENT_KILL_ALL",
+              "confidence": "conservative",
+              "kill_scope": "all_constants",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "unmodeled_statement",
+              "rule_id": "K009872",
+              "source_column": 11,
+              "source_line": 2648,
+              "statement_classification": "mutating_but_unmodeled",
+              "statement_text": "EXEC CICS ASKTIME  ABSTIME(WW-DATE)   END-EXEC.",
+              "statement_type": "DIALECT"
+            },
+            {
+              "code": "UNMODELED_STATEMENT_KILL_ALL",
+              "confidence": "conservative",
+              "kill_scope": "all_constants",
+              "provenance_source": "java_static_value_dataflow",
+              "reason": "unmodeled_statement",
+              "rule_id": "K009873",
+              "source_column": 11,
+              "source_line": 2649,
+              "statement_classification": "mutating_but_unmodeled",
+              "statement_text": "EXEC CICS FORMATTIME  ABSTIME(WW-DATE)  DDMMYY(WDATE)\n                     DATESEP  END-EXEC.",
+              "statement_type": "DIALECT"
+            }
+          ],
+          "resolution_note": "No proven alphanumeric constant for PXRSEMAF at CALL node entry.",
+          "resolution_status": "unresolved",
+          "resolved_value": null,
+          "site_id": "b03e506d-2a89-432a-9edb-74c6a71c22e0:call_target:PXRSEMAF",
+          "site_kind": "dynamic_call_target",
+          "source_column": 11,
+          "source_line": 2861,
+          "statement_text": "CALL PXRSEMAF USING PXCSEMAF-AREA",
+          "statement_type": "CALL",
+          "static_value_evidence": {
+            "assignments": [
+              {
+                "provenance_source": "java_data_value_clause",
+                "source_kind": "literal",
+                "source_line": 1148,
+                "source_section": "WORKING_STORAGE",
+                "source_value": "'PXRSEMAF'",
+                "statement_text": "01  PXRSEMAF         PIC X(08) VALUE 'PXRSEMAF'.",
+                "statement_type": "VALUE"
+              }
+            ],
+            "source_chunk": "PDCBVC.CBL__static_values__part1.json",
+            "values": [
+              "'PXRSEMAF'"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "schema_version": "1.0",
+  "semantics": "flow-sensitive"
+}
