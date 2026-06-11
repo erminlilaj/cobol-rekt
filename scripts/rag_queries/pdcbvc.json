@@ -1,0 +1,158 @@
+{
+  "program": "PDCBVC.CBL",
+  "queries": [
+    {
+      "query_id": "cics_map_pdcvbc1",
+      "category": "cics_targets",
+      "query": "Which CICS RECEIVE or SEND uses map PDCBVC1 and mapset PDCBVCM?",
+      "expected_types": ["cics.operation", "cics.resource", "screen.pagination", "screen.key_dispatch", "dependencies"],
+      "all_terms": ["PDCBVC1", "PDCBVCM"]
+    },
+    {
+      "query_id": "cics_link_pd1voci",
+      "category": "cics_targets",
+      "query": "Which CICS LINK transfers to program PD1VOCI?",
+      "expected_types": ["cics.program_transfer", "cics.operation", "call_contract", "dependencies", "external_program_calls"],
+      "all_terms": ["LINK", "PD1VOCI"]
+    },
+    {
+      "query_id": "cics_xctl_pdpred",
+      "category": "cics_targets",
+      "query": "Where does EXEC CICS XCTL transfer control to PDPRED?",
+      "expected_types": ["cics.program_transfer", "cics.operation", "call_contract", "dependencies", "external_program_calls", "paragraph_logic"],
+      "all_terms": ["XCTL", "PDPRED"]
+    },
+    {
+      "query_id": "external_pd1fs00_commarea",
+      "category": "external_calls",
+      "query": "What call contract or COMMAREA is used for PD1FS00?",
+      "expected_types": ["call_contract", "cics.program_transfer", "cics.operation", "external_program_calls"],
+      "all_terms": ["PD1FS00"],
+      "any_terms": ["COMMAREA", "LENGTH", "LINK"]
+    },
+    {
+      "query_id": "variable_twcob_funzione",
+      "category": "variables",
+      "query": "Where is TWCOB-FUNZIONE read or written?",
+      "expected_types": ["dataflow.variable", "variable_group", "paragraph_logic", "static_values"],
+      "all_terms": ["TWCOB-FUNZIONE"]
+    },
+    {
+      "query_id": "variable_static_prog_liv5",
+      "category": "variables",
+      "query": "Which static value defines PROG-LIV5 as PDCGVC?",
+      "expected_types": ["static_values", "dataflow.variable", "variable_group", "paragraph_logic", "copybook_fields"],
+      "all_terms": ["PROG-LIV5", "PDCGVC"]
+    },
+    {
+      "query_id": "paragraph_selection_flow",
+      "category": "paragraphs",
+      "query": "Explain paragraph BROWSE-FASE2-SEL-10 selection flow.",
+      "expected_types": ["paragraph_logic", "controlflow.cfg", "screen.selection", "error_path", "dataflow.variable"],
+      "all_terms": ["BROWSE-FASE2-SEL-10"]
+    },
+    {
+      "query_id": "paragraph_prep_riga",
+      "category": "paragraphs",
+      "query": "What does PREP-RIGA do when building RIGA-MAPPA?",
+      "expected_types": ["paragraph_logic", "dataflow.variable", "variable_group", "screen.row_build"],
+      "all_terms": ["PREP-RIGA", "RIGA-MAPPA"]
+    },
+    {
+      "query_id": "copybook_pdrtwa2_twcob_fase",
+      "category": "copybooks",
+      "query": "Which copybook defines PDRTWA2 and TWCOB-FASE?",
+      "expected_types": ["copybook_fields", "copybook_mentions", "variable_group", "dataflow.variable"],
+      "all_terms": ["PDRTWA2", "TWCOB-FASE"]
+    },
+    {
+      "query_id": "workflow_browse_phase2",
+      "category": "workflow",
+      "query": "Which workflow chunk explains BROWSE-FASE2 control flow?",
+      "expected_types": ["workflow", "paragraph_logic", "controlflow.cfg"],
+      "all_terms": ["BROWSE-FASE2"]
+    },
+    {
+      "query_id": "error_no_selection",
+      "category": "error_path",
+      "query": "Where is the no-selection message WMNOSEL handled?",
+      "expected_types": ["error_path", "paragraph_logic", "dataflow.variable", "static_values"],
+      "any_terms": ["WMNOSEL", "Nessuna scelta"]
+    },
+    {
+      "query_id": "business_rule_selection",
+      "category": "business_rule",
+      "query": "Which business rule mentions selection field SCELTAI?",
+      "expected_types": ["business_rule", "screen.selection", "paragraph_logic"],
+      "all_terms": ["SCELTAI"]
+    },
+    {
+      "query_id": "controlflow_pf7_logic",
+      "category": "controlflow",
+      "query": "Show the control-flow branch for DFHPF7 or PF7.",
+      "expected_types": ["controlflow.cfg", "paragraph_logic", "screen.key_dispatch", "screen.pagination"],
+      "any_terms": ["DFHPF7", "PF7"],
+      "require_terms": ["BROWSE"]
+    },
+    {
+      "query_id": "screen_pf7_pf8_dispatch",
+      "category": "screen_flow",
+      "query": "What happens for PF7 or PF8 key on the PDCBVC screen?",
+      "expected_types": ["screen.key_dispatch", "screen.pagination", "paragraph_logic", "controlflow.cfg", "error_path", "dataflow.variable"],
+      "any_terms": ["PF7", "PF8"],
+      "require_terms": ["BROWSE"]
+    },
+    {
+      "query_id": "screen_dfhpf7_dfhpf8_exact",
+      "category": "screen_flow",
+      "query": "Which branch handles EIBAID DFHPF7 or DFHPF8?",
+      "expected_types": ["screen.key_dispatch", "screen.pagination", "paragraph_logic", "controlflow.cfg", "error_path", "dataflow.variable"],
+      "any_terms": ["DFHPF7", "DFHPF8"],
+      "require_terms": ["EIBAID"]
+    },
+    {
+      "query_id": "static_analysis_node_scoped_constants",
+      "category": "static_analysis",
+      "query": "Which static-analysis chunk shows node-scoped propagated entry and exit constants?",
+      "expected_types": ["static_value.propagation"],
+      "requires_any_chunk_type": ["static_value.propagation"],
+      "all_terms": ["Entry constants", "Exit constants"],
+      "require_terms": ["not global always claims"]
+    },
+    {
+      "query_id": "static_analysis_flow_sensitive_targets",
+      "category": "static_analysis",
+      "query": "Which flow-sensitive target chunk explains resolved CALL or CICS targets from dataflow?",
+      "expected_types": ["flow_sensitive.target"],
+      "requires_any_chunk_type": ["flow_sensitive.target"],
+      "any_terms": ["CALL targets", "CICS targets", "CICS arguments"],
+      "require_terms": ["not global target claims"]
+    },
+    {
+      "query_id": "negative_static_analysis_nonexistent_constant_pd9xxxx",
+      "category": "static_analysis_negative",
+      "query": "Which propagated static-analysis constant resolves nonexistent program PD9XXXX?",
+      "expected_hit": false,
+      "expected_types": ["static_value.propagation", "flow_sensitive.target"],
+      "requires_any_chunk_type": ["static_value.propagation", "flow_sensitive.target"],
+      "all_terms": ["PD9XXXX"]
+    },
+    {
+      "query_id": "negative_static_analysis_always_claim",
+      "category": "static_analysis_negative",
+      "query": "Which static-analysis chunk claims a value is globally always true?",
+      "expected_hit": false,
+      "expected_types": ["static_value.propagation", "flow_sensitive.target"],
+      "requires_any_chunk_type": ["static_value.propagation", "flow_sensitive.target"],
+      "all_terms": ["globally always true"]
+    },
+    {
+      "query_id": "negative_nonexistent_program_pd9xxxx",
+      "category": "negative_canary",
+      "query": "Which CICS LINK transfers to nonexistent program PD9XXXX?",
+      "expected_hit": false,
+      "expected_types": ["cics.program_transfer", "cics.operation", "call_contract", "dependencies", "external_program_calls", "paragraph_logic", "workflow", "business_rule"],
+      "all_terms": ["PD9XXXX"]
+    }
+  ]
+}

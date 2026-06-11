@@ -1,0 +1,164 @@
+{
+  "program": "PDB305.CBL",
+  "queries": [
+    {
+      "query_id": "cics_map_pdb3051",
+      "category": "cics_targets",
+      "query": "Which CICS RECEIVE or SEND uses map PDB3051 and mapset PDB305M?",
+      "expected_types": ["cics.operation", "cics.resource", "screen.pagination", "screen.key_dispatch", "dependencies"],
+      "all_terms": ["PDB3051", "PDB305M"]
+    },
+    {
+      "query_id": "cics_link_pd0gcoda",
+      "category": "cics_targets",
+      "query": "Which CICS LINK transfers to program PD0GCODA?",
+      "expected_types": ["cics.program_transfer", "cics.operation", "call_contract", "dependencies", "external_program_calls"],
+      "all_terms": ["LINK", "PD0GCODA"]
+    },
+    {
+      "query_id": "cics_link_pd3sort",
+      "category": "cics_targets",
+      "query": "Which CICS LINK transfers to program PD3SORT?",
+      "expected_types": ["cics.program_transfer", "cics.operation", "call_contract", "dependencies", "external_program_calls"],
+      "all_terms": ["LINK", "PD3SORT"]
+    },
+    {
+      "query_id": "cics_xctl_pdpred",
+      "category": "cics_targets",
+      "query": "Where does EXEC CICS XCTL transfer control to PDPRED?",
+      "expected_types": ["cics.program_transfer", "cics.operation", "call_contract", "dependencies", "external_program_calls", "paragraph_logic"],
+      "all_terms": ["XCTL", "PDPRED"]
+    },
+    {
+      "query_id": "external_pd1ac_commarea",
+      "category": "external_calls",
+      "query": "What call contract or COMMAREA is used for PD1AC?",
+      "expected_types": ["call_contract", "cics.program_transfer", "cics.operation", "external_program_calls"],
+      "all_terms": ["PD1AC"],
+      "any_terms": ["COMMAREA", "LENGTH", "LINK"]
+    },
+    {
+      "query_id": "variable_twcob_funzione",
+      "category": "variables",
+      "query": "Where is TWCOB-FUNZIONE read or written?",
+      "expected_types": ["dataflow.variable", "variable_group", "paragraph_logic", "static_values"],
+      "all_terms": ["TWCOB-FUNZIONE"]
+    },
+    {
+      "query_id": "variable_static_prog_pf2",
+      "category": "variables",
+      "query": "Which static value defines PROG-PF2 as PDB306?",
+      "expected_types": ["static_values", "dataflow.variable", "variable_group", "paragraph_logic", "copybook_fields"],
+      "all_terms": ["PROG-PF2", "PDB306"]
+    },
+    {
+      "query_id": "paragraph_tastoer",
+      "category": "paragraphs",
+      "query": "Explain paragraph BROWSE-FASE2-TASTOER error flow.",
+      "expected_types": ["paragraph_logic", "controlflow.cfg", "error_path", "dataflow.variable"],
+      "all_terms": ["BROWSE-FASE2-TASTOER"]
+    },
+    {
+      "query_id": "paragraph_prepara_map",
+      "category": "paragraphs",
+      "query": "What does PREPARA-MAP do with WNUMREC-CODA?",
+      "expected_types": ["paragraph_logic", "controlflow.cfg", "workflow", "dataflow.variable"],
+      "all_terms": ["PREPARA-MAP", "WNUMREC-CODA"]
+    },
+    {
+      "query_id": "copybook_pdrtwa2_twcob_fase",
+      "category": "copybooks",
+      "query": "Which copybook defines PDRTWA2 and TWCOB-FASE?",
+      "expected_types": ["copybook_fields", "copybook_mentions", "variable_group", "dataflow.variable"],
+      "all_terms": ["PDRTWA2", "TWCOB-FASE"]
+    },
+    {
+      "query_id": "workflow_prepara_map",
+      "category": "workflow",
+      "query": "Which workflow chunk explains PREPARA-MAP row preparation?",
+      "expected_types": ["workflow", "paragraph_logic", "controlflow.cfg"],
+      "all_terms": ["PREPARA-MAP"]
+    },
+    {
+      "query_id": "error_tastoer_message",
+      "category": "error_path",
+      "query": "Where is the functional-key error WTASTOER handled?",
+      "expected_types": ["error_path", "paragraph_logic", "dataflow.variable", "static_values"],
+      "any_terms": ["WTASTOER", "Tasto"]
+    },
+    {
+      "query_id": "business_rule_wctpag",
+      "category": "business_rule",
+      "query": "Which business rule mentions WCTPAG pagination?",
+      "expected_types": ["business_rule", "screen.pagination", "paragraph_logic"],
+      "all_terms": ["WCTPAG"]
+    },
+    {
+      "query_id": "controlflow_pf7_logic",
+      "category": "controlflow",
+      "query": "Show the control-flow branch for DFHPF7 or PF7.",
+      "expected_types": ["controlflow.cfg", "paragraph_logic", "screen.key_dispatch", "screen.pagination"],
+      "any_terms": ["DFHPF7", "PF7"],
+      "require_terms": ["BROWSE"]
+    },
+    {
+      "query_id": "screen_pf7_pf8_dispatch",
+      "category": "screen_flow",
+      "query": "What happens for PF7 or PF8 key on the PDB305 screen?",
+      "expected_types": ["screen.key_dispatch", "screen.pagination", "paragraph_logic", "controlflow.cfg", "error_path", "dataflow.variable"],
+      "any_terms": ["PF7", "PF8"],
+      "require_terms": ["BROWSE"]
+    },
+    {
+      "query_id": "screen_row_build",
+      "category": "screen_flow",
+      "query": "How does screen row building use MRIGAO and WCTRIG?",
+      "expected_types": ["screen.row_build", "paragraph_logic", "dataflow.variable", "controlflow.cfg"],
+      "all_terms": ["MRIGAO", "WCTRIG"]
+    },
+    {
+      "query_id": "static_analysis_node_scoped_constants",
+      "category": "static_analysis",
+      "query": "Which static-analysis chunk shows node-scoped propagated entry and exit constants?",
+      "expected_types": ["static_value.propagation"],
+      "requires_any_chunk_type": ["static_value.propagation"],
+      "all_terms": ["Entry constants", "Exit constants"],
+      "require_terms": ["not global always claims"]
+    },
+    {
+      "query_id": "static_analysis_flow_sensitive_targets",
+      "category": "static_analysis",
+      "query": "Which flow-sensitive target chunk explains resolved CALL or CICS targets from dataflow?",
+      "expected_types": ["flow_sensitive.target"],
+      "requires_any_chunk_type": ["flow_sensitive.target"],
+      "any_terms": ["CALL targets", "CICS targets", "CICS arguments"],
+      "require_terms": ["not global target claims"]
+    },
+    {
+      "query_id": "negative_static_analysis_nonexistent_constant_pd9xxxx",
+      "category": "static_analysis_negative",
+      "query": "Which propagated static-analysis constant resolves nonexistent program PD9XXXX?",
+      "expected_hit": false,
+      "expected_types": ["static_value.propagation", "flow_sensitive.target"],
+      "requires_any_chunk_type": ["static_value.propagation", "flow_sensitive.target"],
+      "all_terms": ["PD9XXXX"]
+    },
+    {
+      "query_id": "negative_static_analysis_always_claim",
+      "category": "static_analysis_negative",
+      "query": "Which static-analysis chunk claims a value is globally always true?",
+      "expected_hit": false,
+      "expected_types": ["static_value.propagation", "flow_sensitive.target"],
+      "requires_any_chunk_type": ["static_value.propagation", "flow_sensitive.target"],
+      "all_terms": ["globally always true"]
+    },
+    {
+      "query_id": "negative_nonexistent_program_pd9xxxx",
+      "category": "negative_canary",
+      "query": "Which CICS LINK transfers to nonexistent program PD9XXXX?",
+      "expected_hit": false,
+      "expected_types": ["cics.program_transfer", "cics.operation", "call_contract", "dependencies", "external_program_calls", "paragraph_logic", "workflow", "business_rule"],
+      "all_terms": ["PD9XXXX"]
+    }
+  ]
+}

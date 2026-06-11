@@ -1,0 +1,4041 @@
+{
+  "baseline_bundle": "knowledge-base_rag_v0",
+  "baseline_category_summary": {
+    "business_rule": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "cics_targets": {
+      "expected_pass_at_5": 3,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 3,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 3,
+      "query_count": 3,
+      "skipped_query_count": 0,
+      "total_query_count": 3
+    },
+    "controlflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "copybooks": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "error_path": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "external_calls": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "negative_canary": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "paragraphs": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "screen_flow": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "static_analysis": {
+      "expected_pass_at_5": 0,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 0,
+      "skipped_query_count": 2,
+      "total_query_count": 2
+    },
+    "static_analysis_negative": {
+      "expected_pass_at_5": 0,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 0,
+      "skipped_query_count": 2,
+      "total_query_count": 2
+    },
+    "variables": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "workflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    }
+  },
+  "baseline_completeness": {
+    "static_values": {
+      "chunk_count": 11,
+      "chunks_with_full_program_variable_set": 11,
+      "chunks_with_static_values_metadata": 11,
+      "max_variables_per_chunk": 63,
+      "median_variables_per_chunk": 63,
+      "metadata_variable_instances": 693,
+      "min_variables_per_chunk": 63,
+      "unique_variables": 63
+    }
+  },
+  "baseline_metrics": {
+    "artifact_files": 22,
+    "chunk_count": 545,
+    "exists": true,
+    "knowledge_base_files": 4,
+    "manifest_chunk_count": 547,
+    "manifest_schema_version": "1.5",
+    "total_bytes": 12589514,
+    "total_files": 575,
+    "type_counts": {
+      "call_contract": 5,
+      "cics.operation": 13,
+      "cics.program_transfer": 4,
+      "cics.resource": 7,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 36,
+      "copybook_fields": 34,
+      "copybook_mentions": 2,
+      "dataflow.variable": 264,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 53,
+      "external_program_calls": 1,
+      "paragraph_logic": 54,
+      "program_summary": 1,
+      "screen.key_dispatch": 4,
+      "screen.pagination": 4,
+      "screen.row_build": 3,
+      "screen.selection": 4,
+      "static_values": 11,
+      "unused_copybooks": 2,
+      "variable_group": 16,
+      "workflow": 20
+    }
+  },
+  "baseline_retrieval_summary": {
+    "avg_elapsed_ms": null,
+    "expected_pass_at_5": 16,
+    "expected_pass_at_5_pct": 100.0,
+    "hit_at_5": 15,
+    "hit_at_5_pct": 100.0,
+    "mrr": 0.8389,
+    "negative_pass_at_5": 1,
+    "negative_pass_at_5_pct": 100.0,
+    "negative_query_count": 1,
+    "positive_query_count": 15,
+    "query_count": 16,
+    "skipped_query_count": 4,
+    "total_query_count": 20
+  },
+  "current_bundle": "knowledge-base_rag",
+  "current_category_summary": {
+    "business_rule": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "cics_targets": {
+      "expected_pass_at_5": 3,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 3,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 3,
+      "query_count": 3,
+      "skipped_query_count": 0,
+      "total_query_count": 3
+    },
+    "controlflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "copybooks": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "error_path": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "external_calls": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "negative_canary": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "paragraphs": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "screen_flow": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "static_analysis": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 1,
+      "total_query_count": 2
+    },
+    "static_analysis_negative": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "variables": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "workflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    }
+  },
+  "current_completeness": {
+    "static_values": {
+      "chunk_count": 11,
+      "chunks_with_full_program_variable_set": 11,
+      "chunks_with_static_values_metadata": 11,
+      "max_variables_per_chunk": 63,
+      "median_variables_per_chunk": 63,
+      "metadata_variable_instances": 693,
+      "min_variables_per_chunk": 63,
+      "unique_variables": 63
+    }
+  },
+  "current_metrics": {
+    "artifact_files": 23,
+    "chunk_count": 732,
+    "exists": true,
+    "knowledge_base_files": 4,
+    "manifest_chunk_count": 734,
+    "manifest_schema_version": "1.6",
+    "total_bytes": 13880362,
+    "total_files": 763,
+    "type_counts": {
+      "business_rule": 72,
+      "call_contract": 6,
+      "cics.operation": 14,
+      "cics.program_transfer": 4,
+      "cics.resource": 7,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 37,
+      "copybook_fields": 34,
+      "copybook_mentions": 2,
+      "dataflow.variable": 281,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 53,
+      "external_program_calls": 1,
+      "paragraph_logic": 54,
+      "program_summary": 1,
+      "screen.key_dispatch": 5,
+      "screen.pagination": 4,
+      "screen.row_build": 3,
+      "screen.selection": 4,
+      "static_value.propagation": 94,
+      "static_values": 11,
+      "unused_copybooks": 2,
+      "variable_group": 16,
+      "workflow": 20
+    }
+  },
+  "current_retrieval_summary": {
+    "avg_elapsed_ms": null,
+    "expected_pass_at_5": 19,
+    "expected_pass_at_5_pct": 100.0,
+    "hit_at_5": 16,
+    "hit_at_5_pct": 100.0,
+    "mrr": 0.8854,
+    "negative_pass_at_5": 3,
+    "negative_pass_at_5_pct": 100.0,
+    "negative_query_count": 3,
+    "positive_query_count": 16,
+    "query_count": 19,
+    "skipped_query_count": 1,
+    "total_query_count": 20
+  },
+  "fact_diff": {
+    "bm25_terms": {
+      "added_sample": [
+        "A6-6C8A-40E8-89EC-8998FEE63972",
+        "A62833F3-CBE4-4887-9C08-6C21A2D0524A",
+        "A881-F314-4F89-9AA6-A8B14F778F3B",
+        "A8C5-B8DF-47D2-8124-E4C22B0DC7D5",
+        "AA74E39-511F-44EB-97FB-D5B41C958B62",
+        "AAC6007C-2914-49E8-AA82-D817F9AF6734",
+        "AB9EB-AE40-469F-881B-8AC034C6FDA6",
+        "AFF1B6-9F76-4BD8-A715-9AB9EA730A2F",
+        "ALIASES",
+        "ALPHANUMERIC",
+        "ALWAYS",
+        "B0179-282F-4D8B-B39A-AEF9399DFE48",
+        "B0B573B-83F0-4630-AC99-E8CA2BCD9261",
+        "B0B63E-74CC-4FF0-BCF5-B54FEC21DBAF",
+        "B1558A27-D7A1-4AF8-8A3F-A74E99F78553",
+        "B2A-C4AD-40BC-817D-C046985697A1",
+        "B4AB-EB59-4F14-8047-6B76CBCA9120",
+        "B50D32C-2814-4C6B-B155-9A9DE93EF384",
+        "B569C4D4-C850-4C37-94F5-8FFE74A57830",
+        "B61F0CDD-5310-48BF-B279-D7033CCC749E",
+        "B7C91042-6D96-4785-9197-ED4BFDAE9711",
+        "BA0543-6301-4137-B588-9B665E68ACD4",
+        "BD8CB46B-3FAA-40C7-AFDB-F169F2DBC4FE",
+        "BF573A5E-679E-4DC4-A9CF-F29DD565526D",
+        "BF9E0FD5-70E9-42E8-B3F5-CEEC7DB4C54A"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 1072,
+      "jaccard_pct": 86.95,
+      "missing_sample": [
+        "COMMANDS"
+      ],
+      "retained_count": 933,
+      "retention_pct": 99.89,
+      "v0_count": 934,
+      "value_improved_count": 0
+    },
+    "business_rules": {
+      "added_sample": [
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|(TWCOB-FUNZIONE = 'I' OR 'A' OR 'C' OR 'D' OR 'P') AND TWCOB-ID-SISTEMA = 'IP'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHENTER|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF1|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF2|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF3|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF4|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF7|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF8|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF9|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|NOT (PD1VOCI-TABVOX-FINE(PD1VOCI-IND) = SPACES)|NO",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|NOT (TWCOB-FUNZIONE = 'I')|NO",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|NOT (TWCOB-VARCONT-ANNO = 'TTTT')|NO",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|NPAGT LESS 1|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|NPAGT NOT GREATER 1|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1FS00-RETURN = '0'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1FS00-RETURN = '2'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1FS00-SESS-FLAG = '1'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1FS00-SESS-FLAG = '2'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1FS00-SESS-FLAG = '3'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1VOCI-IND GREATER PD1VOCI-TABVOX-NUMERO|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1VOCI-TABVOX-FINE(PD1VOCI-IND) = SPACES|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1VOCI-TABVOX-NUMERO = 0 AND TWCOB-XCTL-PGM = 'PDCGVC'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PD1VOCI-TABVOX-NUMERO = 0|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PDRUTI01-FUNZIONE = '04' OR '05'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PXCSEMAF-STATUS = 1|YES"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 155,
+      "jaccard_pct": 0.0,
+      "missing_sample": [],
+      "retained_count": 0,
+      "retention_pct": 100.0,
+      "v0_count": 0,
+      "value_improved_count": 0
+    },
+    "chunk_ids": {
+      "added_sample": [
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:1",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:10",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:11",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:12",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:13",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:14",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:15",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:16",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:17",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:18",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:19",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:2",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:20",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:21",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:22",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:23",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:24",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:25",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:26",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:27",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:28",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:29",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:3",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:30",
+        "business_rule|PDCBVC.CBL:BUSINESS_RULE:31"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 732,
+      "jaccard_pct": 73.98,
+      "missing_sample": [
+        "call_contract|PDCBVC.CBL:CALL_CONTRACT:PD1VOCI:5",
+        "dataflow.variable|PDCBVC.CBL:DATAFLOW.VARIABLE:WKERR2"
+      ],
+      "retained_count": 543,
+      "retention_pct": 99.63,
+      "v0_count": 545,
+      "value_improved_count": 0
+    },
+    "cics": {
+      "added_sample": [
+        "cics.operation|ADDRESS|OTHER|UNKNOWN||arg|TWA|ADDRESS OF PDRTWA2|IDENTIFIER",
+        "cics.operation|ASKTIME|OTHER|UNKNOWN||arg|ABSTIME|WW-DATE|IDENTIFIER",
+        "cics.operation|FORMATTIME|OTHER|UNKNOWN||arg|ABSTIME|WW-DATE|IDENTIFIER",
+        "cics.operation|FORMATTIME|OTHER|UNKNOWN||arg|DDMMYY|WDATE|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|COMMAREA|WPDRUTI01|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|LENGTH|400|LITERAL",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD1FS00|arg|COMMAREA|WPD1FS00|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD1FS00|arg|LENGTH|PD1FS00-LUNGH|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD1VOCI|arg|COMMAREA|WPD1VOCI|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD1VOCI|arg|LENGTH|32000|LITERAL",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|COMMAREA|WPDRUTI01|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|LENGTH|400|LITERAL",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD1FS00|arg|COMMAREA|WPD1FS00|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD1FS00|arg|LENGTH|PD1FS00-LUNGH|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD1VOCI|arg|COMMAREA|WPD1VOCI|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD1VOCI|arg|LENGTH|32000|LITERAL"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 50,
+      "jaccard_pct": 68.0,
+      "missing_sample": [],
+      "retained_count": 34,
+      "retention_pct": 100.0,
+      "v0_count": 34,
+      "value_improved_count": 0
+    },
+    "copybooks": {
+      "added_sample": [],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 435,
+      "jaccard_pct": 100.0,
+      "missing_sample": [],
+      "retained_count": 435,
+      "retention_pct": 100.0,
+      "v0_count": 435,
+      "value_improved_count": 0
+    },
+    "dataflow.sidecar": {
+      "added_sample": [
+        "analysis|analysis_version|1.10",
+        "analysis|schema_version|1.0",
+        "node_state|entry_constants|MDSESSO||ALPHANUMERIC|APERTA",
+        "node_state|entry_constants|MDSESSO||ALPHANUMERIC|CHIUSA",
+        "node_state|entry_constants|PD1VOCI-FUNZIONE||ALPHANUMERIC|02",
+        "node_state|entry_constants|PD1VOCI-FUNZIONE||ALPHANUMERIC|11",
+        "node_state|entry_constants|PD1VOCI-FUNZIONE||ALPHANUMERIC|12",
+        "node_state|entry_constants|PD1VOCI-TIPO-ESTRA||ALPHANUMERIC|A",
+        "node_state|entry_constants|PD1VOCI-TIPO-VOCE||ALPHANUMERIC|1",
+        "node_state|entry_constants|PD1VOCI-TIPO-VOCE||ALPHANUMERIC|2",
+        "node_state|entry_constants|PD1VOCI-TIPO-VOCE||ALPHANUMERIC|3",
+        "node_state|entry_constants|PD1VOCI-TIPO-VOCE||ALPHANUMERIC|4",
+        "node_state|entry_constants|PXCSEMAF-AGENT||ALPHANUMERIC|SEMAFORO",
+        "node_state|entry_constants|PXCSEMAF-CALLER-TYPE||ALPHANUMERIC|CICS",
+        "node_state|entry_constants|PXCSEMAF-CALLER||ALPHANUMERIC|PDCBVC",
+        "node_state|entry_constants|PXCSEMAF-NAME||ALPHANUMERIC|PDAGGVIP",
+        "node_state|entry_constants|PXCSEMAF-REQ||ALPHANUMERIC|GET",
+        "node_state|entry_constants|SW-FINE||ALPHANUMERIC|1",
+        "node_state|entry_constants|TESTATA1||ALPHANUMERIC|AGGIORNAMENTO",
+        "node_state|entry_constants|TESTATA1||ALPHANUMERIC|CESSAZIONE",
+        "node_state|entry_constants|TESTATA1||ALPHANUMERIC|IMPIANTO",
+        "node_state|entry_constants|TESTATA1||ALPHANUMERIC|MODIFICA DECORRENZA",
+        "node_state|entry_constants|TESTATA1||ALPHANUMERIC|VISUALIZZAZIONE",
+        "node_state|entry_constants|TESTATA2||ALPHANUMERIC|COMPETENZE E RITENUTE",
+        "node_state|entry_constants|TESTATA2||ALPHANUMERIC|COMPETENZE IMPONIBILI"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 91,
+      "jaccard_pct": 0.0,
+      "missing_sample": [],
+      "retained_count": 0,
+      "retention_pct": 100.0,
+      "v0_count": 0,
+      "value_improved_count": 0
+    },
+    "dataflow.variable": {
+      "added_sample": [],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 1741,
+      "jaccard_pct": 100.0,
+      "missing_sample": [],
+      "retained_count": 1741,
+      "retention_pct": 100.0,
+      "v0_count": 1741,
+      "value_improved_count": 0
+    },
+    "paragraphs": {
+      "added_sample": [
+        "controlflow.cfg|paragraph|INIZ-PARAM-020"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 977,
+      "jaccard_pct": 99.9,
+      "missing_sample": [],
+      "retained_count": 976,
+      "retention_pct": 100.0,
+      "v0_count": 976,
+      "value_improved_count": 0
+    },
+    "path_sensitive": {
+      "added_sample": [],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 0,
+      "jaccard_pct": 100.0,
+      "missing_sample": [],
+      "retained_count": 0,
+      "retention_pct": 100.0,
+      "v0_count": 0,
+      "value_improved_count": 0
+    },
+    "static_values": {
+      "added_sample": [],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 351,
+      "jaccard_pct": 100.0,
+      "missing_sample": [],
+      "retained_count": 351,
+      "retention_pct": 100.0,
+      "v0_count": 351,
+      "value_improved_count": 0
+    }
+  },
+  "integrity": {
+    "artifacts": {
+      "added_current": [
+        "static_analysis/dataflow_rag_summary.json"
+      ],
+      "byte_identical": false,
+      "current_files": 23,
+      "differing_common_files": [
+        "analysis_health.json",
+        "analysis_self_evaluation.json",
+        "cobol_structure.json",
+        "pipeline_report.json",
+        "variable_values.json"
+      ],
+      "file_retention_pct": 100.0,
+      "missing_current": [],
+      "v0_files": 22
+    },
+    "knowledge_base": {
+      "added_current": [],
+      "byte_identical": false,
+      "current_files": 4,
+      "differing_common_files": [
+        "00_Executive_Summary.md"
+      ],
+      "file_retention_pct": 100.0,
+      "missing_current": [],
+      "v0_files": 4
+    }
+  },
+  "per_query": [
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 3,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:RECEIVE-PDCBVC1",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__RECEIVE-PDCBVC1.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 44.9663
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:SEND-PDCBVC1",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__SEND-PDCBVC1.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 44.302
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:5",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__5.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 44.1624
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:SEND-PDCBVC1-DO",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__SEND-PDCBVC1-DO.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 43.1173
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:6",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__6.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 42.6431
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:7",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__7.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 42.6431
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.resource:3",
+            "chunk_type": "cics.resource",
+            "file": "PDCBVC.CBL__cics_resource__3.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 42.1154
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.resource:2",
+            "chunk_type": "cics.resource",
+            "file": "PDCBVC.CBL__cics_resource__2.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 41.706
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:datasets_tables_resources",
+            "chunk_type": "datasets_tables_resources",
+            "file": "PDCBVC.CBL__datasets_tables_resources.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 40.7615
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.resource:5",
+            "chunk_type": "cics.resource",
+            "file": "PDCBVC.CBL__cics_resource__5.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 40.4759
+          }
+        ]
+      },
+      "category": "cics_targets",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 3,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:RECEIVE-PDCBVC1",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__RECEIVE-PDCBVC1.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 47.5983
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:SEND-PDCBVC1",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__SEND-PDCBVC1.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 46.987
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:6",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__6.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 45.7341
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:SEND-PDCBVC1-DO",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__SEND-PDCBVC1-DO.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 45.5733
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:7",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__7.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 44.2254
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:8",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__8.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 44.2254
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.resource:3",
+            "chunk_type": "cics.resource",
+            "file": "PDCBVC.CBL__cics_resource__3.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 43.9868
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.resource:2",
+            "chunk_type": "cics.resource",
+            "file": "PDCBVC.CBL__cics_resource__2.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 43.5631
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:datasets_tables_resources",
+            "chunk_type": "datasets_tables_resources",
+            "file": "PDCBVC.CBL__datasets_tables_resources.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 42.799
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.resource:5",
+            "chunk_type": "cics.resource",
+            "file": "PDCBVC.CBL__cics_resource__5.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 42.315
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which CICS RECEIVE or SEND uses map PDCBVC1 and mapset PDCBVCM?",
+      "query_id": "cics_map_pdcvbc1"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDCBVC.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 35.418
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDCBVC.CBL__dependencies.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 33.9202
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:13",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__13.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 29.4881
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 29.0735
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:4",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__4.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 26.5955
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:BROWSE-FASE2-ENTER",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__BROWSE-FASE2-ENTER.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 22.7033
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1FS00",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1FS00.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 22.6022
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 22.5942
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDCBVC.CBL__external_program_calls.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 22.5085
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:BROWSE-FASE1",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__BROWSE-FASE1.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 22.099
+          }
+        ]
+      },
+      "category": "cics_targets",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 3,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDCBVC.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 37.4132
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 30.4096
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:14",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__14.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 30.0623
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:4",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__4.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 26.5219
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDCBVC.CBL__dependencies.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 26.1522
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:BROWSE-FASE2-ENTER",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__BROWSE-FASE2-ENTER.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 23.5838
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1FS00",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1FS00.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 23.5738
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 23.5624
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:BROWSE-FASE1",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__BROWSE-FASE1.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 22.8377
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDCBVC.CBL__external_program_calls.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 22.7096
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which CICS LINK transfers to program PD1VOCI?",
+      "query_id": "cics_link_pd1voci"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:XCTL-MAIN",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__XCTL-MAIN.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 33.6148
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:1",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 32.1988
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:4",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__4.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 31.968
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:call_contract:PDPRED:2",
+            "chunk_type": "call_contract",
+            "file": "PDCBVC.CBL__call_contract__PDPRED__2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 30.6486
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDCBVC.CBL__dependencies.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 24.9029
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDCBVC.CBL__cics_operations.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 24.6314
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDCBVC.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 20.8127
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 15.1648
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 15.1102
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part8.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 13.0887
+          }
+        ]
+      },
+      "category": "cics_targets",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:XCTL-MAIN",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__XCTL-MAIN.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 35.3852
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:5",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__5.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 32.7663
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:1",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 32.4294
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:call_contract:PDPRED:2",
+            "chunk_type": "call_contract",
+            "file": "PDCBVC.CBL__call_contract__PDPRED__2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 31.6836
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDCBVC.CBL__dependencies.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 26.4919
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDCBVC.CBL__cics_operations.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 25.3158
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDCBVC.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 20.6609
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 12.4059
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 12.3588
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:RETURN-CICS",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__RETURN-CICS.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 11.3393
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Where does EXEC CICS XCTL transfer control to PDPRED?",
+      "query_id": "cics_xctl_pdpred"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDCBVC.CBL__external_program_calls.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 27.3836
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1FS00",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1FS00.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 23.695
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:12",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__12.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 23.63
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:call_contract:PD1FS00:4",
+            "chunk_type": "call_contract",
+            "file": "PDCBVC.CBL__call_contract__PD1FS00__4.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 21.5484
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:call_contract:PD0UTI01:3",
+            "chunk_type": "call_contract",
+            "file": "PDCBVC.CBL__call_contract__PD0UTI01__3.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 20.1813
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:47",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__47.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 19.8287
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part3.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 18.2933
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part4.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 18.1213
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 17.257
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 17.2334
+          }
+        ]
+      },
+      "category": "external_calls",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDCBVC.CBL__external_program_calls.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 27.9046
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:13",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__13.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 24.6104
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:call_contract:PD1FS00:4",
+            "chunk_type": "call_contract",
+            "file": "PDCBVC.CBL__call_contract__PD1FS00__4.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 24.1322
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1FS00",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1FS00.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 23.7899
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:3",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__3.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 22.264
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:call_contract:PD0UTI01:3",
+            "chunk_type": "call_contract",
+            "file": "PDCBVC.CBL__call_contract__PD0UTI01__3.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 21.1596
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:call_contract:PD1VOCI:5:part:2",
+            "chunk_type": "call_contract",
+            "file": "PDCBVC.CBL__call_contract__PD1VOCI__5__part2.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 21.1487
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDCBVC.CBL__dependencies.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 20.3819
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:47",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__47.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 19.6719
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part3.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 18.2789
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "What call contract or COMMAREA is used for PD1FS00?",
+      "query_id": "external_pd1fs00_commarea"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:PXCSEMAF-STATUS:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__PXCSEMAF-STATUS__part1.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 11.1759
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:ASKIP-DRK:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__ASKIP-DRK__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 10.4305
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:KFINE-DATI:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__KFINE-DATI__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 10.4305
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-ID-SISTEMA:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-ID-SISTEMA__part1.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.4305
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-VARCONT-NUMFUNZ:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-VARCONT-NUMFUNZ__part1.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 10.4305
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-XCTL-PGM:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-XCTL-PGM__part1.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 10.4305
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAI:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAI__part1.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 10.364
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:PXCSEMAF-OUTCOME:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__PXCSEMAF-OUTCOME__part1.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 10.3192
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-XCTL:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-XCTL__part1.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 10.1196
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WKERR2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WKERR2.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 10.0762
+          }
+        ]
+      },
+      "category": "variables",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:PXCSEMAF-STATUS:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__PXCSEMAF-STATUS__part1.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 12.2968
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:PD1VOCI-TABVOX-NUMERO:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__PD1VOCI-TABVOX-NUMERO__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 11.3789
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-ID-SISTEMA:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-ID-SISTEMA__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 11.3789
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-VARCONT-NUMFUNZ:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-VARCONT-NUMFUNZ__part1.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 11.3789
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-XCTL-PGM:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-XCTL-PGM__part1.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 11.3789
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAI:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAI__part1.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 11.2649
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:PXCSEMAF-OUTCOME:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__PXCSEMAF-OUTCOME__part1.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 11.2108
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-XCTL:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-XCTL__part1.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 10.9613
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHENTER",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHENTER.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 10.5319
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHPF1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHPF1.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 10.5319
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Where is TWCOB-FUNZIONE read or written?",
+      "query_id": "variable_twcob_funzione"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:variable_group:FILLER_2",
+            "chunk_type": "variable_group",
+            "file": "PDCBVC.CBL__variable_group__FILLER_2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 26.0283
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part5.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 22.972
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:11",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part11.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 18.4408
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 17.7036
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 17.0203
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part2.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 16.8071
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part4.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 16.712
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part8.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 16.4813
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part6.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 14.8046
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:9",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part9.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 14.1296
+          }
+        ]
+      },
+      "category": "variables",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:variable_group:FILLER_2",
+            "chunk_type": "variable_group",
+            "file": "PDCBVC.CBL__variable_group__FILLER_2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 20.2733
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part5.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 18.5373
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:11",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part11.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 13.3645
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 12.9174
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 12.5508
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part2.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 12.432
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part4.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 12.3817
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part8.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 12.259
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-FASE:part:6",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-FASE__part6.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 11.6931
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-FASE:part:4",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-FASE__part4.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 11.6093
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which static value defines PROG-LIV5 as PDCGVC?",
+      "query_id": "variable_static_prog_liv5"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:2",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 14.3645
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:1",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 13.4244
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:31",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__31.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 10.1891
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-VARCONT-PROGVOCE:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-VARCONT-PROGVOCE__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.1801
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:VOCE:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__VOCE__part3.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 10.1801
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WCODVO:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WCODVO__part3.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 10.1801
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WPROGREC:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WPROGREC__part3.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 10.1801
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:32",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__32.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 9.9198
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAI:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAI__part2.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 9.8618
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:BROWSE-FASE2-SEL-10",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__BROWSE-FASE2-SEL-10.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 9.8019
+          }
+        ]
+      },
+      "category": "paragraphs",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:2",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 14.8414
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:1",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 13.7593
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:31",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__31.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 10.9973
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:TWCOB-VARCONT-PROGVOCE:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__TWCOB-VARCONT-PROGVOCE__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.9197
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:VOCE:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__VOCE__part3.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 10.9197
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WCODVO:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WCODVO__part3.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 10.9197
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WPROGREC:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WPROGREC__part3.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 10.9197
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:32",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__32.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 10.5769
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAI:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAI__part2.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 10.535
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:MRIGAO:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__MRIGAO__part2.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 10.1914
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Explain paragraph BROWSE-FASE2-SEL-10 selection flow.",
+      "query_id": "paragraph_selection_flow"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:RIGA-MAPPA:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__RIGA-MAPPA__part2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 15.645
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.row_build:part:1",
+            "chunk_type": "screen.row_build",
+            "file": "PDCBVC.CBL__screen_row_build__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 15.6028
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WVOCE:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WVOCE__part3.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 14.946
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.row_build:part:2",
+            "chunk_type": "screen.row_build",
+            "file": "PDCBVC.CBL__screen_row_build__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 14.7352
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DATA-IMPIANTO",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DATA-IMPIANTO.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 14.3511
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:IMPORTO-RATA",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__IMPORTO-RATA.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 14.3511
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WDESCVO",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WDESCVO.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 14.3183
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WCODVO:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WCODVO__part1.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 14.2064
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WPROGR:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WPROGR__part1.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 14.2064
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WPROGREC:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WPROGREC__part1.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 14.1752
+          }
+        ]
+      },
+      "category": "paragraphs",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:RIGA-MAPPA:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__RIGA-MAPPA__part2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 16.7951
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.row_build:part:1",
+            "chunk_type": "screen.row_build",
+            "file": "PDCBVC.CBL__screen_row_build__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 16.2922
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WVOCE:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WVOCE__part3.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 15.5
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.row_build:part:2",
+            "chunk_type": "screen.row_build",
+            "file": "PDCBVC.CBL__screen_row_build__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 15.3752
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DATA-IMPIANTO",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DATA-IMPIANTO.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 14.7445
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:IMPORTO-RATA",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__IMPORTO-RATA.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 14.7445
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:PD1VOCI-IND:part:4",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__PD1VOCI-IND__part4.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 14.7113
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WCODVO:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WCODVO__part1.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 14.7073
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WDESCVO",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WDESCVO.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 14.7073
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WPROGREC:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WPROGREC__part1.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 14.6706
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "What does PREP-RIGA do when building RIGA-MAPPA?",
+      "query_id": "paragraph_prep_riga"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:23",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part23.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 19.1096
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:22",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part22.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 18.894
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:24",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part24.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 18.7324
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:unused_copybooks:part:2",
+            "chunk_type": "unused_copybooks",
+            "file": "PDCBVC.CBL__unused_copybooks__part2.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 17.7901
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:1",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part1.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 16.4483
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:20",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part20.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 14.9388
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:unused_copybooks:part:1",
+            "chunk_type": "unused_copybooks",
+            "file": "PDCBVC.CBL__unused_copybooks__part1.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 14.8898
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:16",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part16.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 14.8724
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:8",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part8.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 14.4891
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:12",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part12.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 14.3875
+          }
+        ]
+      },
+      "category": "copybooks",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:23",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part23.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 19.9582
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:22",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part22.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 19.7349
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:24",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part24.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 19.5477
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:unused_copybooks:part:2",
+            "chunk_type": "unused_copybooks",
+            "file": "PDCBVC.CBL__unused_copybooks__part2.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 18.4659
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:1",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part1.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 17.0618
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:16",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part16.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 15.4791
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:20",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part20.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 15.4672
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:unused_copybooks:part:1",
+            "chunk_type": "unused_copybooks",
+            "file": "PDCBVC.CBL__unused_copybooks__part1.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 15.3613
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:8",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part8.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 15.0146
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:12",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part12.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 14.8924
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which copybook defines PDRTWA2 and TWCOB-FASE?",
+      "query_id": "copybook_pdrtwa2_twcob_fase"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 10.6857
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part8.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 10.2834
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:BROWSE-FASE2-ENTER",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__BROWSE-FASE2-ENTER.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 9.9087
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 7.1512
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:PREP-RIGA",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__PREP-RIGA.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 6.7193
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 6.6588
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:EIBAID:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__EIBAID__part2.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 6.1428
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:3",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part3.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 6.1377
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part1.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 5.9991
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:EIBAID:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__EIBAID__part1.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 5.928
+          }
+        ]
+      },
+      "category": "workflow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:71",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__71.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 9.124
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 7.4118
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:51",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__51.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 7.2127
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:50",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__50.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 7.1565
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:55",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__55.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 7.1565
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:56",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__56.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 7.1565
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:62",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__62.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 7.1565
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part8.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 7.1092
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:52",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__52.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 7.1023
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:BROWSE-FASE2-ENTER",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__BROWSE-FASE2-ENTER.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 7.0297
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which workflow chunk explains BROWSE-FASE2 control flow?",
+      "query_id": "workflow_browse_phase2"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:27",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__27.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 14.7295
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:29",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__29.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 14.0118
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WMNOSEL",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WMNOSEL.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 9.5304
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:21",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part21.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 8.6897
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:variable_group:FILLER_2",
+            "chunk_type": "variable_group",
+            "file": "PDCBVC.CBL__variable_group__FILLER_2.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 8.6431
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:BROWSE-FASE2-NOSEL",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__BROWSE-FASE2-NOSEL.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 8.4267
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:26",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part26.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 8.1769
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 7.9083
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:27",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part27.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 7.7382
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAL:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAL__part1.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 7.6485
+          }
+        ]
+      },
+      "category": "error_path",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:27",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__27.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 15.5612
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:29",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__29.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 14.706
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:WMNOSEL",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__WMNOSEL.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 9.6891
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:21",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part21.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 9.5628
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:26",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part26.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 8.8497
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:BROWSE-FASE2-NOSEL",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__BROWSE-FASE2-NOSEL.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 8.6675
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:variable_group:FILLER_2",
+            "chunk_type": "variable_group",
+            "file": "PDCBVC.CBL__variable_group__FILLER_2.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 8.6532
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 7.8738
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAL:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAL__part1.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 7.8244
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:copybook_fields:part:27",
+            "chunk_type": "copybook_fields",
+            "file": "PDCBVC.CBL__copybook_fields__part27.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 7.703
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Where is the no-selection message WMNOSEL handled?",
+      "query_id": "error_no_selection"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:1",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part1.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 13.4087
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:2",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part2.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 12.1137
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 11.5523
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part6.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 10.7333
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 10.5278
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part2.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 10.3702
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAI:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAI__part2.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 10.0279
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:4",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part4.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 9.4423
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:2",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part2.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 8.9614
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:32",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__32.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 8.8129
+          }
+        ]
+      },
+      "category": "business_rule",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:54",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__54.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 16.5537
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:49",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__49.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 15.2645
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:1",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 13.4625
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:2",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 12.0674
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:SCELTAI:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__SCELTAI__part2.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 10.1681
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.selection:part:4",
+            "chunk_type": "screen.selection",
+            "file": "PDCBVC.CBL__screen_selection__part4.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 9.478
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:BROWSE-FASE2-ENTER",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__BROWSE-FASE2-ENTER.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 9.1309
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:2",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part2.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 8.998
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:32",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__32.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 8.9094
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 8.5822
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which business rule mentions selection field SCELTAI?",
+      "query_id": "business_rule_selection"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHPF7",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHPF7.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 13.9977
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:3",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part3.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 11.7951
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 10.7874
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:15",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__15.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 10.1965
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:EIBAID:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__EIBAID__part2.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 10.1899
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:2",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part2.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 9.1571
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:EIBAID:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__EIBAID__part1.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 7.7161
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:PREPARA-MAP",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__PREPARA-MAP.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 7.0775
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:ABBL-RIGA",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__ABBL-RIGA.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 6.9356
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:BROWSE-FASE1",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__BROWSE-FASE1.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 6.9081
+          }
+        ]
+      },
+      "category": "controlflow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:BROWSE-FASE2",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__BROWSE-FASE2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 20.0886
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 14.3162
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:1",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 13.7727
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHPF7",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHPF7.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 13.7386
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:56",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__56.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 12.6934
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:BROWSE-FASE1",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__BROWSE-FASE1.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 12.4585
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:LINK-PD0UTI01",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__LINK-PD0UTI01.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 12.0158
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:BROWSE-FASE2-PF7",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__BROWSE-FASE2-PF7.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 11.563
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:MUOVI-TESTATA-10",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__MUOVI-TESTATA-10.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 11.1364
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:MUOVI-TESTATA-20",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__MUOVI-TESTATA-20.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 11.1364
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Show the control-flow branch for DFHPF7 or PF7.",
+      "query_id": "controlflow_pf7_logic"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 4,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:MUOVI-DATI",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__MUOVI-DATI.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 14.6894
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:PREPARA-MAP",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__PREPARA-MAP.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 14.4483
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 11.0098
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:4",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part4.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.6052
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 10.4297
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part6.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 10.2785
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part2.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 9.7803
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:MUOVI-DATI:part:1",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__MUOVI-DATI__part1.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 9.6775
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:7",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part7.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 9.4142
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:4",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part4.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 9.0488
+          }
+        ]
+      },
+      "category": "screen_flow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:1",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part1.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 24.23
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 21.8222
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:MUOVI-DATI",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__MUOVI-DATI.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 15.5521
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:workflow:PREPARA-MAP",
+            "chunk_type": "workflow",
+            "file": "PDCBVC.CBL__workflow__PREPARA-MAP.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 15.2536
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:5",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part5.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 11.6951
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 11.3115
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:4",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part4.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 10.7168
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 10.7014
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part6.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 10.6095
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part2.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 10.1085
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "What happens for PF7 or PF8 key on the PDCBVC screen?",
+      "query_id": "screen_pf7_pf8_dispatch"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:3",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part3.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 25.0435
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:15",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__15.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 24.1252
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:EIBAID:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__EIBAID__part2.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 23.7637
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:2",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 20.0319
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part1.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 19.9486
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHPF7",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHPF7.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 16.1288
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHPF8",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHPF8.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 16.1288
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:EIBAID:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__EIBAID__part1.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 12.7968
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:2",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part2.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 11.0572
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHENTER",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHENTER.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 7.4459
+          }
+        ]
+      },
+      "category": "screen_flow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:controlflow.cfg:BROWSE-FASE2",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDCBVC.CBL__controlflow_cfg__BROWSE-FASE2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 28.7625
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:error_path:15",
+            "chunk_type": "error_path",
+            "file": "PDCBVC.CBL__error_path__15.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 22.7273
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:3",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part3.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 22.5805
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:EIBAID:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__EIBAID__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 21.4849
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:2",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part2.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 20.655
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDCBVC.CBL__screen_pagination__part1.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 19.7341
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:55",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__55.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 16.1421
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:business_rule:56",
+            "chunk_type": "business_rule",
+            "file": "PDCBVC.CBL__business_rule__56.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 16.1421
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:screen.key_dispatch:part:4",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDCBVC.CBL__screen_key_dispatch__part4.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 15.7004
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dataflow.variable:DFHPF7",
+            "chunk_type": "dataflow.variable",
+            "file": "PDCBVC.CBL__dataflow_variable__DFHPF7.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 15.177
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which branch handles EIBAID DFHPF7 or DFHPF8?",
+      "query_id": "screen_dfhpf7_dfhpf8_exact"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: static_value.propagation",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:0f0eb33e-42dc-4420-9e63-84202582aa85",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__0f0eb33e-42dc-4420-9e63-84202582aa85.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:1900c1ca-a12e-42cc-95a8-5fc395371a87",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__1900c1ca-a12e-42cc-95a8-5fc395371a87.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:244eee42-58c3-4158-ad6c-8f32271dd623",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__244eee42-58c3-4158-ad6c-8f32271dd623.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:27811e53-39ff-4b63-99be-33aa686917e3",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__27811e53-39ff-4b63-99be-33aa686917e3.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:299554d0-31a3-4fd9-b175-ee310167db1a",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__299554d0-31a3-4fd9-b175-ee310167db1a.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:41f41ca3-63ac-481c-9ac2-aad98471b6f5",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__41f41ca3-63ac-481c-9ac2-aad98471b6f5.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:45d489dc-b2a4-4891-ac91-a4997e5dae20",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__45d489dc-b2a4-4891-ac91-a4997e5dae20.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:482cdf2e-3e14-42e6-946d-973f2a06d393",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__482cdf2e-3e14-42e6-946d-973f2a06d393.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:4f6ac0aa-389d-4261-a930-52e378cd1f8d",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__4f6ac0aa-389d-4261-a930-52e378cd1f8d.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 17.2317
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:53516dd3-f0c1-4ce5-bcb6-31ed186f7b45",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__53516dd3-f0c1-4ce5-bcb6-31ed186f7b45.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 17.2317
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which static-analysis chunk shows node-scoped propagated entry and exit constants?",
+      "query_id": "static_analysis_node_scoped_constants"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target",
+        "skipped": true,
+        "top": []
+      },
+      "expected_hit": true,
+      "query": "Which flow-sensitive target chunk explains resolved CALL or CICS targets from dataflow?",
+      "query_id": "static_analysis_flow_sensitive_targets"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target, static_value.propagation",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis_negative",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part5.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 10.0803
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:11",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part11.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 9.8988
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part6.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 9.6374
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part2.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 9.4939
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part4.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 9.4043
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part3.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 8.961
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part1.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 8.8773
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:10",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part10.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 7.8979
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:7",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part7.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 7.1974
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_values:part:9",
+            "chunk_type": "static_values",
+            "file": "PDCBVC.CBL__static_values__part9.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 7.1974
+          }
+        ]
+      },
+      "expected_hit": false,
+      "query": "Which propagated static-analysis constant resolves nonexistent program PD9XXXX?",
+      "query_id": "negative_static_analysis_nonexistent_constant_pd9xxxx"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target, static_value.propagation",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis_negative",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:0f0eb33e-42dc-4420-9e63-84202582aa85",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__0f0eb33e-42dc-4420-9e63-84202582aa85.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:1900c1ca-a12e-42cc-95a8-5fc395371a87",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__1900c1ca-a12e-42cc-95a8-5fc395371a87.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:244eee42-58c3-4158-ad6c-8f32271dd623",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__244eee42-58c3-4158-ad6c-8f32271dd623.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:27811e53-39ff-4b63-99be-33aa686917e3",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__27811e53-39ff-4b63-99be-33aa686917e3.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:299554d0-31a3-4fd9-b175-ee310167db1a",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__299554d0-31a3-4fd9-b175-ee310167db1a.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:41f41ca3-63ac-481c-9ac2-aad98471b6f5",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__41f41ca3-63ac-481c-9ac2-aad98471b6f5.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:45d489dc-b2a4-4891-ac91-a4997e5dae20",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__45d489dc-b2a4-4891-ac91-a4997e5dae20.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:482cdf2e-3e14-42e6-946d-973f2a06d393",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__482cdf2e-3e14-42e6-946d-973f2a06d393.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:4f6ac0aa-389d-4261-a930-52e378cd1f8d",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__4f6ac0aa-389d-4261-a930-52e378cd1f8d.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 7.8274
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:static_value.propagation:53516dd3-f0c1-4ce5-bcb6-31ed186f7b45",
+            "chunk_type": "static_value.propagation",
+            "file": "PDCBVC.CBL__static_value_propagation__53516dd3-f0c1-4ce5-bcb6-31ed186f7b45.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 7.8274
+          }
+        ]
+      },
+      "expected_hit": false,
+      "query": "Which static-analysis chunk claims a value is globally always true?",
+      "query_id": "negative_static_analysis_always_claim"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDCBVC.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 22.4672
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDCBVC.CBL__dependencies.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 20.8001
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:13",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__13.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 14.9541
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:9",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__9.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 14.9541
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:12",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__12.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 14.8883
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 14.7855
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1FS00",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1FS00.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 14.7522
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 14.7442
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:2",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__2.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 13.3348
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:3",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__3.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 13.3348
+          }
+        ]
+      },
+      "category": "negative_canary",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDCBVC.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDCBVC.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 24.2747
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1VOCI",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1VOCI.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 15.7611
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD1FS00",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD1FS00.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 15.7238
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDCBVC.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 15.7124
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:10",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__10.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 15.3855
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:14",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__14.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 15.3855
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.operation:13",
+            "chunk_type": "cics.operation",
+            "file": "PDCBVC.CBL__cics_operation__13.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 15.2421
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDCBVC.CBL__dependencies.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 15.2238
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:2",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__2.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 13.3456
+          },
+          {
+            "chunk_id": "PDCBVC.CBL:cics.program_transfer:4",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDCBVC.CBL__cics_program_transfer__4.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 13.3456
+          }
+        ]
+      },
+      "expected_hit": false,
+      "query": "Which CICS LINK transfers to nonexistent program PD9XXXX?",
+      "query_id": "negative_nonexistent_program_pd9xxxx"
+    }
+  ],
+  "queries_path": "scripts/rag_queries/pdcbvc.json",
+  "report_dir": "out/report/PDCBVC.CBL.report"
+}

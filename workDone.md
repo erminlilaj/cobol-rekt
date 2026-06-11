@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-06-11 — Fix CICS benchmark retention comparator
+
+**File(s):** `scripts/rag_bundle_benchmark.py`, `scripts/rag_queries/pdb305.json`, `scripts/rag_queries/pdcbvc.json`, `test_rag_bundle_benchmark.py`, `docs/static-analysis/pdb305-rag-benchmark-2026-05-21.md`, `docs/static-analysis/pdb305-rag-benchmark-2026-05-21.json`, `docs/static-analysis/pdcbvc-rag-benchmark-2026-05-21.md`, `docs/static-analysis/pdcbvc-rag-benchmark-2026-05-21.json`, `docs/handoff.md`, `workDone.md`
+**What changed:** Changed the CICS fact comparator so resolved argument values are compared as payload changes instead of being part of the identity key. The PDB305 WRITEQ QUEUE fact now reports as retained with one blank-to-`TWCOB-TS-CODA` improvement, and the Markdown/JSON reports include changed/improved fact counts.
+**Why:** The previous benchmark reported `49/50` retained for PDB305 because improved CICS argument normalization looked like one lost fact plus one added fact. Task 3 required stable retention accounting without hiding value changes.
+
+---
+
 ## 2026-06-11 — Kill constants for unmodeled empty-modification statements
 
 **File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/analysis/unknown_statement_audit.md`, `docs/handoff.md`, `workDone.md`
