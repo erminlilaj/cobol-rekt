@@ -65,11 +65,20 @@ public class CodeTaskRunner {
     private final Format1DataStructureBuildStrategy format1DataStructureBuilder;
     private final ProgramSearch programSearch;
     private final ResourceOperations resourceOperations;
+    private final boolean emitFullDataflow;
 
     public CodeTaskRunner(String sourceDir, String reportRootDir, List<File> copyBookPaths, String dialectJarPath,
             LanguageDialect dialect, FlowchartGenerationStrategy flowchartGenerationStrategy, IdProvider idProvider,
             Format1DataStructureBuildStrategy format1DataStructureBuilder, ProgramSearch programSearch,
             ResourceOperations resourceOperations) {
+        this(sourceDir, reportRootDir, copyBookPaths, dialectJarPath, dialect, flowchartGenerationStrategy,
+                idProvider, format1DataStructureBuilder, programSearch, resourceOperations, false);
+    }
+
+    public CodeTaskRunner(String sourceDir, String reportRootDir, List<File> copyBookPaths, String dialectJarPath,
+            LanguageDialect dialect, FlowchartGenerationStrategy flowchartGenerationStrategy, IdProvider idProvider,
+            Format1DataStructureBuildStrategy format1DataStructureBuilder, ProgramSearch programSearch,
+            ResourceOperations resourceOperations, boolean emitFullDataflow) {
         this.sourceDir = sourceDir;
         this.copyBookPaths = copyBookPaths;
         this.dialectJarPath = dialectJarPath;
@@ -80,6 +89,7 @@ public class CodeTaskRunner {
         this.format1DataStructureBuilder = format1DataStructureBuilder;
         this.programSearch = programSearch;
         this.resourceOperations = resourceOperations;
+        this.emitFullDataflow = emitFullDataflow;
         reportParameters();
     }
 
@@ -193,7 +203,7 @@ public class CodeTaskRunner {
                 flowASTOutputConfig, cfgOutputConfig,
                 graphBuildConfig, dataStructuresOutputConfig, unifiedModelOutputConfig, similarityOutputConfig,
                 mermaidOutputConfig, graphvizOutputConfig, transpilerModelOutputConfig,
-                llmOutputConfig, idProvider, resourceOperations, new Neo4JDriverBuilder());
+                llmOutputConfig, idProvider, resourceOperations, new Neo4JDriverBuilder(), emitFullDataflow);
 
         List<CommandLineAnalysisTask> effectiveTasks = tasks.getFirst() != CommandLineAnalysisTask.BUILD_BASE_ANALYSIS
                 ? Stream.concat(Stream.of(CommandLineAnalysisTask.BUILD_BASE_ANALYSIS), tasks.stream()).toList()

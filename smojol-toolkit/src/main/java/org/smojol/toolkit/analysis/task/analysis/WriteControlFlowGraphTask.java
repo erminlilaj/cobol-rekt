@@ -7,6 +7,7 @@ import org.smojol.common.ast.FlowNode;
 import com.mojo.algorithms.id.IdProvider;
 import org.smojol.common.resource.ResourceOperations;
 import com.mojo.algorithms.task.CommandLineAnalysisTask;
+import org.smojol.toolkit.analysis.staticvalue.DataflowArtifactBuilder;
 import org.smojol.toolkit.analysis.staticvalue.DataflowAnalysisResult;
 import org.smojol.toolkit.analysis.staticvalue.PathSensitiveTargetResolver;
 import org.smojol.toolkit.analysis.staticvalue.StaticValueDataflowPass;
@@ -18,6 +19,7 @@ import org.smojol.common.vm.structure.CobolDataStructure;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Map;
 
 public class WriteControlFlowGraphTask implements AnalysisTask {
     private final FlowNode astRoot;
@@ -25,18 +27,31 @@ public class WriteControlFlowGraphTask implements AnalysisTask {
     private final IdProvider idProvider;
     private final CFGOutputConfig cfgOutputConfig;
     private final ResourceOperations resourceOperations;
+    private final boolean emitFullDataflow;
 
     public WriteControlFlowGraphTask(FlowNode astRoot, IdProvider idProvider, CFGOutputConfig cfgOutputConfig, ResourceOperations resourceOperations) {
-        this(astRoot, null, idProvider, cfgOutputConfig, resourceOperations);
+        this(astRoot, null, idProvider, cfgOutputConfig, resourceOperations, false);
+    }
+
+    public WriteControlFlowGraphTask(FlowNode astRoot, IdProvider idProvider, CFGOutputConfig cfgOutputConfig,
+                                     ResourceOperations resourceOperations, boolean emitFullDataflow) {
+        this(astRoot, null, idProvider, cfgOutputConfig, resourceOperations, emitFullDataflow);
     }
 
     public WriteControlFlowGraphTask(FlowNode astRoot, CobolDataStructure dataStructures, IdProvider idProvider,
                                      CFGOutputConfig cfgOutputConfig, ResourceOperations resourceOperations) {
+        this(astRoot, dataStructures, idProvider, cfgOutputConfig, resourceOperations, false);
+    }
+
+    public WriteControlFlowGraphTask(FlowNode astRoot, CobolDataStructure dataStructures, IdProvider idProvider,
+                                     CFGOutputConfig cfgOutputConfig, ResourceOperations resourceOperations,
+                                     boolean emitFullDataflow) {
         this.astRoot = astRoot;
         this.dataStructures = dataStructures;
         this.idProvider = idProvider;
         this.cfgOutputConfig = cfgOutputConfig;
         this.resourceOperations = resourceOperations;
+        this.emitFullDataflow = emitFullDataflow;
     }
 
     @Override
@@ -72,10 +87,21 @@ public class WriteControlFlowGraphTask implements AnalysisTask {
     private void writeDataflow(Gson gson, DataflowAnalysisResult result) throws IOException {
         Path staticAnalysisDir = cfgOutputConfig.outputDir().getParent().resolve("static_analysis");
         resourceOperations.createDirectories(staticAnalysisDir);
+        DataflowArtifactBuilder artifactBuilder = new DataflowArtifactBuilder();
         try (JsonWriter writer = new JsonWriter(resourceOperations.fileWriter(
-                staticAnalysisDir.resolve("dataflow.json").toAbsolutePath().normalize().toString()))) {
+                staticAnalysisDir.resolve("dataflow_rag_summary.json").toAbsolutePath().normalize().toString()))) {
             writer.setIndent("  ");
-            gson.toJson(result, DataflowAnalysisResult.class, writer);
+            gson.toJson(artifactBuilder.compactSummary(result), Map.class, writer);
+        }
+        Path fullDataflowPath = staticAnalysisDir.resolve("dataflow.json").toAbsolutePath().normalize();
+        if (!emitFullDataflow) {
+            resourceOperations.deleteIfExists(fullDataflowPath);
+            return;
+        }
+        try (JsonWriter writer = new JsonWriter(resourceOperations.fileWriter(
+                fullDataflowPath.toString()))) {
+            writer.setIndent("  ");
+            gson.toJson(artifactBuilder.ruleCompactedSidecar(result), Map.class, writer);
         }
     }
 

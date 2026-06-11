@@ -406,6 +406,54 @@ class JavaHardeningRegressionTest {
     }
 
     @Test
+    void writeCfgSuppressesRawDataflowByDefaultButKeepsCompactSummary() throws IOException {
+        new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
+                .runTaskWithoutFullDataflow(CommandLineAnalysisTask.WRITE_CFG);
+
+        Path rawDataflow = Path.of(TestTaskRunner.dir(
+                "test-code/out/constant-folding-phase1.cbl.report/static_analysis/dataflow.json"));
+        Path compactSummary = Path.of(TestTaskRunner.dir(
+                "test-code/out/constant-folding-phase1.cbl.report/static_analysis/dataflow_rag_summary.json"));
+
+        assertFalse(Files.exists(rawDataflow));
+        assertTrue(Files.exists(compactSummary));
+
+        JsonObject summary = readJson("constant-folding-phase1.cbl.report/static_analysis/dataflow_rag_summary.json");
+        assertEquals("1.0", summary.get("schema_version").getAsString());
+        assertEquals("1.11", summary.get("analysis_version").getAsString());
+        assertEquals("static_analysis/dataflow.json", summary.get("source_artifact").getAsString());
+        assertTrue(summary.get("rag_compacted").getAsBoolean());
+        assertEquals(56, summary.getAsJsonObject("summary").get("entry_constant_count").getAsInt());
+        assertEquals(64, summary.getAsJsonObject("summary").get("exit_constant_count").getAsInt());
+        assertTrue(summary.getAsJsonObject("node_states").size() > 0);
+    }
+
+    @Test
+    void fullDataflowUsesKillRuleRefsAndKeepsSummaryEquivalent() throws IOException {
+        new TestTaskRunner("alias-kills-phase2.cbl", "test-code/flow-ast")
+                .runTask2(CommandLineAnalysisTask.WRITE_CFG, new DefaultFormat1DataStructureBuilder());
+
+        JsonObject dataflow = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow.json");
+        JsonObject compactSummary = readJson("alias-kills-phase2.cbl.report/static_analysis/dataflow_rag_summary.json");
+
+        assertEquals("kill_rule_compacted", dataflow.get("storage_model").getAsString());
+        assertEquals(dataflow.getAsJsonObject("summary"), compactSummary.getAsJsonObject("summary"));
+        assertEquals(dataflow.getAsJsonObject("summary").get("kill_count").getAsInt(),
+                dataflow.get("materialized_kill_count").getAsInt());
+        assertTrue(dataflow.get("kill_rule_count").getAsInt()
+                < dataflow.getAsJsonObject("summary").get("kill_count").getAsInt());
+
+        JsonObject childWrite = findNodeByOriginalTextAndType(
+                readJson("alias-kills-phase2.cbl.report/cfg/cfg-alias-kills-phase2.cbl.json")
+                        .getAsJsonArray("nodes"),
+                "MOVE \"A\" TO CHILD-A", "MOVE");
+        JsonObject state = dataflow.getAsJsonObject("node_states").getAsJsonObject(childWrite.get("id").getAsString());
+        assertFalse(state.has("kills"));
+        assertTrue(state.has("kill_rule_refs"));
+        assertTrue(state.getAsJsonArray("kill_rule_refs").size() > 0);
+    }
+
+    @Test
     void dataflowSkeletonEmitsDeterministicParagraphSummary() throws IOException {
         new TestTaskRunner("constant-folding-phase1.cbl", "test-code/flow-ast")
                 .runTask(CommandLineAnalysisTask.WRITE_CFG);
@@ -608,7 +656,8 @@ class JavaHardeningRegressionTest {
         JsonObject computeState = dataflow.getAsJsonObject("node_states").getAsJsonObject(computeNodeId);
         assertEquals(0, computeState.getAsJsonObject("entry_constants").size());
         assertNumericConstant(computeState.getAsJsonObject("exit_constants"), "WS-A", "3", "3", 0, 1, "POSITIVE");
-        assertEquals(0, computeState.getAsJsonArray("kills").size());
+        assertFalse(computeState.has("kills"));
+        assertEquals(0, computeState.getAsJsonArray("kill_rule_refs").size());
         assertEquals(0, computeState.getAsJsonArray("diagnostics").size());
     }
 
@@ -1924,7 +1973,38 @@ class JavaHardeningRegressionTest {
         String nodeId = cfgNode.get("id").getAsString();
         JsonObject nodeStates = dataflow.getAsJsonObject("node_states");
         assertTrue(nodeStates.has(nodeId), "Missing dataflow node state for CFG node " + nodeId);
-        return nodeStates.getAsJsonObject(nodeId);
+        JsonObject state = nodeStates.getAsJsonObject(nodeId);
+        if (!state.has("kills") && state.has("kill_rule_refs")) {
+            state.add("kills", expandedKillRules(dataflow, state.getAsJsonArray("kill_rule_refs")));
+        }
+        return state;
+    }
+
+    private JsonArray expandedKillRules(JsonObject dataflow, JsonArray refs) {
+        JsonArray expanded = new JsonArray();
+        JsonObject killRules = dataflow.getAsJsonObject("kill_rules");
+        refs.forEach(ref -> {
+            JsonObject rule = killRules.getAsJsonObject(ref.getAsString());
+            if (rule.has("killed_variables")) {
+                rule.getAsJsonArray("killed_variables").forEach(variable -> {
+                    JsonObject kill = rule.deepCopy();
+                    kill.remove("killed_variables");
+                    kill.add("variable", variable);
+                    expanded.add(kill);
+                });
+            } else if (rule.has("killed_alias_set_id")) {
+                JsonObject aliasSets = dataflow.getAsJsonObject("alias_sets");
+                JsonObject aliasSet = aliasSets.getAsJsonObject(rule.get("killed_alias_set_id").getAsString());
+                aliasSet.getAsJsonArray("members").forEach(variable -> {
+                    JsonObject kill = rule.deepCopy();
+                    kill.add("variable", variable);
+                    expanded.add(kill);
+                });
+            } else {
+                expanded.add(rule.deepCopy());
+            }
+        });
+        return expanded;
     }
 
     private List<String> killVariablesWithAliases(JsonArray kills) {
@@ -2306,7 +2386,8 @@ class JavaHardeningRegressionTest {
                 idProvider,
                 new OccursIgnoringFormat1DataStructureBuilder(),
                 new ProgramSearch(resourceOperations),
-                resourceOperations
+                resourceOperations,
+                true
         ).runForPrograms(tasks, programs, mode);
     }
 }

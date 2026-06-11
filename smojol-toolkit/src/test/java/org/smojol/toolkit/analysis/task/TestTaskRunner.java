@@ -41,7 +41,24 @@ public class TestTaskRunner {
                 dir("test-code/out"),
                 ImmutableList.of(new File(dir(sourceDir))),
                 dir("che-che4z-lsp-for-cobol-integration/server/dialect-idms/target/dialect-idms.jar"),
-                LanguageDialect.COBOL, new FullProgram(FlowchartOutputFormat.MERMAID, idProvider), idProvider, structureBuildStrategy, new ProgramSearch(resourceOperations), resourceOperations)
+                LanguageDialect.COBOL, new FullProgram(FlowchartOutputFormat.MERMAID, idProvider), idProvider,
+                structureBuildStrategy, new ProgramSearch(resourceOperations), resourceOperations, true)
+                .runForPrograms(ImmutableList.of(task), ImmutableList.of(programName));
+        List<AnalysisTaskResult> taskResults = results.get(programName);
+        return taskResults.get(taskResults.size() - 1);
+    }
+
+    public AnalysisTaskResult runTaskWithoutFullDataflow(CommandLineAnalysisTask task) throws IOException {
+        LoggingConfig.setupLogging();
+        LocalFilesystemOperations resourceOperations = new LocalFilesystemOperations();
+        UUIDProvider idProvider = new UUIDProvider();
+        Map<String, List<AnalysisTaskResult>> results = new CodeTaskRunner(dir(sourceDir),
+                dir("test-code/out"),
+                ImmutableList.of(new File(dir(sourceDir))),
+                dir("che-che4z-lsp-for-cobol-integration/server/dialect-idms/target/dialect-idms.jar"),
+                LanguageDialect.COBOL, new FullProgram(FlowchartOutputFormat.MERMAID, idProvider), idProvider,
+                new OccursIgnoringFormat1DataStructureBuilder(), new ProgramSearch(resourceOperations),
+                resourceOperations)
                 .runForPrograms(ImmutableList.of(task), ImmutableList.of(programName));
         List<AnalysisTaskResult> taskResults = results.get(programName);
         return taskResults.get(taskResults.size() - 1);

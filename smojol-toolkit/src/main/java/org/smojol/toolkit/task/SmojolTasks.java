@@ -44,6 +44,7 @@ public class SmojolTasks {
     private final Neo4JDriverBuilder neo4JDriverBuilder;
     private final ParsePipeline pipeline;
     private final NodeSpecBuilder qualifier;
+    private final boolean emitFullDataflow;
     private BaseAnalysisModel baseModel;
 
     public SmojolTasks(ParsePipeline pipeline, SourceConfig sourceConfig, FlowchartOutputWriter flowchartOutputWriter,
@@ -54,6 +55,21 @@ public class SmojolTasks {
             OutputArtifactConfig graphvizOutputConfig, OutputArtifactConfig transpilerModelOutputConfig,
             OutputArtifactConfig llmOutputConfig, IdProvider idProvider, ResourceOperations resourceOperations,
             Neo4JDriverBuilder neo4JDriverBuilder) {
+        this(pipeline, sourceConfig, flowchartOutputWriter, rawAstOutputConfig, graphMLOutputConfig,
+                flowASTOutputConfig, cfgOutputConfig, graphBuildConfig, dataStructuresOutputConfig,
+                unifiedModelOutputConfig, similarityOutputConfig, mermaidOutputConfig, graphvizOutputConfig,
+                transpilerModelOutputConfig, llmOutputConfig, idProvider, resourceOperations, neo4JDriverBuilder,
+                false);
+    }
+
+    public SmojolTasks(ParsePipeline pipeline, SourceConfig sourceConfig, FlowchartOutputWriter flowchartOutputWriter,
+            RawASTOutputConfig rawAstOutputConfig, GraphMLExportConfig graphMLOutputConfig,
+            FlowASTOutputConfig flowASTOutputConfig, CFGOutputConfig cfgOutputConfig, GraphBuildConfig graphBuildConfig,
+            OutputArtifactConfig dataStructuresOutputConfig, OutputArtifactConfig unifiedModelOutputConfig,
+            OutputArtifactConfig similarityOutputConfig, OutputArtifactConfig mermaidOutputConfig,
+            OutputArtifactConfig graphvizOutputConfig, OutputArtifactConfig transpilerModelOutputConfig,
+            OutputArtifactConfig llmOutputConfig, IdProvider idProvider, ResourceOperations resourceOperations,
+            Neo4JDriverBuilder neo4JDriverBuilder, boolean emitFullDataflow) {
 
         this.pipeline = pipeline;
         this.sourceConfig = sourceConfig;
@@ -74,6 +90,7 @@ public class SmojolTasks {
         this.graphBuildConfig = graphBuildConfig;
         this.resourceOperations = resourceOperations;
         this.neo4JDriverBuilder = neo4JDriverBuilder;
+        this.emitFullDataflow = emitFullDataflow;
         qualifier = new NodeSpecBuilder(new NamespaceQualifier("NEW-CODE"));
     }
 
@@ -206,7 +223,7 @@ public class SmojolTasks {
         @Override
         public AnalysisTaskResult run() {
             return new WriteControlFlowGraphTask(baseModel.flowRoot(), baseModel.dataStructures(), idProvider,
-                    cfgOutputConfig, resourceOperations).run();
+                    cfgOutputConfig, resourceOperations, emitFullDataflow).run();
         }
     };
 

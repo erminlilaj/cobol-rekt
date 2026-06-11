@@ -13,4 +13,5 @@ public interface ResourceOperations {
     Writer fileWriter(String path) throws IOException;
     PrintWriter printWriter(String outputPath) throws IOException;
     byte[] readAllBytes(Path path) throws IOException;
+    void deleteIfExists(Path path) throws IOException;
 }

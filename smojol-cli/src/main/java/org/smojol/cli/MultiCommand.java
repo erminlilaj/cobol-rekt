@@ -76,6 +76,9 @@ public class MultiCommand implements Callable<Integer> {
                         "--lenient" }, defaultValue = "false", description = "Continue analysis despite parsing errors (use DIAGNOSTIC_MODE)")
         private boolean isLenient;
 
+        @Option(names = { "--emit-full-dataflow" }, defaultValue = "false", description = "Emit compacted static_analysis/dataflow.json in addition to the default dataflow_rag_summary.json")
+        private boolean emitFullDataflow;
+
         @Override
         public Integer call() throws IOException {
                 LoggingConfig.setupLogging();
@@ -100,7 +103,7 @@ public class MultiCommand implements Callable<Integer> {
                                 FlowchartGenerationStrategy.strategy(flowchartGenerationStrategy,
                                                 flowchartOutputFormat),
                                 new UUIDProvider(), new OccursIgnoringFormat1DataStructureBuilder(), programSearch,
-                                new LocalFilesystemOperations());
+                                new LocalFilesystemOperations(), emitFullDataflow);
                 copyBookPaths.forEach(cpp -> LOGGER.info(cpp.getAbsolutePath()));
                 TaskRunnerMode mode = isLenient ? TaskRunnerMode.LENIENT_MODE : TaskRunnerMode.PRODUCTION_MODE;
                 Map<String, List<AnalysisTaskResult>> runResults = taskRunner.runForPrograms(toGraphTasks(commands),

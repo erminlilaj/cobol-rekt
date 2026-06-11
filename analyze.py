@@ -552,6 +552,7 @@ class AnalysisPipeline:
     def _build_smojol_cmd(self, commands: str, generation: str = "PROGRAM") -> str:
         """Build smojol-cli command string."""
         lenient = "--lenient" if self.options.get('lenient') else ""
+        full_dataflow = "--emit-full-dataflow" if self.options.get('emit_full_dataflow') else ""
         heap_size = self.options.get('java_heap', '2g')
         jvm_flags = f'-Xmx{heap_size} -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath="{self.report_subdir}"'
         return (
@@ -559,7 +560,7 @@ class AnalysisPipeline:
             f'--commands="{commands}" '
             f'--srcDir "{self.src_dir}" --copyBooksDir "{self.copybooks_dir}" '
             f'--dialectJarPath "{self.dialect_jar}" --dialect COBOL '
-            f'--reportDir "{self.config.report_dir}" --generation={generation} {lenient}'
+            f'--reportDir "{self.config.report_dir}" --generation={generation} {lenient} {full_dataflow}'
         )
     
     def step1_core_structures(self):
@@ -1099,6 +1100,7 @@ def main():
         'skip_mermaid': "--no-mermaid" in sys.argv or rag_only,
         'rag_only': rag_only,
         'java_heap': java_heap,
+        'emit_full_dataflow': "--emit-full-dataflow" in sys.argv,
     }
     
     config = Config()

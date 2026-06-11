@@ -40,4 +40,10 @@ public class LocalFilesystemOperations implements ResourceOperations {
         LOGGER.info(String.format("Reading bytes from path: '%s'", path.toAbsolutePath()));
         return Files.readAllBytes(path);
     }
+
+    @Override
+    public void deleteIfExists(Path path) throws IOException {
+        LOGGER.info(String.format("Deleting file if present: '%s'", path.toAbsolutePath()));
+        Files.deleteIfExists(path);
+    }
 }

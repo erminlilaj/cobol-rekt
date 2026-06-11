@@ -12,6 +12,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-06-11 — Compact and gate raw dataflow sidecars
+
+**File(s):** `analyze.py`, `smojol-cli/src/main/java/org/smojol/cli/MultiCommand.java`, `smojol-core/src/main/java/org/smojol/common/resource/LocalFilesystemOperations.java`, `smojol-core/src/main/java/org/smojol/common/resource/ResourceOperations.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/DataflowArtifactBuilder.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/CodeTaskRunner.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/task/analysis/WriteControlFlowGraphTask.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/task/SmojolTasks.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/TestTaskRunner.java`, `docs/analysis/raw_sidecar_redesign.md`, `docs/handoff.md`, `workDone.md`
+**What changed:** Gated raw `static_analysis/dataflow.json` emission behind `--emit-full-dataflow`, kept the compact `dataflow_rag_summary.json` default-on, and replaced per-node materialized kill records with shared `kill_rules`, `alias_sets`, and per-node `kill_rule_refs`. The full sidecar records `materialized_kill_count` for audit parity while staying under 50 MB on both real programs.
+**Why:** PDB305 and PDCBVC were spending gigabytes on repeated kill JSON objects. The new storage model preserves logical kill counts and summary semantics while making the raw sidecar usable as an opt-in diagnostic artifact.
+
+---
+
 ## 2026-05-20 — Phase 2.12 grammar-backed expression propagation
 
 **File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/folding/StaticExpressionFolder.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/ComputeFlowNode.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
