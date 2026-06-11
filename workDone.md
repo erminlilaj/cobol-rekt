@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-06-11 — Re-run final RAG benchmarks after hardening
+
+**File(s):** `docs/analysis/pdb305-rag-benchmark-default-2026-06-11.md`, `docs/analysis/pdb305-rag-benchmark-default-2026-06-11.json`, `docs/analysis/pdb305-rag-benchmark-static-2026-06-11.md`, `docs/analysis/pdb305-rag-benchmark-static-2026-06-11.json`, `docs/analysis/pdcbvc-rag-benchmark-default-2026-06-11.md`, `docs/analysis/pdcbvc-rag-benchmark-default-2026-06-11.json`, `docs/analysis/pdcbvc-rag-benchmark-static-2026-06-11.md`, `docs/analysis/pdcbvc-rag-benchmark-static-2026-06-11.json`, `docs/analysis/rag_benchmark_final_2026-06-11.md`, `docs/analysis/rag_benchmark_final_2026-06-11.json`, `docs/handoff.md`, `workDone.md`
+**What changed:** Regenerated PDB305/PDCBVC RAG bundles in default mode and with `--include-static-analysis-rag`, ran deterministic benchmarks against `knowledge-base_rag_v0`, and wrote a final summary separating fixed-original query results from added static-analysis queries.
+**Why:** The final pre-merge step required correcting the benchmark record after Tasks 1-3. Default mode keeps original queries at PDB305 `17/17` and PDCBVC `16/16`; opt-in static mode keeps original queries unchanged and adds `3/3` active static-analysis expected-pass checks per program.
+
+---
+
 ## 2026-06-11 — Add GnuCOBOL differential soundness harness
 
 **File(s):** `scripts/gnucobol_differential.py`, `docs/analysis/differential_soundness.md`, `docs/analysis/differential_soundness.json`, `docs/handoff.md`, `workDone.md`

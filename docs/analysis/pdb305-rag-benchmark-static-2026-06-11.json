@@ -1,0 +1,4342 @@
+{
+  "baseline_bundle": "knowledge-base_rag_v0",
+  "baseline_category_summary": {
+    "business_rule": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "cics_targets": {
+      "expected_pass_at_5": 4,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 4,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 4,
+      "query_count": 4,
+      "skipped_query_count": 0,
+      "total_query_count": 4
+    },
+    "controlflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "copybooks": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "error_path": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "external_calls": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "negative_canary": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "paragraphs": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "screen_flow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 50.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 50.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "static_analysis": {
+      "expected_pass_at_5": 0,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 0,
+      "skipped_query_count": 2,
+      "total_query_count": 2
+    },
+    "static_analysis_negative": {
+      "expected_pass_at_5": 0,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 0,
+      "skipped_query_count": 2,
+      "total_query_count": 2
+    },
+    "variables": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "workflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    }
+  },
+  "baseline_completeness": {
+    "static_values": {
+      "chunk_count": 8,
+      "chunks_with_full_program_variable_set": 8,
+      "chunks_with_static_values_metadata": 8,
+      "max_variables_per_chunk": 56,
+      "median_variables_per_chunk": 56.0,
+      "metadata_variable_instances": 448,
+      "min_variables_per_chunk": 56,
+      "unique_variables": 56
+    }
+  },
+  "baseline_metrics": {
+    "artifact_files": 22,
+    "chunk_count": 393,
+    "exists": true,
+    "knowledge_base_files": 4,
+    "manifest_chunk_count": 395,
+    "manifest_schema_version": "1.5",
+    "total_bytes": 12559259,
+    "total_files": 423,
+    "type_counts": {
+      "call_contract": 6,
+      "cics.error_handler": 4,
+      "cics.operation": 18,
+      "cics.program_transfer": 6,
+      "cics.resource": 8,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 23,
+      "copybook_fields": 37,
+      "copybook_mentions": 2,
+      "dataflow.variable": 149,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 37,
+      "external_program_calls": 1,
+      "paragraph_logic": 39,
+      "program_summary": 1,
+      "screen.key_dispatch": 1,
+      "screen.pagination": 3,
+      "screen.row_build": 2,
+      "static_values": 8,
+      "unused_copybooks": 2,
+      "variable_group": 21,
+      "workflow": 18
+    }
+  },
+  "baseline_retrieval_summary": {
+    "avg_elapsed_ms": null,
+    "expected_pass_at_5": 16,
+    "expected_pass_at_5_pct": 94.12,
+    "hit_at_5": 15,
+    "hit_at_5_pct": 93.75,
+    "mrr": 0.7778,
+    "negative_pass_at_5": 1,
+    "negative_pass_at_5_pct": 100.0,
+    "negative_query_count": 1,
+    "positive_query_count": 16,
+    "query_count": 17,
+    "skipped_query_count": 4,
+    "total_query_count": 21
+  },
+  "current_bundle": "knowledge-base_rag_static_2026-06-11",
+  "current_category_summary": {
+    "business_rule": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "cics_targets": {
+      "expected_pass_at_5": 4,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 4,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 4,
+      "query_count": 4,
+      "skipped_query_count": 0,
+      "total_query_count": 4
+    },
+    "controlflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "copybooks": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "error_path": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "external_calls": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "negative_canary": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    },
+    "paragraphs": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "screen_flow": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "static_analysis": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 1,
+      "total_query_count": 2
+    },
+    "static_analysis_negative": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 0,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 0,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "variables": {
+      "expected_pass_at_5": 2,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 2,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 2,
+      "query_count": 2,
+      "skipped_query_count": 0,
+      "total_query_count": 2
+    },
+    "workflow": {
+      "expected_pass_at_5": 1,
+      "expected_pass_at_5_pct": 100.0,
+      "hit_at_5": 1,
+      "hit_at_5_pct": 100.0,
+      "positive_query_count": 1,
+      "query_count": 1,
+      "skipped_query_count": 0,
+      "total_query_count": 1
+    }
+  },
+  "current_completeness": {
+    "static_values": {
+      "chunk_count": 3,
+      "chunks_with_full_program_variable_set": 3,
+      "chunks_with_static_values_metadata": 3,
+      "max_variables_per_chunk": 56,
+      "median_variables_per_chunk": 56,
+      "metadata_variable_instances": 168,
+      "min_variables_per_chunk": 56,
+      "unique_variables": 56
+    }
+  },
+  "current_metrics": {
+    "artifact_files": 24,
+    "chunk_count": 376,
+    "exists": true,
+    "knowledge_base_files": 4,
+    "manifest_chunk_count": 378,
+    "manifest_schema_version": "1.6",
+    "total_bytes": 30585781,
+    "total_files": 408,
+    "type_counts": {
+      "business_rule": 25,
+      "call_contract": 6,
+      "cics.error_handler": 4,
+      "cics.operation": 19,
+      "cics.program_transfer": 6,
+      "cics.resource": 8,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 25,
+      "copybook_fields": 20,
+      "copybook_mentions": 1,
+      "dataflow.variable": 99,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 37,
+      "external_program_calls": 1,
+      "paragraph_logic": 37,
+      "program_summary": 1,
+      "screen.key_dispatch": 1,
+      "screen.pagination": 1,
+      "screen.row_build": 1,
+      "static_value.propagation": 42,
+      "static_values": 3,
+      "unused_copybooks": 1,
+      "variable_group": 14,
+      "workflow": 17
+    }
+  },
+  "current_retrieval_summary": {
+    "avg_elapsed_ms": null,
+    "expected_pass_at_5": 20,
+    "expected_pass_at_5_pct": 100.0,
+    "hit_at_5": 17,
+    "hit_at_5_pct": 100.0,
+    "mrr": 0.902,
+    "negative_pass_at_5": 3,
+    "negative_pass_at_5_pct": 100.0,
+    "negative_query_count": 3,
+    "positive_query_count": 17,
+    "query_count": 20,
+    "skipped_query_count": 1,
+    "total_query_count": 21
+  },
+  "fact_diff": {
+    "bm25_terms": {
+      "added_sample": [
+        "A-25D1-45BA-8327-9A4BD5FA2E49",
+        "A010C-54FE-42AB-9E50-50EC957F68B2",
+        "A03E1EEC-D2BA-4F44-8285-AE7A0E353FC1",
+        "A45AF1A8-DAE7-4D50-B791-BDFA8026270E",
+        "AF9EE-FD6D-46D7-A6ED-C700ED0AED60",
+        "AFB11E1C-FA60-486F-9B76-0FAB43C7D2A3",
+        "ALIASES",
+        "ALPHANUMERIC",
+        "ALWAYS",
+        "B-FF1E-440A-BAFA-4220A750F034",
+        "B17619-E328-4273-B936-613CBAA82229",
+        "B1E4-4777-91F2-E09D23C64926",
+        "B70-A452-A574F0BF6D61",
+        "B80E0112-0AFE-43D2-A71C-172451E1C699",
+        "B8DC71-5BA3-4AFB-9184-33C2CD0B6EC3",
+        "B99121F5-87C3-46FA-8A9D-E9E8023F42A5",
+        "C205A3D-290E-43A5-BB77-31794C37CA82",
+        "C33E68CA-BC23-4D84-A2DE-1B03FD7F6DFF",
+        "C40B-4B84-BB91-18C102238C15",
+        "C672F019-0280-4E08-BE8A-C1189DB50664",
+        "C8A88F-FAF2-435C-9015-6F2E3BE50BAD",
+        "CALCOLA-NPAG",
+        "CB9CBB2D-6C04-4FF1-97C3-F40A7C73CCE4",
+        "CC512-BFFC-4E86-918D-6011BBD59E2F",
+        "CD851-CB54-4526-AC47-8EFA508B45AE"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 1017,
+      "jaccard_pct": 82.0,
+      "missing_sample": [
+        "ATI",
+        "COMMANDS",
+        "CONTR-DATI THRU CONTR-DATI-EXIT",
+        "COPYBOOK-OWNED",
+        "DATAEL-GG",
+        "DEAD",
+        "DRGCODA-PD40",
+        "IMCE-NUMERO",
+        "MARKS",
+        "MATR2",
+        "MEDIUM",
+        "MESS",
+        "NOTES",
+        "PD1AC-RIFE",
+        "PDRUTI",
+        "REAL",
+        "STUBBED",
+        "TWCOB-TS",
+        "UNAVAILABLE",
+        "UNREACHABLE",
+        "UTI01",
+        "WPDR"
+      ],
+      "retained_count": 852,
+      "retention_pct": 97.48,
+      "v0_count": 874,
+      "value_improved_count": 0
+    },
+    "business_rules": {
+      "added_sample": [
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHENTER|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF1|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF2|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF7|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF8|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|EIBAID = DFHPF9|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PDRGCODA-PD40-CODDIP = '000000'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PDRGCODA-RETURN = '1' AND WCTRIG NOT GREATER 1|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PDRGCODA-RETURN = '1'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PDRGCODA-RETURN = '2'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|PDRGCODA-RETURN = 'E'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|TWCOB-FASE = '1'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|TWCOB-FASE = '2'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|TWCOB-FUNZIONE = 'T'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|TWCOB-PRESENTA-NOMI = 'C'|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|WCTPAG = 1|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|WCTPAG EQUAL 1|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|WCTRIG GREATER 14|YES",
+        "business_rule|CONTROL_FLOW|GUARD|STARTS_WITH|WCTRIG NOT GREATER MAX-RIGHE|YES",
+        "business_rule|ERROR_HANDLING|FATAL|STARTS_WITH|PD1AC-PDRAL01 = SPACE|YES",
+        "business_rule|ERROR_HANDLING|FATAL|STARTS_WITH|PD1AC-RETURN EQUAL 'E'|YES",
+        "business_rule|ERROR_HANDLING|FATAL|STARTS_WITH|PDRGCODA-RETURN = '2' OR 'E'|YES",
+        "business_rule|ERROR_HANDLING|FATAL|STARTS_WITH|PDRUTI01-RETURN EQUAL 'E'|YES",
+        "business_rule|identifier|ABBL-RIGA-10",
+        "business_rule|identifier|ASKIP-DRK"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 65,
+      "jaccard_pct": 0.0,
+      "missing_sample": [],
+      "retained_count": 0,
+      "retention_pct": 100.0,
+      "v0_count": 0,
+      "value_improved_count": 0
+    },
+    "chunk_ids": {
+      "added_sample": [
+        "business_rule|PDB305.CBL:BUSINESS_RULE:1",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:10",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:11",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:12",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:13",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:14",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:15",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:16",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:17",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:18",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:19",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:2",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:20",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:21",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:22",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:23",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:24",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:25",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:3",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:4",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:5",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:6",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:7",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:8",
+        "business_rule|PDB305.CBL:BUSINESS_RULE:9"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 376,
+      "jaccard_pct": 52.58,
+      "missing_sample": [
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:21",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:22",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:23",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:24",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:25",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:26",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:27",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:28",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:29",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:30",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:31",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:32",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:33",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:34",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:35",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:36",
+        "copybook_fields|PDB305.CBL:COPYBOOK_FIELDS:PART:37",
+        "copybook_mentions|PDB305.CBL:COPYBOOK_MENTIONS:PART:1",
+        "copybook_mentions|PDB305.CBL:COPYBOOK_MENTIONS:PART:2",
+        "dataflow.variable|PDB305.CBL:DATAFLOW.VARIABLE:ASKIP-DRK-FSET:PART:1",
+        "dataflow.variable|PDB305.CBL:DATAFLOW.VARIABLE:ASKIP-DRK-FSET:PART:2",
+        "dataflow.variable|PDB305.CBL:DATAFLOW.VARIABLE:ASKIP-DRK:PART:1",
+        "dataflow.variable|PDB305.CBL:DATAFLOW.VARIABLE:ASKIP-DRK:PART:2",
+        "dataflow.variable|PDB305.CBL:DATAFLOW.VARIABLE:EIBAID:PART:1",
+        "dataflow.variable|PDB305.CBL:DATAFLOW.VARIABLE:EIBAID:PART:2"
+      ],
+      "retained_count": 265,
+      "retention_pct": 67.43,
+      "v0_count": 393,
+      "value_improved_count": 0
+    },
+    "cics": {
+      "added_sample": [
+        "cics.operation|ABEND|OTHER|UNKNOWN||arg|ABCODE|WABEND-CODE|IDENTIFIER",
+        "cics.operation|ADDRESS|OTHER|UNKNOWN||arg|TWA|ADDRESS OF PDRTWA2|IDENTIFIER",
+        "cics.operation|ASKTIME|OTHER|UNKNOWN||arg|ABSTIME|WW-DATE|IDENTIFIER",
+        "cics.operation|FORMATTIME|OTHER|UNKNOWN||arg|ABSTIME|WW-DATE|IDENTIFIER",
+        "cics.operation|FORMATTIME|OTHER|UNKNOWN||arg|DDMMYY|M1DATAO|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD0GCODA|arg|COMMAREA|WPDRGCODA|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD0GCODA|arg|LENGTH|PDRGCODA-LUNGH|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|COMMAREA|WPDRUTI01|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|LENGTH|PDRUTI01-LUNG-COMMA|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD1AC|arg|COMMAREA|WPD1AC|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD1AC|arg|LENGTH|PD1AC-LUNGH|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD3SORT|arg|COMMAREA|WPDRSELE|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|PD3SORT|arg|LENGTH|PDRSELE-LUNG-COMMA|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|TE0CDUMP|arg|COMMAREA|WABEND-CODE|IDENTIFIER",
+        "cics.operation|LINK|PROGRAM_TRANSFER|PROGRAM|TE0CDUMP|arg|LENGTH|4|LITERAL",
+        "cics.operation|WRITEQ|QUEUE_WRITE|QUEUE|TWCOB-TS-CODA|arg|FROM|TWCOB-INIZIO|IDENTIFIER",
+        "cics.operation|WRITEQ|QUEUE_WRITE|QUEUE|TWCOB-TS-CODA|arg|ITEM|TWCOB-TS-ITEM|IDENTIFIER",
+        "cics.operation|WRITEQ|QUEUE_WRITE|QUEUE|TWCOB-TS-CODA|arg|LENGTH|TWCOB-LLTS|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD0GCODA|arg|COMMAREA|WPDRGCODA|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD0GCODA|arg|LENGTH|PDRGCODA-LUNGH|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|COMMAREA|WPDRUTI01|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD0UTI01|arg|LENGTH|PDRUTI01-LUNG-COMMA|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD1AC|arg|COMMAREA|WPD1AC|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD1AC|arg|LENGTH|PD1AC-LUNGH|IDENTIFIER",
+        "cics.program_transfer|LINK|PROGRAM_TRANSFER|PROGRAM|PD3SORT|arg|COMMAREA|WPDRSELE|IDENTIFIER"
+      ],
+      "changed_count": 1,
+      "changed_sample": [
+        "cics.operation|WRITEQ|QUEUE_WRITE|QUEUE|TWCOB-TS-CODA|arg|QUEUE|TWCOB-TS-CODA|IDENTIFIER|value_changed|<blank>|TWCOB-TS-CODA"
+      ],
+      "current_count": 78,
+      "jaccard_pct": 64.1,
+      "missing_sample": [],
+      "retained_count": 50,
+      "retention_pct": 100.0,
+      "v0_count": 50,
+      "value_improved_count": 1
+    },
+    "copybooks": {
+      "added_sample": [
+        "copybook_fields|copybook|DFHAID|status|RESOLVED",
+        "copybook_fields|copybook|DFHAID|stubbed|FALSE",
+        "copybook_fields|copybook|DFHBMSCA|status|RESOLVED",
+        "copybook_fields|copybook|DFHBMSCA|stubbed|FALSE",
+        "copybook_fields|copybook|PDPSQLER|status|RESOLVED",
+        "copybook_fields|copybook|PDPSQLER|stubbed|FALSE",
+        "copybook_fields|copybook|PDRTELR|status|RESOLVED",
+        "copybook_fields|copybook|PDRTELR|stubbed|FALSE",
+        "copybook_fields|copybook|PDWSQLER|status|RESOLVED",
+        "copybook_fields|copybook|PDWSQLER|stubbed|FALSE",
+        "copybook_fields|copybook|SQLCA|status|RESOLVED",
+        "copybook_fields|copybook|SQLCA|stubbed|FALSE",
+        "copybook_fields|text_term|PDRSELE-MESS"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 498,
+      "jaccard_pct": 95.1,
+      "missing_sample": [
+        "copybook_fields|copybook|DFHAID|status|STUBBED",
+        "copybook_fields|copybook|DFHAID|stubbed|TRUE",
+        "copybook_fields|copybook|DFHBMSCA|status|STUBBED",
+        "copybook_fields|copybook|DFHBMSCA|stubbed|TRUE",
+        "copybook_fields|copybook|PDPSQLER|status|STUBBED",
+        "copybook_fields|copybook|PDPSQLER|stubbed|TRUE",
+        "copybook_fields|copybook|PDRTELR|status|STUBBED",
+        "copybook_fields|copybook|PDRTELR|stubbed|TRUE",
+        "copybook_fields|copybook|PDWSQLER|status|STUBBED",
+        "copybook_fields|copybook|PDWSQLER|stubbed|TRUE",
+        "copybook_fields|copybook|SQLCA|status|STUBBED",
+        "copybook_fields|copybook|SQLCA|stubbed|TRUE"
+      ],
+      "retained_count": 485,
+      "retention_pct": 97.59,
+      "v0_count": 497,
+      "value_improved_count": 0
+    },
+    "dataflow.sidecar": {
+      "added_sample": [
+        "analysis|analysis_version|1.11",
+        "analysis|schema_version|1.0",
+        "node_state|entry_constants|WABEND-CODE||ALPHANUMERIC|AB69",
+        "node_state|entry_constants|WABEND-CODE||ALPHANUMERIC|AV05",
+        "node_state|entry_constants|WABEND-CODE||ALPHANUMERIC|BR00",
+        "node_state|entry_constants|WABEND-CODE||ALPHANUMERIC|TF01",
+        "node_state|entry_constants|WABEND-CODE||ALPHANUMERIC|UT$$",
+        "node_state|exit_constants|M1MSGL||NUMERIC|-1",
+        "node_state|exit_constants|PD1AC-CODICE-IP-TIPO||ALPHANUMERIC|5",
+        "node_state|exit_constants|PD1AC-FUNZIONE||ALPHANUMERIC|01",
+        "node_state|exit_constants|PDRGCODA-FUNZIONE||ALPHANUMERIC|01",
+        "node_state|exit_constants|PDRGCODA-KOST||ALPHANUMERIC|PD40",
+        "node_state|exit_constants|PDRSELE-FUNZIONE||ALPHANUMERIC|01",
+        "node_state|exit_constants|PDRSELE-KOST||ALPHANUMERIC|PD40",
+        "node_state|exit_constants|PDRSELE-NELEM-CODA||ALPHANUMERIC|01",
+        "node_state|exit_constants|PDRUTI01-F20-CAR-SEPARA||ALPHANUMERIC|*",
+        "node_state|exit_constants|PDRUTI01-FUNZIONE||ALPHANUMERIC|04",
+        "node_state|exit_constants|PDRUTI01-FUNZIONE||ALPHANUMERIC|20",
+        "node_state|exit_constants|RIGA-BOLLETTA-SEP||ALPHANUMERIC|/",
+        "node_state|exit_constants|RIGA-COGN-NOME||ALPHANUMERIC|T O T A L I",
+        "node_state|exit_constants|RIGA-SESSIONE-SEP||ALPHANUMERIC|/",
+        "node_state|exit_constants|TWCOB-BRO-STATO||ALPHANUMERIC|0",
+        "node_state|exit_constants|TWCOB-FASE||ALPHANUMERIC|1",
+        "node_state|exit_constants|TWCOB-FASE||ALPHANUMERIC|2",
+        "node_state|exit_constants|TWCOB-FUNZIONE||ALPHANUMERIC|1"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 41,
+      "jaccard_pct": 0.0,
+      "missing_sample": [],
+      "retained_count": 0,
+      "retention_pct": 100.0,
+      "v0_count": 0,
+      "value_improved_count": 0
+    },
+    "dataflow.variable": {
+      "added_sample": [],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 1078,
+      "jaccard_pct": 100.0,
+      "missing_sample": [],
+      "retained_count": 1078,
+      "retention_pct": 100.0,
+      "v0_count": 1078,
+      "value_improved_count": 0
+    },
+    "paragraphs": {
+      "added_sample": [
+        "controlflow.cfg|paragraph|CONTR-DATI",
+        "controlflow.cfg|paragraph|MUOVI-TESTATA"
+      ],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 733,
+      "jaccard_pct": 95.93,
+      "missing_sample": [
+        "paragraph_logic|PREPARA-MAP-020|calls|CONTR-DATI THRU CONTR-DATI-EXIT",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|DFHAID",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|DFHBMSCA",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PD1AC",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDB305M",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDIABEND",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDRAL01",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDRGCODA",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDRSELE",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDRTELR",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDRTWA2",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDRUTI01",
+        "paragraph_logic|PREPARA-MAP-020|copybooks_used|PDSAVTW2",
+        "paragraph_logic|XCTL-MAIN|cics_commands|XCTL",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|DFHAID",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|DFHBMSCA",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PD1AC",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDB305M",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDIABEND",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDRAL01",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDRGCODA",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDRSELE",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDRTELR",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDRTWA2",
+        "paragraph_logic|XCTL-MAIN|copybooks_used|PDRUTI01"
+      ],
+      "retained_count": 731,
+      "retention_pct": 96.18,
+      "v0_count": 760,
+      "value_improved_count": 0
+    },
+    "path_sensitive": {
+      "added_sample": [],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 0,
+      "jaccard_pct": 100.0,
+      "missing_sample": [],
+      "retained_count": 0,
+      "retention_pct": 100.0,
+      "v0_count": 0,
+      "value_improved_count": 0
+    },
+    "static_values": {
+      "added_sample": [],
+      "changed_count": 0,
+      "changed_sample": [],
+      "current_count": 266,
+      "jaccard_pct": 100.0,
+      "missing_sample": [],
+      "retained_count": 266,
+      "retention_pct": 100.0,
+      "v0_count": 266,
+      "value_improved_count": 0
+    }
+  },
+  "integrity": {
+    "artifacts": {
+      "added_current": [
+        "static_analysis/dataflow.json",
+        "static_analysis/dataflow_rag_summary.json"
+      ],
+      "byte_identical": false,
+      "current_files": 24,
+      "differing_common_files": [
+        "analysis_health.json",
+        "analysis_self_evaluation.json",
+        "cobol_structure.json",
+        "copybook_manifest.json",
+        "pipeline_report.json",
+        "variable_values.json"
+      ],
+      "file_retention_pct": 100.0,
+      "missing_current": [],
+      "v0_files": 22
+    },
+    "knowledge_base": {
+      "added_current": [],
+      "byte_identical": false,
+      "current_files": 4,
+      "differing_common_files": [
+        "00_Executive_Summary.md",
+        "02_Data_Dictionary.md",
+        "03_Dependencies.yaml"
+      ],
+      "file_retention_pct": 100.0,
+      "missing_current": [],
+      "v0_files": 4
+    }
+  },
+  "per_query": [
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:RECEIVE-PDB3051",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__RECEIVE-PDB3051.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 41.8784
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:9",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__9.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 41.3937
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:SEND-PDB3051-DO",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__SEND-PDB3051-DO.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 40.6099
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:10",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__10.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 40.0011
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:11",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__11.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 40.0011
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:SEND-PDB3051",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__SEND-PDB3051.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 39.9481
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.resource:4",
+            "chunk_type": "cics.resource",
+            "file": "PDB305.CBL__cics_resource__4.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 39.2256
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.resource:3",
+            "chunk_type": "cics.resource",
+            "file": "PDB305.CBL__cics_resource__3.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 39.1453
+          },
+          {
+            "chunk_id": "PDB305.CBL:datasets_tables_resources",
+            "chunk_type": "datasets_tables_resources",
+            "file": "PDB305.CBL__datasets_tables_resources.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 37.8971
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.resource:6",
+            "chunk_type": "cics.resource",
+            "file": "PDB305.CBL__cics_resource__6.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 37.7065
+          }
+        ]
+      },
+      "category": "cics_targets",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:RECEIVE-PDB3051",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__RECEIVE-PDB3051.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 42.2166
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:10",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__10.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 41.0262
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:SEND-PDB3051-DO",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__SEND-PDB3051-DO.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 41.0119
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:11",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__11.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 39.6857
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:12",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__12.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 39.6857
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.resource:4",
+            "chunk_type": "cics.resource",
+            "file": "PDB305.CBL__cics_resource__4.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 39.192
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.resource:3",
+            "chunk_type": "cics.resource",
+            "file": "PDB305.CBL__cics_resource__3.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 39.094
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:SEND-PDB3051",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__SEND-PDB3051.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 38.7792
+          },
+          {
+            "chunk_id": "PDB305.CBL:datasets_tables_resources",
+            "chunk_type": "datasets_tables_resources",
+            "file": "PDB305.CBL__datasets_tables_resources.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 38.7188
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.resource:6",
+            "chunk_type": "cics.resource",
+            "file": "PDB305.CBL__cics_resource__6.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 37.7227
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which CICS RECEIVE or SEND uses map PDB3051 and mapset PDB305M?",
+      "query_id": "cics_map_pdb3051"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 31.4803
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 30.5365
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:18",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__18.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 27.4647
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-CODA",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-CODA.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 26.7023
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:6",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__6.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 25.1799
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD0GCODA:6",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD0GCODA__6.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 24.9111
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 20.5195
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-SELE",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-SELE.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 16.0489
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 16.0159
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD1AC",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD1AC.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 15.9324
+          }
+        ]
+      },
+      "category": "cics_targets",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 3,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 33.0653
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-CODA",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-CODA.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 27.2829
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:19",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__19.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 27.0663
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD0GCODA:6",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD0GCODA__6.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 24.8102
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:6",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__6.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 24.3069
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 23.1931
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 20.4618
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-SELE",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-SELE.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 16.5333
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 16.5014
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD1AC",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD1AC.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 16.4251
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which CICS LINK transfers to program PD0GCODA?",
+      "query_id": "cics_link_pd0gcoda"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 31.4803
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 30.5365
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:17",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__17.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 27.4647
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-SELE",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-SELE.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 25.9232
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:5",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__5.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 25.1799
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD3SORT:5",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD3SORT__5.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 24.9111
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 20.5195
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 18.1079
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-CODA",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-CODA.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 16.3502
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 16.0159
+          }
+        ]
+      },
+      "category": "cics_targets",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 33.0653
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:18",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__18.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 27.0663
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-SELE",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-SELE.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 26.6019
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD3SORT:5",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD3SORT__5.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 24.8102
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:5",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__5.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 24.3069
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 23.1931
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 20.4618
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-CODA",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-CODA.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 16.7843
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 16.5014
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD1AC",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD1AC.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 16.4251
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which CICS LINK transfers to program PD3SORT?",
+      "query_id": "cics_link_pd3sort"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:XCTL-MAIN",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__XCTL-MAIN.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 30.7548
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:2",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__2.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 30.6651
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:8",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__8.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 29.3934
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PDPRED:2",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PDPRED__2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 28.2001
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 22.922
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 22.2456
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 18.9155
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part5.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 13.7174
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:1",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__1.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 9.9616
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:3",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__3.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 9.9616
+          }
+        ]
+      },
+      "category": "cics_targets",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:2",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 29.9013
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:9",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__9.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 28.9899
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:SEND-PDB3051",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__SEND-PDB3051.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 28.9013
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PDPRED:2",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PDPRED__2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 28.1135
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 22.8582
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 22.0448
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 18.684
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:1",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__1.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 9.3938
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:3",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__3.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 9.3213
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:4",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__4.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 9.3213
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Where does EXEC CICS XCTL transfer control to PDPRED?",
+      "query_id": "cics_xctl_pdpred"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD1AC:3",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD1AC__3.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 23.5284
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:TE0CDUMP:1",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__TE0CDUMP__1.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 23.2757
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD0GCODA:6",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD0GCODA__6.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 23.1394
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD3SORT:5",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD3SORT__5.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 23.1394
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:13",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__13.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 22.0039
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 21.963
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD1AC",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD1AC.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 21.9024
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 21.3272
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 20.0863
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part4.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 19.7009
+          }
+        ]
+      },
+      "category": "external_calls",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD1AC:3",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD1AC__3.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 26.8058
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:TE0CDUMP:1",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__TE0CDUMP__1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 24.4287
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD0GCODA:6",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD0GCODA__6.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 23.4229
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD3SORT:5",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD3SORT__5.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 23.4229
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:14",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__14.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 22.4502
+          },
+          {
+            "chunk_id": "PDB305.CBL:external_program_calls",
+            "chunk_type": "external_program_calls",
+            "file": "PDB305.CBL__external_program_calls.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 22.1253
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD1AC",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD1AC.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 21.8846
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 21.8286
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.program_transfer:3",
+            "chunk_type": "cics.program_transfer",
+            "file": "PDB305.CBL__cics_program_transfer__3.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 20.4718
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 20.4051
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "What call contract or COMMAREA is used for PD1AC?",
+      "query_id": "external_pd1ac_commarea"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part8.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 13.4283
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:7",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part7.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 12.9814
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 12.723
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part6.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 12.4874
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part5.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 12.2832
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part4.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 11.572
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:ASKIP-DRK:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__ASKIP-DRK__part1.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 10.3127
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 10.0814
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:TWCOB-FUNZIONE:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__TWCOB-FUNZIONE__part2.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 10.0258
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:TWCOB-FUNZIONE:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__TWCOB-FUNZIONE__part1.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 9.3642
+          }
+        ]
+      },
+      "category": "variables",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 14.1164
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 13.5381
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 11.9836
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:TWCOB-FUNZIONE",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__TWCOB-FUNZIONE.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.1587
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:PDRGCODA-PD40-CODDIP",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__PDRGCODA-PD40-CODDIP.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 8.6584
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:ASKIP-DRK",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__ASKIP-DRK.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 8.4071
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:XCTL-PF1",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__XCTL-PF1.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 8.0768
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:XCTL-PF2",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__XCTL-PF2.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 8.0768
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:XCTL-PF9",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__XCTL-PF9.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 8.0768
+          },
+          {
+            "chunk_id": "PDB305.CBL:business_rule:6",
+            "chunk_type": "business_rule",
+            "file": "PDB305.CBL__business_rule__6.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 8.0407
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Where is TWCOB-FUNZIONE read or written?",
+      "query_id": "variable_twcob_funzione"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:variable_group:FILLER_2",
+            "chunk_type": "variable_group",
+            "file": "PDB305.CBL__variable_group__FILLER_2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 26.1748
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part4.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 22.8998
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 16.7759
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part8.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 16.6356
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:7",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part7.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 16.5172
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 15.1515
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part5.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 15.0355
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part6.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 14.9015
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 14.4134
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:27",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part27.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 10.3758
+          }
+        ]
+      },
+      "category": "variables",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:variable_group:FILLER_1",
+            "chunk_type": "variable_group",
+            "file": "PDB305.CBL__variable_group__FILLER_1.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 22.2844
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 16.5021
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 13.1017
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 12.3967
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:PROG-PF2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__PROG-PF2.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 10.5498
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:16",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part16.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 9.6966
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:XCTL-PF2",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__XCTL-PF2.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 9.5683
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:TWCOB-NOME-PGM",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__TWCOB-NOME-PGM.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 8.9645
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:1",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part1.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 8.15
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:10",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part10.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 8.15
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which static value defines PROG-PF2 as PDB306?",
+      "query_id": "variable_static_prog_pf2"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:error_path:12",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__12.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 13.649
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:8",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__8.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 13.354
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:14",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__14.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 13.2136
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:16",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__16.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 13.0113
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:19",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__19.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 13.0113
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:17",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__17.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 12.946
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:20",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__20.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 12.946
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:18",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__18.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 12.514
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:21",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__21.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 12.3735
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:13",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__13.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 12.2472
+          }
+        ]
+      },
+      "category": "paragraphs",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:error_path:12",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__12.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 13.8259
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:8",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__8.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 13.5644
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:14",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__14.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 13.4391
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:16",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__16.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 13.2577
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:19",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__19.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 13.2577
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:17",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__17.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 13.1989
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:20",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__20.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 13.1989
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:18",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__18.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 12.8001
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:21",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__21.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 12.6696
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:13",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__13.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 12.5486
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Explain paragraph BROWSE-FASE2-TASTOER error flow.",
+      "query_id": "paragraph_tastoer"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTPAG:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTPAG__part3.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 13.8193
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:3",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part3.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 13.7721
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:BROWSE-FASE2-ENTER-010",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__BROWSE-FASE2-ENTER-010.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 13.7535
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTPAG:part:4",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTPAG__part4.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 13.7215
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WNUMREC-CODA-INIZ:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WNUMREC-CODA-INIZ__part3.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 13.6872
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:BROWSE-FASE1-10",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__BROWSE-FASE1-10.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 13.6582
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WNUMREC-CODA:part:4",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WNUMREC-CODA__part4.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 13.568
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:TWCOB-ITEM-CODA:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__TWCOB-ITEM-CODA__part2.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 13.0872
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:M1MSGO:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__M1MSGO__part1.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 12.877
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WNUMREC-CODA:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WNUMREC-CODA__part3.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 12.77
+          }
+        ]
+      },
+      "category": "paragraphs",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:BROWSE-FASE2-ENTER-010",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__BROWSE-FASE2-ENTER-010.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 14.8294
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:BROWSE-FASE1-10",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__BROWSE-FASE1-10.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 14.7517
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WNUMREC-CODA:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WNUMREC-CODA__part1.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 14.3136
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:TWCOB-ITEM-CODA",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__TWCOB-ITEM-CODA.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 14.0153
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WNUMREC-CODA-INIZ",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WNUMREC-CODA-INIZ.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 13.6298
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTPAG:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTPAG__part1.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 13.1803
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 13.0275
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:PDRGCODA-RETURN",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__PDRGCODA-RETURN.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 12.7209
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:M1MSGO",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__M1MSGO.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 12.6311
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:TWCOB-BRO-PAG-CORR",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__TWCOB-BRO-PAG-CORR.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 12.6036
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "What does PREPARA-MAP do with WNUMREC-CODA?",
+      "query_id": "paragraph_prepara_map"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:24",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part24.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 18.4628
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:23",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part23.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 18.1794
+          },
+          {
+            "chunk_id": "PDB305.CBL:unused_copybooks:part:2",
+            "chunk_type": "unused_copybooks",
+            "file": "PDB305.CBL__unused_copybooks__part2.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 18.0324
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:25",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part25.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 17.9926
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:1",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part1.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 15.7775
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:18",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part18.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 15.0808
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:12",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part12.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 14.7265
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:8",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part8.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 14.6979
+          },
+          {
+            "chunk_id": "PDB305.CBL:unused_copybooks:part:1",
+            "chunk_type": "unused_copybooks",
+            "file": "PDB305.CBL__unused_copybooks__part1.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 14.1688
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:21",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part21.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 13.942
+          }
+        ]
+      },
+      "category": "copybooks",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:15",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part15.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 21.2744
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:14",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part14.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 20.0808
+          },
+          {
+            "chunk_id": "PDB305.CBL:unused_copybooks",
+            "chunk_type": "unused_copybooks",
+            "file": "PDB305.CBL__unused_copybooks.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 19.2241
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:1",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part1.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 17.1533
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:5",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part5.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 16.1692
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:3",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part3.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 16.1337
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:10",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part10.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 16.1055
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:12",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part12.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 16.0236
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:7",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part7.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 15.9999
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:13",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part13.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 13.8867
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which copybook defines PDRTWA2 and TWCOB-FASE?",
+      "query_id": "copybook_pdrtwa2_twcob_fase"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 2,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:screen.row_build:part:2",
+            "chunk_type": "screen.row_build",
+            "file": "PDB305.CBL__screen_row_build__part2.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 9.0691
+          },
+          {
+            "chunk_id": "PDB305.CBL:workflow:BROWSE-FASE1-10",
+            "chunk_type": "workflow",
+            "file": "PDB305.CBL__workflow__BROWSE-FASE1-10.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 8.2513
+          },
+          {
+            "chunk_id": "PDB305.CBL:workflow:BROWSE-FASE2-ENTER-010",
+            "chunk_type": "workflow",
+            "file": "PDB305.CBL__workflow__BROWSE-FASE2-ENTER-010.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 8.2513
+          },
+          {
+            "chunk_id": "PDB305.CBL:workflow:PREPARA-MAP",
+            "chunk_type": "workflow",
+            "file": "PDB305.CBL__workflow__PREPARA-MAP.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 8.2089
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.row_build:part:1",
+            "chunk_type": "screen.row_build",
+            "file": "PDB305.CBL__screen_row_build__part1.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 8.1923
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:PREPARA-MAP",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__PREPARA-MAP.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 7.9714
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:COM3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__COM3.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 7.9394
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:BROWSE-FASE1-10",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__BROWSE-FASE1-10.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 7.8629
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:BROWSE-FASE2-ENTER-010",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__BROWSE-FASE2-ENTER-010.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 7.8629
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTPAG:part:4",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTPAG__part4.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 7.4198
+          }
+        ]
+      },
+      "category": "workflow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:workflow:BROWSE-FASE1-10",
+            "chunk_type": "workflow",
+            "file": "PDB305.CBL__workflow__BROWSE-FASE1-10.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 8.7198
+          },
+          {
+            "chunk_id": "PDB305.CBL:workflow:BROWSE-FASE2-ENTER-010",
+            "chunk_type": "workflow",
+            "file": "PDB305.CBL__workflow__BROWSE-FASE2-ENTER-010.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 8.7198
+          },
+          {
+            "chunk_id": "PDB305.CBL:workflow:PREPARA-MAP",
+            "chunk_type": "workflow",
+            "file": "PDB305.CBL__workflow__PREPARA-MAP.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 8.6795
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:COM3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__COM3.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 8.5004
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTPAG:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTPAG__part2.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 8.4134
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:PREPARA-MAP",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__PREPARA-MAP.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 8.2137
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:BROWSE-FASE1-10",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__BROWSE-FASE1-10.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 7.8614
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:PREPARA-MAP",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__PREPARA-MAP.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 7.8614
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.row_build",
+            "chunk_type": "screen.row_build",
+            "file": "PDB305.CBL__screen_row_build.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 7.8547
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:BROWSE-FASE2-ENTER-010",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__BROWSE-FASE2-ENTER-010.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 7.8348
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which workflow chunk explains PREPARA-MAP row preparation?",
+      "query_id": "workflow_prepara_map"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:error_path:13",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__13.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 15.6189
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:15",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__15.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 14.9381
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WTASTOER",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WTASTOER.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 11.2934
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:M1MSGO:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__M1MSGO__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 11.0618
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:BROWSE-FASE2-TASTOER",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__BROWSE-FASE2-TASTOER.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 10.445
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:27",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part27.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 10.4111
+          },
+          {
+            "chunk_id": "PDB305.CBL:copybook_fields:part:22",
+            "chunk_type": "copybook_fields",
+            "file": "PDB305.CBL__copybook_fields__part22.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 9.7868
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.error_handler:1",
+            "chunk_type": "cics.error_handler",
+            "file": "PDB305.CBL__cics_error_handler__1.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 9.2013
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part8.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 9.0496
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.error_handler:4",
+            "chunk_type": "cics.error_handler",
+            "file": "PDB305.CBL__cics_error_handler__4.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 8.9743
+          }
+        ]
+      },
+      "category": "error_path",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:error_path:13",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__13.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 15.6653
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:15",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__15.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 15.0724
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WTASTOER",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WTASTOER.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 11.4305
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:BROWSE-FASE2-TASTOER",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__BROWSE-FASE2-TASTOER.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.5695
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:M1MSGO",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__M1MSGO.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 9.4998
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.error_handler:1",
+            "chunk_type": "cics.error_handler",
+            "file": "PDB305.CBL__cics_error_handler__1.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 9.4458
+          },
+          {
+            "chunk_id": "PDB305.CBL:variable_group:FILLER_1",
+            "chunk_type": "variable_group",
+            "file": "PDB305.CBL__variable_group__FILLER_1.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 9.3719
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.error_handler:4",
+            "chunk_type": "cics.error_handler",
+            "file": "PDB305.CBL__cics_error_handler__4.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 9.241
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.error_handler:2",
+            "chunk_type": "cics.error_handler",
+            "file": "PDB305.CBL__cics_error_handler__2.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 9.1094
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.error_handler:3",
+            "chunk_type": "cics.error_handler",
+            "file": "PDB305.CBL__cics_error_handler__3.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 9.1094
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Where is the functional-key error WTASTOER handled?",
+      "query_id": "error_tastoer_message"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:3",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part3.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 11.1254
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:7",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part7.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 11.094
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part6.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 11.0675
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part1.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.8118
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:2",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part2.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 10.763
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 10.6906
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part8.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 10.5569
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 9.3119
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part5.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 9.1798
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part4.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 9.0953
+          }
+        ]
+      },
+      "category": "business_rule",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:business_rule:12",
+            "chunk_type": "business_rule",
+            "file": "PDB305.CBL__business_rule__12.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 15.7626
+          },
+          {
+            "chunk_id": "PDB305.CBL:business_rule:13",
+            "chunk_type": "business_rule",
+            "file": "PDB305.CBL__business_rule__13.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 15.7626
+          },
+          {
+            "chunk_id": "PDB305.CBL:business_rule:4",
+            "chunk_type": "business_rule",
+            "file": "PDB305.CBL__business_rule__4.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 15.2359
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.0172
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 9.0131
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 8.8172
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 8.3027
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:21",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__21.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 8.0801
+          },
+          {
+            "chunk_id": "PDB305.CBL:business_rule:10",
+            "chunk_type": "business_rule",
+            "file": "PDB305.CBL__business_rule__10.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 8.0378
+          },
+          {
+            "chunk_id": "PDB305.CBL:business_rule:23",
+            "chunk_type": "business_rule",
+            "file": "PDB305.CBL__business_rule__23.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 8.0378
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which business rule mentions WCTPAG pagination?",
+      "query_id": "business_rule_wctpag"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 3,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:DFHPF7",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__DFHPF7.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 12.5465
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:EIBAID:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__EIBAID__part2.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 11.5211
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.key_dispatch",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDB305.CBL__screen_key_dispatch.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 11.2648
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:2",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part2.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 10.3964
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:9",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__9.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 9.3814
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:7",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part7.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 8.9926
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part1.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 8.7634
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part8.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 8.7612
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 8.6685
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part6.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 8.2512
+          }
+        ]
+      },
+      "category": "controlflow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:BROWSE-FASE2",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__BROWSE-FASE2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 20.0319
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.key_dispatch",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDB305.CBL__screen_key_dispatch.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 15.6317
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:PREPARA-MAP-010",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__PREPARA-MAP-010.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 14.2209
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:DFHPF7",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__DFHPF7.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 12.7836
+          },
+          {
+            "chunk_id": "PDB305.CBL:business_rule:16",
+            "chunk_type": "business_rule",
+            "file": "PDB305.CBL__business_rule__16.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 12.2597
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 12.2225
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:BROWSE-PF7",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__BROWSE-PF7.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 11.5806
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:EIBAID",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__EIBAID.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 10.3633
+          },
+          {
+            "chunk_id": "PDB305.CBL:controlflow.cfg:BROWSE-FASE1-10",
+            "chunk_type": "controlflow.cfg",
+            "file": "PDB305.CBL__controlflow_cfg__BROWSE-FASE1-10.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 9.5843
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 9.504
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Show the control-flow branch for DFHPF7 or PF7.",
+      "query_id": "controlflow_pf7_logic"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": false,
+        "passed": false,
+        "rank": 9,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 16.6774
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:4",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part4.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 15.9822
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:7",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part7.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 11.6745
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:8",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part8.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 11.5518
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:6",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part6.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 10.9415
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 10.4429
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:5",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part5.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 10.0685
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 9.7968
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:3",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part3.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 9.5379
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination:part:1",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination__part1.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 8.7706
+          }
+        ]
+      },
+      "category": "screen_flow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:screen.key_dispatch",
+            "chunk_type": "screen.key_dispatch",
+            "file": "PDB305.CBL__screen_key_dispatch.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 21.3423
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 15.4482
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 15.3736
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.pagination",
+            "chunk_type": "screen.pagination",
+            "file": "PDB305.CBL__screen_pagination.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 15.0113
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 12.1362
+          },
+          {
+            "chunk_id": "PDB305.CBL:unused_copybooks",
+            "chunk_type": "unused_copybooks",
+            "file": "PDB305.CBL__unused_copybooks.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 7.8375
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:BROWSE-FASE1",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__BROWSE-FASE1.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 7.2466
+          },
+          {
+            "chunk_id": "PDB305.CBL:workflow:BROWSE-FASE1",
+            "chunk_type": "workflow",
+            "file": "PDB305.CBL__workflow__BROWSE-FASE1.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 6.8619
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:23",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__23.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 6.6589
+          },
+          {
+            "chunk_id": "PDB305.CBL:error_path:22",
+            "chunk_type": "error_path",
+            "file": "PDB305.CBL__error_path__22.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 6.6276
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "What happens for PF7 or PF8 key on the PDB305 screen?",
+      "query_id": "screen_pf7_pf8_dispatch"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:screen.row_build:part:2",
+            "chunk_type": "screen.row_build",
+            "file": "PDB305.CBL__screen_row_build__part2.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 27.9664
+          },
+          {
+            "chunk_id": "PDB305.CBL:screen.row_build:part:1",
+            "chunk_type": "screen.row_build",
+            "file": "PDB305.CBL__screen_row_build__part1.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 25.6222
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:MRIGAO:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__MRIGAO__part2.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 19.6681
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:ABBL-RIGA-10",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__ABBL-RIGA-10.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 19.1981
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTRIG:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTRIG__part2.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 19.1815
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTRIG:part:4",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTRIG__part4.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 18.714
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:RIGA-MAPPA:part:3",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__RIGA-MAPPA__part3.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 17.8973
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:MUOVI-DATI-010",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__MUOVI-DATI-010.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 17.791
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:PREPARA-MAP-030",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__PREPARA-MAP-030.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 16.9578
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 16.8978
+          }
+        ]
+      },
+      "category": "screen_flow",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:screen.row_build",
+            "chunk_type": "screen.row_build",
+            "file": "PDB305.CBL__screen_row_build.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 26.21
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:ABBL-RIGA-10",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__ABBL-RIGA-10.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 19.323
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:MRIGAO",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__MRIGAO.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 18.4585
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:MUOVI-DATI-010",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__MUOVI-DATI-010.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 18.0716
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTRIG:part:1",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTRIG__part1.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 17.3551
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:PREPARA-MAP-030",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__PREPARA-MAP-030.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 17.3255
+          },
+          {
+            "chunk_id": "PDB305.CBL:call_contract:PD0UTI01:4",
+            "chunk_type": "call_contract",
+            "file": "PDB305.CBL__call_contract__PD0UTI01__4.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 15.9407
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:WCTRIG:part:2",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__WCTRIG__part2.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 15.6986
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:MAX-RIGHE",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__MAX-RIGHE.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 14.8597
+          },
+          {
+            "chunk_id": "PDB305.CBL:dataflow.variable:RIGA-MAPPA",
+            "chunk_type": "dataflow.variable",
+            "file": "PDB305.CBL__dataflow_variable__RIGA-MAPPA.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 14.6851
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "How does screen row building use MRIGAO and WCTRIG?",
+      "query_id": "screen_row_build"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: static_value.propagation",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": true,
+        "passed": true,
+        "rank": 1,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:04559035-c40b-4b84-bb91-18c102238c15",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__04559035-c40b-4b84-bb91-18c102238c15.json",
+            "rank": 1,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:109e7092-2bd4-47c5-9a28-310524a65292",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__109e7092-2bd4-47c5-9a28-310524a65292.json",
+            "rank": 2,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:20f04ce1-8b11-49a2-8881-9746710d0e0a",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__20f04ce1-8b11-49a2-8881-9746710d0e0a.json",
+            "rank": 3,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:21b17619-e328-4273-b936-613cbaa82229",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__21b17619-e328-4273-b936-613cbaa82229.json",
+            "rank": 4,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:29950281-b1e4-4777-91f2-e09d23c64926",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__29950281-b1e4-4777-91f2-e09d23c64926.json",
+            "rank": 5,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:348a010c-54fe-42ab-9e50-50ec957f68b2",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__348a010c-54fe-42ab-9e50-50ec957f68b2.json",
+            "rank": 6,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:471db452-7a71-416c-b8aa-ba352500494a",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__471db452-7a71-416c-b8aa-ba352500494a.json",
+            "rank": 7,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:484dc6bd-37a0-45ab-95b8-de5a8baad915",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__484dc6bd-37a0-45ab-95b8-de5a8baad915.json",
+            "rank": 8,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:5080d0c9-3ffa-4558-b1b6-a7de4a890ce1",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__5080d0c9-3ffa-4558-b1b6-a7de4a890ce1.json",
+            "rank": 9,
+            "relevant": true,
+            "score": 18.2333
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:50c8a88f-faf2-435c-9015-6f2e3be50bad",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__50c8a88f-faf2-435c-9015-6f2e3be50bad.json",
+            "rank": 10,
+            "relevant": true,
+            "score": 18.2333
+          }
+        ]
+      },
+      "expected_hit": true,
+      "query": "Which static-analysis chunk shows node-scoped propagated entry and exit constants?",
+      "query_id": "static_analysis_node_scoped_constants"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": true,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target",
+        "skipped": true,
+        "top": []
+      },
+      "expected_hit": true,
+      "query": "Which flow-sensitive target chunk explains resolved CALL or CICS targets from dataflow?",
+      "query_id": "static_analysis_flow_sensitive_targets"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target, static_value.propagation",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis_negative",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:3",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part3.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 10.5021
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:1",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part1.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 8.7051
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_values:part:2",
+            "chunk_type": "static_values",
+            "file": "PDB305.CBL__static_values__part2.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 8.2719
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 5.331
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:9",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__9.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 4.7586
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:3",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__3.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 4.6301
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:14",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__14.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 4.599
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:15",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__15.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 4.599
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:18",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__18.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 4.599
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:19",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__19.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 4.599
+          }
+        ]
+      },
+      "expected_hit": false,
+      "query": "Which propagated static-analysis constant resolves nonexistent program PD9XXXX?",
+      "query_id": "negative_static_analysis_nonexistent_constant_pd9xxxx"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": "required chunk type absent: flow_sensitive.target, static_value.propagation",
+        "skipped": true,
+        "top": []
+      },
+      "category": "static_analysis_negative",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:04559035-c40b-4b84-bb91-18c102238c15",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__04559035-c40b-4b84-bb91-18c102238c15.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:109e7092-2bd4-47c5-9a28-310524a65292",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__109e7092-2bd4-47c5-9a28-310524a65292.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:20f04ce1-8b11-49a2-8881-9746710d0e0a",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__20f04ce1-8b11-49a2-8881-9746710d0e0a.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:21b17619-e328-4273-b936-613cbaa82229",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__21b17619-e328-4273-b936-613cbaa82229.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:29950281-b1e4-4777-91f2-e09d23c64926",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__29950281-b1e4-4777-91f2-e09d23c64926.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:348a010c-54fe-42ab-9e50-50ec957f68b2",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__348a010c-54fe-42ab-9e50-50ec957f68b2.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:471db452-7a71-416c-b8aa-ba352500494a",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__471db452-7a71-416c-b8aa-ba352500494a.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:484dc6bd-37a0-45ab-95b8-de5a8baad915",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__484dc6bd-37a0-45ab-95b8-de5a8baad915.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:5080d0c9-3ffa-4558-b1b6-a7de4a890ce1",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__5080d0c9-3ffa-4558-b1b6-a7de4a890ce1.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 8.6658
+          },
+          {
+            "chunk_id": "PDB305.CBL:static_value.propagation:50c8a88f-faf2-435c-9015-6f2e3be50bad",
+            "chunk_type": "static_value.propagation",
+            "file": "PDB305.CBL__static_value_propagation__50c8a88f-faf2-435c-9015-6f2e3be50bad.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 8.6658
+          }
+        ]
+      },
+      "expected_hit": false,
+      "query": "Which static-analysis chunk claims a value is globally always true?",
+      "query_id": "negative_static_analysis_always_claim"
+    },
+    {
+      "baseline": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 18.332
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 16.8493
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-CODA",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-CODA.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 12.5002
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-SELE",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-SELE.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 12.1989
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 12.1659
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD1AC",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD1AC.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 12.0824
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:3",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__3.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 11.8994
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:13",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__13.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 11.8411
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:14",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__14.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 11.8411
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:17",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__17.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 11.8411
+          }
+        ]
+      },
+      "category": "negative_canary",
+      "current": {
+        "elapsed_ms": null,
+        "expected_hit": false,
+        "hit": false,
+        "passed": true,
+        "rank": null,
+        "skip_reason": null,
+        "skipped": false,
+        "top": [
+          {
+            "chunk_id": "PDB305.CBL:cics_operations",
+            "chunk_type": "cics_operations",
+            "file": "PDB305.CBL__cics_operations.json",
+            "rank": 1,
+            "relevant": false,
+            "score": 19.6664
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-CODA",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-CODA.json",
+            "rank": 2,
+            "relevant": false,
+            "score": 12.9343
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-SELE",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-SELE.json",
+            "rank": 3,
+            "relevant": false,
+            "score": 12.6833
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD0UTI01",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD0UTI01.json",
+            "rank": 4,
+            "relevant": false,
+            "score": 12.6514
+          },
+          {
+            "chunk_id": "PDB305.CBL:paragraph_logic:LINK-PD1AC",
+            "chunk_type": "paragraph_logic",
+            "file": "PDB305.CBL__paragraph__LINK-PD1AC.json",
+            "rank": 5,
+            "relevant": false,
+            "score": 12.5751
+          },
+          {
+            "chunk_id": "PDB305.CBL:dependencies",
+            "chunk_type": "dependencies",
+            "file": "PDB305.CBL__dependencies.json",
+            "rank": 6,
+            "relevant": false,
+            "score": 12.2394
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:3",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__3.json",
+            "rank": 7,
+            "relevant": false,
+            "score": 11.7793
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:14",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__14.json",
+            "rank": 8,
+            "relevant": false,
+            "score": 11.6848
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:15",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__15.json",
+            "rank": 9,
+            "relevant": false,
+            "score": 11.6848
+          },
+          {
+            "chunk_id": "PDB305.CBL:cics.operation:18",
+            "chunk_type": "cics.operation",
+            "file": "PDB305.CBL__cics_operation__18.json",
+            "rank": 10,
+            "relevant": false,
+            "score": 11.6848
+          }
+        ]
+      },
+      "expected_hit": false,
+      "query": "Which CICS LINK transfers to nonexistent program PD9XXXX?",
+      "query_id": "negative_nonexistent_program_pd9xxxx"
+    }
+  ],
+  "queries_path": "scripts/rag_queries/pdb305.json",
+  "report_dir": "out/report/PDB305.CBL.report"
+}

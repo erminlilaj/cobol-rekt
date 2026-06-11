@@ -1,0 +1,608 @@
+{
+  "PDB305 default": {
+    "baseline": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 0,
+        "hit_at_5": 0,
+        "negative_query_count": 0,
+        "positive_query_count": 0,
+        "query_count": 0
+      },
+      "original": {
+        "expected_pass_at_5": 16,
+        "hit_at_5": 15,
+        "negative_query_count": 1,
+        "positive_query_count": 16,
+        "query_count": 17
+      },
+      "skipped": 4
+    },
+    "current": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 0,
+        "hit_at_5": 0,
+        "negative_query_count": 0,
+        "positive_query_count": 0,
+        "query_count": 0
+      },
+      "original": {
+        "expected_pass_at_5": 17,
+        "hit_at_5": 16,
+        "negative_query_count": 1,
+        "positive_query_count": 16,
+        "query_count": 17
+      },
+      "skipped": 4
+    },
+    "current_bundle": "knowledge-base_rag_default_2026-06-11",
+    "current_chunk_count": 334,
+    "current_total_bytes": 30469879,
+    "fact_retention": {
+      "bm25_terms": {
+        "changed_count": 0,
+        "current_count": 959,
+        "retained_count": 851,
+        "retention_pct": 97.37,
+        "v0_count": 874,
+        "value_improved_count": 0
+      },
+      "business_rules": {
+        "changed_count": 0,
+        "current_count": 65,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "chunk_ids": {
+        "changed_count": 0,
+        "current_count": 334,
+        "retained_count": 265,
+        "retention_pct": 67.43,
+        "v0_count": 393,
+        "value_improved_count": 0
+      },
+      "cics": {
+        "changed_count": 1,
+        "current_count": 78,
+        "retained_count": 50,
+        "retention_pct": 100.0,
+        "v0_count": 50,
+        "value_improved_count": 1
+      },
+      "copybooks": {
+        "changed_count": 0,
+        "current_count": 498,
+        "retained_count": 485,
+        "retention_pct": 97.59,
+        "v0_count": 497,
+        "value_improved_count": 0
+      },
+      "dataflow.sidecar": {
+        "changed_count": 0,
+        "current_count": 41,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "dataflow.variable": {
+        "changed_count": 0,
+        "current_count": 1078,
+        "retained_count": 1078,
+        "retention_pct": 100.0,
+        "v0_count": 1078,
+        "value_improved_count": 0
+      },
+      "paragraphs": {
+        "changed_count": 0,
+        "current_count": 733,
+        "retained_count": 731,
+        "retention_pct": 96.18,
+        "v0_count": 760,
+        "value_improved_count": 0
+      },
+      "path_sensitive": {
+        "changed_count": 0,
+        "current_count": 0,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "static_values": {
+        "changed_count": 0,
+        "current_count": 266,
+        "retained_count": 266,
+        "retention_pct": 100.0,
+        "v0_count": 266,
+        "value_improved_count": 0
+      }
+    },
+    "type_counts": {
+      "business_rule": 25,
+      "call_contract": 6,
+      "cics.error_handler": 4,
+      "cics.operation": 19,
+      "cics.program_transfer": 6,
+      "cics.resource": 8,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 25,
+      "copybook_fields": 20,
+      "copybook_mentions": 1,
+      "dataflow.variable": 99,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 37,
+      "external_program_calls": 1,
+      "paragraph_logic": 37,
+      "program_summary": 1,
+      "screen.key_dispatch": 1,
+      "screen.pagination": 1,
+      "screen.row_build": 1,
+      "static_values": 3,
+      "unused_copybooks": 1,
+      "variable_group": 14,
+      "workflow": 17
+    }
+  },
+  "PDB305 static": {
+    "baseline": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 0,
+        "hit_at_5": 0,
+        "negative_query_count": 0,
+        "positive_query_count": 0,
+        "query_count": 0
+      },
+      "original": {
+        "expected_pass_at_5": 16,
+        "hit_at_5": 15,
+        "negative_query_count": 1,
+        "positive_query_count": 16,
+        "query_count": 17
+      },
+      "skipped": 4
+    },
+    "current": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 3,
+        "hit_at_5": 1,
+        "negative_query_count": 2,
+        "positive_query_count": 1,
+        "query_count": 3
+      },
+      "original": {
+        "expected_pass_at_5": 17,
+        "hit_at_5": 16,
+        "negative_query_count": 1,
+        "positive_query_count": 16,
+        "query_count": 17
+      },
+      "skipped": 1
+    },
+    "current_bundle": "knowledge-base_rag_static_2026-06-11",
+    "current_chunk_count": 376,
+    "current_total_bytes": 30585781,
+    "fact_retention": {
+      "bm25_terms": {
+        "changed_count": 0,
+        "current_count": 1017,
+        "retained_count": 852,
+        "retention_pct": 97.48,
+        "v0_count": 874,
+        "value_improved_count": 0
+      },
+      "business_rules": {
+        "changed_count": 0,
+        "current_count": 65,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "chunk_ids": {
+        "changed_count": 0,
+        "current_count": 376,
+        "retained_count": 265,
+        "retention_pct": 67.43,
+        "v0_count": 393,
+        "value_improved_count": 0
+      },
+      "cics": {
+        "changed_count": 1,
+        "current_count": 78,
+        "retained_count": 50,
+        "retention_pct": 100.0,
+        "v0_count": 50,
+        "value_improved_count": 1
+      },
+      "copybooks": {
+        "changed_count": 0,
+        "current_count": 498,
+        "retained_count": 485,
+        "retention_pct": 97.59,
+        "v0_count": 497,
+        "value_improved_count": 0
+      },
+      "dataflow.sidecar": {
+        "changed_count": 0,
+        "current_count": 41,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "dataflow.variable": {
+        "changed_count": 0,
+        "current_count": 1078,
+        "retained_count": 1078,
+        "retention_pct": 100.0,
+        "v0_count": 1078,
+        "value_improved_count": 0
+      },
+      "paragraphs": {
+        "changed_count": 0,
+        "current_count": 733,
+        "retained_count": 731,
+        "retention_pct": 96.18,
+        "v0_count": 760,
+        "value_improved_count": 0
+      },
+      "path_sensitive": {
+        "changed_count": 0,
+        "current_count": 0,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "static_values": {
+        "changed_count": 0,
+        "current_count": 266,
+        "retained_count": 266,
+        "retention_pct": 100.0,
+        "v0_count": 266,
+        "value_improved_count": 0
+      }
+    },
+    "type_counts": {
+      "business_rule": 25,
+      "call_contract": 6,
+      "cics.error_handler": 4,
+      "cics.operation": 19,
+      "cics.program_transfer": 6,
+      "cics.resource": 8,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 25,
+      "copybook_fields": 20,
+      "copybook_mentions": 1,
+      "dataflow.variable": 99,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 37,
+      "external_program_calls": 1,
+      "paragraph_logic": 37,
+      "program_summary": 1,
+      "screen.key_dispatch": 1,
+      "screen.pagination": 1,
+      "screen.row_build": 1,
+      "static_value.propagation": 42,
+      "static_values": 3,
+      "unused_copybooks": 1,
+      "variable_group": 14,
+      "workflow": 17
+    }
+  },
+  "PDCBVC default": {
+    "baseline": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 0,
+        "hit_at_5": 0,
+        "negative_query_count": 0,
+        "positive_query_count": 0,
+        "query_count": 0
+      },
+      "original": {
+        "expected_pass_at_5": 16,
+        "hit_at_5": 15,
+        "negative_query_count": 1,
+        "positive_query_count": 15,
+        "query_count": 16
+      },
+      "skipped": 4
+    },
+    "current": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 0,
+        "hit_at_5": 0,
+        "negative_query_count": 0,
+        "positive_query_count": 0,
+        "query_count": 0
+      },
+      "original": {
+        "expected_pass_at_5": 16,
+        "hit_at_5": 15,
+        "negative_query_count": 1,
+        "positive_query_count": 15,
+        "query_count": 16
+      },
+      "skipped": 4
+    },
+    "current_bundle": "knowledge-base_rag_default_2026-06-11",
+    "current_chunk_count": 473,
+    "current_total_bytes": 29702825,
+    "fact_retention": {
+      "bm25_terms": {
+        "changed_count": 0,
+        "current_count": 1100,
+        "retained_count": 907,
+        "retention_pct": 97.11,
+        "v0_count": 934,
+        "value_improved_count": 0
+      },
+      "business_rules": {
+        "changed_count": 0,
+        "current_count": 155,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "chunk_ids": {
+        "changed_count": 0,
+        "current_count": 473,
+        "retained_count": 317,
+        "retention_pct": 58.17,
+        "v0_count": 545,
+        "value_improved_count": 0
+      },
+      "cics": {
+        "changed_count": 0,
+        "current_count": 50,
+        "retained_count": 34,
+        "retention_pct": 100.0,
+        "v0_count": 34,
+        "value_improved_count": 0
+      },
+      "copybooks": {
+        "changed_count": 0,
+        "current_count": 485,
+        "retained_count": 419,
+        "retention_pct": 96.32,
+        "v0_count": 435,
+        "value_improved_count": 0
+      },
+      "dataflow.sidecar": {
+        "changed_count": 0,
+        "current_count": 93,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "dataflow.variable": {
+        "changed_count": 0,
+        "current_count": 1741,
+        "retained_count": 1722,
+        "retention_pct": 98.91,
+        "v0_count": 1741,
+        "value_improved_count": 0
+      },
+      "paragraphs": {
+        "changed_count": 0,
+        "current_count": 923,
+        "retained_count": 893,
+        "retention_pct": 91.5,
+        "v0_count": 976,
+        "value_improved_count": 0
+      },
+      "path_sensitive": {
+        "changed_count": 0,
+        "current_count": 0,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "static_values": {
+        "changed_count": 0,
+        "current_count": 351,
+        "retained_count": 351,
+        "retention_pct": 100.0,
+        "v0_count": 351,
+        "value_improved_count": 0
+      }
+    },
+    "type_counts": {
+      "business_rule": 72,
+      "call_contract": 5,
+      "cics.operation": 14,
+      "cics.program_transfer": 4,
+      "cics.resource": 7,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 37,
+      "copybook_fields": 21,
+      "copybook_mentions": 1,
+      "dataflow.variable": 163,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 53,
+      "external_program_calls": 1,
+      "paragraph_logic": 45,
+      "program_summary": 1,
+      "screen.key_dispatch": 2,
+      "screen.pagination": 1,
+      "screen.row_build": 1,
+      "screen.selection": 1,
+      "static_values": 4,
+      "unused_copybooks": 1,
+      "variable_group": 12,
+      "workflow": 20
+    }
+  },
+  "PDCBVC static": {
+    "baseline": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 0,
+        "hit_at_5": 0,
+        "negative_query_count": 0,
+        "positive_query_count": 0,
+        "query_count": 0
+      },
+      "original": {
+        "expected_pass_at_5": 16,
+        "hit_at_5": 15,
+        "negative_query_count": 1,
+        "positive_query_count": 15,
+        "query_count": 16
+      },
+      "skipped": 4
+    },
+    "current": {
+      "added_static_analysis": {
+        "expected_pass_at_5": 3,
+        "hit_at_5": 1,
+        "negative_query_count": 2,
+        "positive_query_count": 1,
+        "query_count": 3
+      },
+      "original": {
+        "expected_pass_at_5": 16,
+        "hit_at_5": 15,
+        "negative_query_count": 1,
+        "positive_query_count": 15,
+        "query_count": 16
+      },
+      "skipped": 1
+    },
+    "current_bundle": "knowledge-base_rag_static_2026-06-11",
+    "current_chunk_count": 571,
+    "current_total_bytes": 29995194,
+    "fact_retention": {
+      "bm25_terms": {
+        "changed_count": 0,
+        "current_count": 1212,
+        "retained_count": 908,
+        "retention_pct": 97.22,
+        "v0_count": 934,
+        "value_improved_count": 0
+      },
+      "business_rules": {
+        "changed_count": 0,
+        "current_count": 155,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "chunk_ids": {
+        "changed_count": 0,
+        "current_count": 571,
+        "retained_count": 317,
+        "retention_pct": 58.17,
+        "v0_count": 545,
+        "value_improved_count": 0
+      },
+      "cics": {
+        "changed_count": 0,
+        "current_count": 50,
+        "retained_count": 34,
+        "retention_pct": 100.0,
+        "v0_count": 34,
+        "value_improved_count": 0
+      },
+      "copybooks": {
+        "changed_count": 0,
+        "current_count": 485,
+        "retained_count": 419,
+        "retention_pct": 96.32,
+        "v0_count": 435,
+        "value_improved_count": 0
+      },
+      "dataflow.sidecar": {
+        "changed_count": 0,
+        "current_count": 93,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "dataflow.variable": {
+        "changed_count": 0,
+        "current_count": 1741,
+        "retained_count": 1722,
+        "retention_pct": 98.91,
+        "v0_count": 1741,
+        "value_improved_count": 0
+      },
+      "paragraphs": {
+        "changed_count": 0,
+        "current_count": 923,
+        "retained_count": 893,
+        "retention_pct": 91.5,
+        "v0_count": 976,
+        "value_improved_count": 0
+      },
+      "path_sensitive": {
+        "changed_count": 0,
+        "current_count": 0,
+        "retained_count": 0,
+        "retention_pct": 100.0,
+        "v0_count": 0,
+        "value_improved_count": 0
+      },
+      "static_values": {
+        "changed_count": 0,
+        "current_count": 351,
+        "retained_count": 351,
+        "retention_pct": 100.0,
+        "v0_count": 351,
+        "value_improved_count": 0
+      }
+    },
+    "type_counts": {
+      "business_rule": 72,
+      "call_contract": 5,
+      "cics.operation": 14,
+      "cics.program_transfer": 4,
+      "cics.resource": 7,
+      "cics_operations": 1,
+      "cobol_analysis_health": 1,
+      "commented_out_code": 1,
+      "comments": 1,
+      "controlflow.cfg": 37,
+      "copybook_fields": 21,
+      "copybook_mentions": 1,
+      "dataflow.variable": 163,
+      "datasets_tables_resources": 1,
+      "dead_code": 1,
+      "dependencies": 1,
+      "error_path": 53,
+      "external_program_calls": 1,
+      "paragraph_logic": 45,
+      "program_summary": 1,
+      "screen.key_dispatch": 2,
+      "screen.pagination": 1,
+      "screen.row_build": 1,
+      "screen.selection": 1,
+      "static_value.propagation": 98,
+      "static_values": 4,
+      "unused_copybooks": 1,
+      "variable_group": 12,
+      "workflow": 20
+    }
+  }
+}
