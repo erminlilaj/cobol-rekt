@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,9 +29,10 @@ import java.util.regex.Pattern;
 
 public class StaticValueDataflowPass {
     private static final String SCHEMA_VERSION = "1.0";
-    private static final String ANALYSIS_VERSION = "1.10";
+    private static final String ANALYSIS_VERSION = "1.11";
     private static final String SUMMARY_SOURCE = "java_static_value_dataflow";
     private static final int MAX_ITERATIONS = 1000;
+    private static final String KILL_SCOPE_ALL_CONSTANTS = "all_constants";
     private static final Pattern ACCEPT_TARGET = Pattern.compile(
             "^\\s*ACCEPT\\s+([A-Z][A-Z0-9-]*(?:\\s*\\([^)]*\\))?)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern READ_INTO_TARGET = Pattern.compile(
@@ -51,6 +53,41 @@ public class StaticValueDataflowPass {
     private static final Pattern DATA_REFERENCE_WITH_PARENS = Pattern.compile("\\b[A-Z][A-Z0-9-]*\\s*\\([^)]*\\)",
             Pattern.CASE_INSENSITIVE);
     private static final Set<String> CICS_OUTPUT_ARGUMENTS = Set.of("INTO", "SET", "RESP", "RESP2");
+    private static final Set<FlowNodeType> EMPTY_MODIFICATION_KILL_ALL_TYPES = EnumSet.of(
+            FlowNodeType.ACCEPT,
+            FlowNodeType.ADD,
+            FlowNodeType.ALTER,
+            FlowNodeType.ATOMIC,
+            FlowNodeType.BIND_RUN_UNIT,
+            FlowNodeType.CLOSE,
+            FlowNodeType.COMPUTE,
+            FlowNodeType.DELETE,
+            FlowNodeType.DIALECT,
+            FlowNodeType.DIVIDE,
+            FlowNodeType.FINISH,
+            FlowNodeType.GENERIC_STATEMENT,
+            FlowNodeType.INITIALIZE,
+            FlowNodeType.INSPECT,
+            FlowNodeType.JSON,
+            FlowNodeType.MERGE,
+            FlowNodeType.MOVE,
+            FlowNodeType.MULTIPLY,
+            FlowNodeType.OPEN,
+            FlowNodeType.READ,
+            FlowNodeType.RELEASE,
+            FlowNodeType.RETURN,
+            FlowNodeType.REWRITE,
+            FlowNodeType.SET,
+            FlowNodeType.SORT,
+            FlowNodeType.START,
+            FlowNodeType.STRING,
+            FlowNodeType.SUBTRACT,
+            FlowNodeType.TRANSFER,
+            FlowNodeType.UNSTRING,
+            FlowNodeType.WRITE,
+            FlowNodeType.XML_GENERATE,
+            FlowNodeType.XML_PARSE
+    );
 
     public DataflowAnalysisResult buildSkeleton(String program, List<SerialisableCFGFlowNode> nodes,
                                                 List<SerialisableEdge> edges) {
@@ -104,6 +141,7 @@ public class StaticValueDataflowPass {
         config.put("paragraph_summaries_enabled", true);
         config.put("alias_analysis_enabled", true);
         config.put("alias_kills_enabled", true);
+        config.put("unmodeled_statement_kill_all_enabled", true);
         config.put("mode", mode);
         config.put("max_iterations", MAX_ITERATIONS);
         return config;
@@ -173,6 +211,7 @@ public class StaticValueDataflowPass {
                 mergeDiagnosticsByNode(nodes, predecessors, exitStates);
         Map<String, List<Map<String, Object>>> nodeDiagnostics =
                 appendDiagnostics(mergeDiagnosticsByNode, loopDiagnosticsByNode(nodes, edges));
+        nodeDiagnostics = appendDiagnostics(nodeDiagnostics, unmodeledStatementDiagnosticsByNode(nodes, killsByNode));
         Map<String, DataflowNodeState> nodeStates = new LinkedHashMap<>();
         for (SerialisableCFGFlowNode node : nodes) {
             nodeStates.put(node.getId(), new DataflowNodeState(
@@ -458,6 +497,10 @@ public class StaticValueDataflowPass {
             boolean numericPictureGatingEnabled) {
         Map<String, Map<String, Object>> exit = new TreeMap<>(entry);
         for (Map<String, Object> kill : kills) {
+            if (isKillAll(kill)) {
+                exit.clear();
+                continue;
+            }
             Object variable = kill.get("variable");
             if (variable instanceof String variableName) exit.remove(canonicalVariable(variableName));
         }
@@ -771,7 +814,7 @@ public class StaticValueDataflowPass {
                                                             transitiveModifiedVariablesByParagraph,
                                                     Set<String> fileDescriptorVariables,
                                                     Map<String, String> conditionParents) {
-        return switch (node.getType()) {
+        List<Map<String, Object>> kills = switch (node.getType()) {
             case ACCEPT -> acceptKills(node);
             case CALL -> callUsingKills(node);
             case DIALECT -> dialectOutputKills(node);
@@ -784,6 +827,24 @@ public class StaticValueDataflowPass {
             case PERFORM -> performTransitiveKills(node, transitiveModifiedVariablesByParagraph);
             default -> List.of();
         };
+        if (shouldKillAllForUnmodeledStatement(node, kills)) {
+            List<Map<String, Object>> withKillAll = new ArrayList<>(kills);
+            withKillAll.add(unmodeledStatementKillAll(node));
+            return withKillAll;
+        }
+        return kills;
+    }
+
+    private boolean shouldKillAllForUnmodeledStatement(SerialisableCFGFlowNode node,
+                                                       List<Map<String, Object>> modeledKills) {
+        return sortedStrings(node.getVariablesModified()).isEmpty()
+                && modeledKills.stream().noneMatch(this::hasDirectVariableKill)
+                && EMPTY_MODIFICATION_KILL_ALL_TYPES.contains(node.getType());
+    }
+
+    private boolean hasDirectVariableKill(Map<String, Object> kill) {
+        return kill.get("variable") instanceof String variableName && !variableName.isBlank()
+                && !KILL_SCOPE_ALL_CONSTANTS.equals(kill.get("kill_scope"));
     }
 
     private List<Map<String, Object>> performTransitiveKills(SerialisableCFGFlowNode node,
@@ -1006,6 +1067,64 @@ public class StaticValueDataflowPass {
         putIfPresent(kill, "source_column", node.getSourceColumn());
         kill.put("provenance_source", SUMMARY_SOURCE);
         return kill;
+    }
+
+    private Map<String, Object> unmodeledStatementKillAll(SerialisableCFGFlowNode node) {
+        Map<String, Object> kill = new LinkedHashMap<>();
+        kill.put("code", "UNMODELED_STATEMENT_KILL_ALL");
+        kill.put("reason", "unmodeled_statement");
+        kill.put("kill_scope", KILL_SCOPE_ALL_CONSTANTS);
+        kill.put("confidence", "conservative");
+        kill.put("statement_type", node.getType().name());
+        kill.put("statement_classification", unmodeledStatementClassification(node));
+        putIfPresent(kill, "statement_text", node.getOriginalText());
+        putIfPresent(kill, "source_line", node.getSourceLine());
+        putIfPresent(kill, "source_column", node.getSourceColumn());
+        kill.put("provenance_source", SUMMARY_SOURCE);
+        return kill;
+    }
+
+    private Map<String, List<Map<String, Object>>> unmodeledStatementDiagnosticsByNode(
+            List<SerialisableCFGFlowNode> nodes,
+            Map<String, List<Map<String, Object>>> killsByNode) {
+        Map<String, List<Map<String, Object>>> diagnosticsByNode = new LinkedHashMap<>();
+        for (SerialisableCFGFlowNode node : nodes) {
+            boolean hasKillAll = killsByNode.getOrDefault(node.getId(), List.of()).stream().anyMatch(this::isKillAll);
+            diagnosticsByNode.put(node.getId(), hasKillAll
+                    ? List.of(unmodeledStatementDiagnostic(node))
+                    : List.of());
+        }
+        return diagnosticsByNode;
+    }
+
+    private Map<String, Object> unmodeledStatementDiagnostic(SerialisableCFGFlowNode node) {
+        Map<String, Object> diagnostic = new LinkedHashMap<>();
+        diagnostic.put("code", "DATAFLOW_UNMODELED_STATEMENT_KILL_ALL");
+        diagnostic.put("severity", "warning");
+        diagnostic.put("category", "soundness");
+        diagnostic.put("reason", "unmodeled_statement");
+        diagnostic.put("statement_type", node.getType().name());
+        diagnostic.put("statement_classification", unmodeledStatementClassification(node));
+        putIfPresent(diagnostic, "statement_text", node.getOriginalText());
+        putIfPresent(diagnostic, "source_line", node.getSourceLine());
+        putIfPresent(diagnostic, "source_column", node.getSourceColumn());
+        diagnostic.put("message", "All current constants were killed because this executable statement has no "
+                + "modeled modified variables.");
+        diagnostic.put("provenance_source", SUMMARY_SOURCE);
+        return diagnostic;
+    }
+
+    private String unmodeledStatementClassification(SerialisableCFGFlowNode node) {
+        Object unsupported = node.getMetadata().get("unsupported_semantics");
+        if (Boolean.TRUE.equals(unsupported)) return "mutating_but_unmodeled";
+        return switch (node.getType()) {
+            case GENERIC_STATEMENT, ATOMIC -> "unknown";
+            default -> "mutating_but_unmodeled";
+        };
+    }
+
+    private boolean isKillAll(Map<String, Object> kill) {
+        return KILL_SCOPE_ALL_CONSTANTS.equals(kill.get("kill_scope"));
     }
 
     private List<Map<String, Object>> aliasKills(SerialisableCFGFlowNode node,

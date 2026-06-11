@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-06-11 — Kill constants for unmodeled empty-modification statements
+
+**File(s):** `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/analysis/unknown_statement_audit.md`, `docs/handoff.md`, `workDone.md`
+**What changed:** Added a conservative kill-all fallback for executable statement types whose modified-variable metadata is empty and no direct variable kill was modeled. The pass now emits `UNMODELED_STATEMENT_KILL_ALL` facts plus `DATAFLOW_UNMODELED_STATEMENT_KILL_ALL` diagnostics, bumps dataflow analysis version to `1.11`, and locks the behavior with exact regression tests.
+**Why:** Pre-merge Task 1 found a soundness gap: typed or unknown statements with empty `variablesModified` could preserve stale constants. The audit records the full node-type classification and PDB305/PDCBVC before/after evidence.
+
+---
+
 ## 2026-05-20 — Phase 2.12 grammar-backed expression propagation
 
 **File(s):** `smojol-core/src/main/java/org/smojol/common/staticanalysis/folding/StaticExpressionFolder.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/ast/ComputeFlowNode.java`, `smojol-toolkit/src/main/java/org/smojol/toolkit/analysis/staticvalue/StaticValueDataflowPass.java`, `smojol-toolkit/src/test/java/org/smojol/toolkit/analysis/task/JavaHardeningRegressionTest.java`, `docs/static-analysis/constant-folding-propagation.md`, `workDone.md`
