@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-06-11 — Document static-analysis assumptions and limits
+
+**File(s):** `docs/analysis/assumptions_and_limits.md`, `docs/handoff.md`, `workDone.md`
+**What changed:** Added the pre-merge assumptions document covering compiler-option gaps, decimal-comma limits, CFG edge limits, CICS HANDLE/AID/ABEND limitations, intraprocedural CALL behavior, copybook stubbing confidence, flow-sensitive `path_sensitive_*` compatibility wording, and PIC refusal semantics.
+**Why:** Task 5 required making conservative assumptions explicit so reviewers can distinguish proven branch behavior from unmodeled COBOL/CICS/runtime semantics.
+
+---
+
 ## 2026-06-11 — Attribute flow-sensitive target-resolution failures
 
 **File(s):** `scripts/flow_sensitive_attribution.py`, `docs/analysis/flow_sensitive_attribution.md`, `docs/analysis/flow_sensitive_attribution.json`, `out/report/PDB305.CBL.report/static_analysis/flow_sensitive_attribution.json`, `out/report/PDCBVC.CBL.report/static_analysis/flow_sensitive_attribution.json`, `docs/handoff.md`, `workDone.md`
