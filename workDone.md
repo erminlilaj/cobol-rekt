@@ -4,6 +4,14 @@ Per `CLAUDE.md` §0 Change Log Policy. Append new entries at the top (most recen
 
 ---
 
+## 2026-06-11 — Add GnuCOBOL differential soundness harness
+
+**File(s):** `scripts/gnucobol_differential.py`, `docs/analysis/differential_soundness.md`, `docs/analysis/differential_soundness.json`, `docs/handoff.md`, `workDone.md`
+**What changed:** Added a fixture-only GnuCOBOL differential harness that discovers non-CICS/non-DB2 flow-ast fixtures with dataflow reports, instruments CFG node entry/exit constants with DISPLAY probes, compiles/runs with `cobc` when available, and records pass/fail/mismatch counts.
+**Why:** Task 6 required differential soundness testing where feasible. `cobc` is not installed here; `gnucobol` is available in apt, but sudo installation is blocked by password, so the committed report is an explicit skip with instructions to run the harness after installing GnuCOBOL.
+
+---
+
 ## 2026-06-11 — Document static-analysis assumptions and limits
 
 **File(s):** `docs/analysis/assumptions_and_limits.md`, `docs/handoff.md`, `workDone.md`

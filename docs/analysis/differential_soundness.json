@@ -1,0 +1,72 @@
+{
+  "candidate_count": 11,
+  "cobc": null,
+  "compile_failed_count": 0,
+  "excluded_scope": "CICS/DB2 fixtures are excluded because GnuCOBOL cannot execute EXEC CICS or EXEC SQL semantics.",
+  "failed_count": 0,
+  "fixtures": [
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/alias-kills-phase2.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/constant-folding-phase1.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/constant-propagation-phase2.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/hardening-features.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/metadata-features.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/negative-hardening-phase211.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/perform-kill-phase210.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/pic-gating-phase28.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/runtime-kills-phase26a.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/subscript-refusal-phase29.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    },
+    {
+      "fixture": "smojol-toolkit/test-code/flow-ast/variable-usage-features.cbl",
+      "reason": "cobc not installed",
+      "status": "skipped"
+    }
+  ],
+  "mismatch_count": 0,
+  "passed_count": 0,
+  "report_root": "smojol-toolkit/test-code/out",
+  "schema_version": "1.0",
+  "skip_reason": "`cobc` is not installed in this environment. `apt-cache policy gnucobol` reports an installable candidate, but `sudo apt-get install -y gnucobol` could not run here because sudo requires a password.",
+  "skipped_count": 11,
+  "source_root": "smojol-toolkit/test-code/flow-ast",
+  "status": "skipped"
+}
