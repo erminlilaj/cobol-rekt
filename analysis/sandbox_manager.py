@@ -67,16 +67,19 @@ class CaseInsensitiveResolver:
     # Common COBOL copybook extensions
     COPYBOOK_EXTENSIONS = {'.cpy', '.cbl', '.cob', '.copy', ''}
     
-    def __init__(self, search_dirs: list[Path], verbose: bool = False):
+    def __init__(self, search_dirs: list[Path], verbose: bool = False,
+                 excluded_paths: set[Path] | None = None):
         """
         Initialize resolver by scanning directories.
         
         Args:
             search_dirs: List of directories to scan for files
             verbose: Print scanning progress
+            excluded_paths: Files that must never resolve as COPY members
         """
         self._mapping: dict[str, Path] = {}  # lowercase_name -> actual_path
         self._verbose = verbose
+        self._excluded_paths = {path.resolve() for path in (excluded_paths or set())}
         
         for directory in search_dirs:
             if directory.exists() and directory.is_dir():
@@ -89,7 +92,7 @@ class CaseInsensitiveResolver:
         
         count = 0
         for path in directory.rglob("*"):
-            if path.is_file():
+            if path.is_file() and path.resolve() not in self._excluded_paths:
                 # Map by full lowercase name
                 key = path.name.lower()
                 if key not in self._mapping:
@@ -455,8 +458,18 @@ class SandboxEnvironment:
             Colors.print_msg(f"  Sandbox root: {self._sandbox_root}", Colors.BLUE)
         
         # Initialize case-insensitive resolver
-        all_search_dirs = self._copybook_dirs + [self._source_file.parent]
-        self._resolver = CaseInsensitiveResolver(all_search_dirs, verbose=self._verbose)
+        # The COBOL source may share its stem with a COPY member (for example,
+        # PD1VSOC.CBL and copybooks/PD1VSOC). Never resolve COPY to the source.
+        all_search_dirs = list(dict.fromkeys(
+            [self._source_file.parent / "copybooks"]
+            + self._copybook_dirs
+            + [self._source_file.parent]
+        ))
+        self._resolver = CaseInsensitiveResolver(
+            all_search_dirs,
+            verbose=self._verbose,
+            excluded_paths={self._source_file},
+        )
         
         # Link/copy source file to sandbox
         self._setup_source_file()
