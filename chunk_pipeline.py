@@ -45,6 +45,8 @@ ALWAYS_INDEXABLE_THIN_TYPES = frozenset({
     "analysis_health",
     "jcl_analysis_health",
     "static_values",
+    "static_value.propagation",
+    "flow_sensitive.target",
     "external_program_calls",
     "controlflow.cfg",
     "dataflow.variable",
@@ -342,6 +344,25 @@ def _cfg_nodes_edges(report_dir: Path) -> tuple[list[dict], list[dict]]:
         [node for node in nodes if isinstance(node, dict)],
         [edge for edge in edges if isinstance(edge, dict)],
     )
+
+
+def _static_analysis_dataflow_path(report_dir: Path) -> Path | None:
+    """Return the static dataflow sidecar path if this report produced one."""
+    candidate = report_dir / "static_analysis" / "dataflow.json"
+    if candidate.is_file():
+        return candidate
+    legacy_candidate = report_dir / "dataflow.json"
+    if legacy_candidate.is_file():
+        return legacy_candidate
+    return None
+
+
+def _static_analysis_dataflow_summary_path(report_dir: Path) -> Path | None:
+    """Return the compact static dataflow summary path if this report produced one."""
+    candidate = report_dir / "static_analysis" / "dataflow_rag_summary.json"
+    if candidate.is_file():
+        return candidate
+    return None
 
 
 def _safe_name(value: str) -> str:
@@ -4801,6 +4822,8 @@ def _split_if_needed(filepath: Path, chunks_dir: Path,
     tc = token_count(text)
     if tc <= MAX_CHUNK_TOKENS:
         return
+    if data.get("metadata", {}).get("size_guard_exempt") is True:
+        return
 
     parts = _split_parts_with_context(text, data.get("metadata", {}))
     if len(parts) <= 1:
@@ -5035,6 +5058,17 @@ def generate_rag_bundle(report_dir: Path, chunks_dir: Path,
     if copybooks_dir.is_dir():
         shutil.copytree(copybooks_dir, bundle_artifacts / "copybooks")
         artifact_count += len([path for path in copybooks_dir.iterdir() if path.is_file()])
+    dataflow_path = _static_analysis_dataflow_path(report_dir)
+    if dataflow_path:
+        static_artifacts = bundle_artifacts / "static_analysis"
+        static_artifacts.mkdir(exist_ok=True)
+        summary_path = report_dir / "static_analysis" / "dataflow_rag_summary.json"
+        if summary_path.is_file():
+            shutil.copy2(summary_path, static_artifacts / "dataflow_rag_summary.json")
+            artifact_count += 1
+        if dataflow_path.stat().st_size <= MAX_RAG_DATAFLOW_SIDECAR_BYTES:
+            shutil.copy2(dataflow_path, static_artifacts / "dataflow.json")
+            artifact_count += 1
 
     manifest = {
         "program": program,
@@ -5050,6 +5084,7 @@ def generate_rag_bundle(report_dir: Path, chunks_dir: Path,
         "notes": [
             "Index files under chunks/ for normal RAG retrieval.",
             "Use artifacts/ for diagnostics, confidence, copybook status, and static value provenance.",
+            "Static analysis RAG summaries are copied under artifacts/static_analysis/ when present; very large raw dataflow sidecars are not copied into the RAG bundle.",
             "Inactive COBOL comments are separated in artifacts/commented_out_code.json when detected.",
         ],
     }
@@ -6993,13 +7028,306 @@ def _workflow_callee_cics_suffix(chunks_dir: Path, program: str, callee: str) ->
     return f" (CICS: {', '.join(rendered)})"
 
 
+MAX_STATIC_ANALYSIS_RAG_CHUNKS = 250
+MAX_STATIC_CONSTANTS_PER_NODE = 20
+MAX_RAG_DATAFLOW_SIDECAR_BYTES = 25 * 1024 * 1024
+
+
+def _compact_static_constant(variable: str, value: dict) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    state = str(value.get("state") or "").upper()
+    if state and state != "CONSTANT":
+        return None
+    kind = str(value.get("kind") or "UNKNOWN").upper()
+    if kind not in {"NUMERIC", "ALPHANUMERIC"}:
+        return None
+    normalized = str(value.get("normalized_value") or value.get("display_value") or "").strip()
+    if not normalized:
+        return None
+    compact = {
+        "variable": str(variable),
+        "kind": kind,
+        "normalized_value": normalized,
+        "display_value": str(value.get("display_value") or normalized),
+    }
+    if isinstance(value.get("numeric"), dict):
+        compact["numeric"] = {
+            key: value["numeric"].get(key)
+            for key in ("decimal", "scale", "precision", "sign")
+            if value["numeric"].get(key) is not None
+        }
+    return compact
+
+
+def _compact_constants_map(values: dict) -> list[dict]:
+    if not isinstance(values, dict):
+        return []
+    facts: list[dict] = []
+    for variable in sorted(values):
+        compact = _compact_static_constant(variable, values.get(variable))
+        if compact:
+            facts.append(compact)
+    return facts
+
+
+def _compact_dataflow_node_states(node_states: dict) -> dict:
+    if not isinstance(node_states, dict):
+        return {}
+    compact: dict[str, dict] = {}
+    for node_id in sorted(node_states):
+        state = node_states.get(node_id)
+        if not isinstance(state, dict):
+            continue
+        entry_facts = _compact_constants_map(state.get("entry_constants", {}))
+        exit_facts = _compact_constants_map(state.get("exit_constants", {}))
+        diagnostics = state.get("diagnostics", [])
+        if entry_facts or exit_facts or diagnostics:
+            compact[node_id] = {
+                "entry_constants": {
+                    fact["variable"]: fact
+                    for fact in entry_facts
+                },
+                "exit_constants": {
+                    fact["variable"]: fact
+                    for fact in exit_facts
+                },
+                "diagnostics": diagnostics if isinstance(diagnostics, list) else [],
+            }
+    return compact
+
+
+def _write_dataflow_rag_summary(report_dir: Path, dataflow: dict) -> Path | None:
+    if not isinstance(dataflow, dict):
+        return None
+    static_dir = report_dir / "static_analysis"
+    static_dir.mkdir(exist_ok=True)
+    compact = {
+        "schema_version": dataflow.get("schema_version"),
+        "analysis_version": dataflow.get("analysis_version"),
+        "source_artifact": "static_analysis/dataflow.json",
+        "summary": dataflow.get("summary", {}),
+        "node_states": _compact_dataflow_node_states(dataflow.get("node_states", {})),
+        "rag_compacted": True,
+    }
+    output = static_dir / "dataflow_rag_summary.json"
+    _atomic_write_json(output, compact)
+    return output
+
+
+def _render_constant_lines(title: str, facts: list[dict]) -> list[str]:
+    if not facts:
+        return [f"{title}: none."]
+    lines = [f"{title}:"]
+    for fact in facts[:MAX_STATIC_CONSTANTS_PER_NODE]:
+        lines.append(
+            f"- {fact['variable']} = {fact['display_value']} ({fact['kind']})"
+        )
+    if len(facts) > MAX_STATIC_CONSTANTS_PER_NODE:
+        lines.append(f"- ... {len(facts) - MAX_STATIC_CONSTANTS_PER_NODE} more omitted from this retrieval chunk.")
+    return lines
+
+
+def generate_static_value_propagation_chunks(report_dir: Path, chunks_dir: Path,
+                                             program: str, verbose: bool) -> int:
+    """Emit opt-in RAG chunks for node-scoped dataflow constants."""
+    dataflow_path = _static_analysis_dataflow_path(report_dir)
+    summary_only = False
+    if dataflow_path:
+        dataflow = load_json(dataflow_path)
+    else:
+        dataflow_path = _static_analysis_dataflow_summary_path(report_dir)
+        summary_only = True
+    if not dataflow_path:
+        return 0
+    if summary_only:
+        dataflow = load_json(dataflow_path)
+    if not isinstance(dataflow, dict):
+        return 0
+    if not summary_only:
+        _write_dataflow_rag_summary(report_dir, dataflow)
+    node_states = dataflow.get("node_states", {})
+    if not isinstance(node_states, dict):
+        return 0
+
+    count = 0
+    for node_id in sorted(node_states):
+        if count >= MAX_STATIC_ANALYSIS_RAG_CHUNKS:
+            break
+        state = node_states.get(node_id)
+        if not isinstance(state, dict):
+            continue
+        entry_facts = _compact_constants_map(state.get("entry_constants", {}))
+        exit_facts = _compact_constants_map(state.get("exit_constants", {}))
+        if not entry_facts and not exit_facts:
+            continue
+
+        node_safe = _safe_name(node_id)
+        truncated = (
+            len(entry_facts) > MAX_STATIC_CONSTANTS_PER_NODE
+            or len(exit_facts) > MAX_STATIC_CONSTANTS_PER_NODE
+        )
+        lines = [
+            f"Scoped static value facts for {program} at CFG node {node_id}.",
+            "These facts come from static_analysis/dataflow.json. They describe constants at this node only; they are not global always claims.",
+            "",
+            *_render_constant_lines("Entry constants", entry_facts),
+            "",
+            *_render_constant_lines("Exit constants", exit_facts),
+        ]
+        metadata = {
+            "chunk_type": "static_value.propagation",
+            "chunk_id": f"{program}:static_value.propagation:{node_safe}",
+            "program": program,
+            "node_id": node_id,
+            "source_artifact": "static_analysis/dataflow.json",
+            "analysis_scope": "flow_sensitive_per_cfg_node",
+            "claim_scope": "node_entry_exit",
+            "provenance_source": "java_static_value_dataflow_sidecar",
+            "entry_constants": entry_facts[:MAX_STATIC_CONSTANTS_PER_NODE],
+            "exit_constants": exit_facts[:MAX_STATIC_CONSTANTS_PER_NODE],
+            "truncated": truncated,
+            "size_guard_exempt": True,
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__static_value_propagation__{node_safe}.json",
+            "\n".join(lines),
+            metadata,
+        )
+        count += 1
+
+    if verbose:
+        print(f"  static_value.propagation: {count} chunk(s)")
+    return count
+
+
+def _node_path_sensitive_facts(node: dict) -> dict:
+    metadata = node.get("metadata", {}) if isinstance(node.get("metadata"), dict) else {}
+    call_targets: list[dict] = []
+    cics_targets: list[dict] = []
+    cics_arguments: list[dict] = []
+
+    if (
+        metadata.get("path_sensitive_call_resolution_status") == "resolved"
+        and metadata.get("path_sensitive_call_target")
+    ):
+        call_targets.append({
+            "identifier": metadata.get("path_sensitive_call_identifier") or metadata.get("call_target"),
+            "target": metadata.get("path_sensitive_call_target"),
+            "confidence": metadata.get("path_sensitive_call_resolution_confidence"),
+            "source": metadata.get("path_sensitive_call_target_source"),
+            "evidence": metadata.get("path_sensitive_call_evidence"),
+        })
+
+    if (
+        metadata.get("path_sensitive_cics_resolution_status") == "resolved"
+        and metadata.get("path_sensitive_cics_target")
+    ):
+        cics_targets.append({
+            "command": metadata.get("cics_command"),
+            "identifier": metadata.get("path_sensitive_cics_identifier") or metadata.get("cics_target_identifier"),
+            "target": metadata.get("path_sensitive_cics_target"),
+            "confidence": metadata.get("path_sensitive_cics_resolution_confidence"),
+            "source": metadata.get("path_sensitive_cics_target_source"),
+            "evidence": metadata.get("path_sensitive_cics_evidence"),
+        })
+
+    for argument in metadata.get("path_sensitive_cics_arguments", []) or []:
+        if not isinstance(argument, dict):
+            continue
+        if argument.get("resolution_status") != "resolved" or not argument.get("resolved_value"):
+            continue
+        cics_arguments.append({
+            "name": argument.get("name"),
+            "identifier": argument.get("identifier"),
+            "resolved_value": argument.get("resolved_value"),
+            "confidence": argument.get("confidence"),
+            "source": argument.get("source"),
+            "evidence": argument.get("evidence"),
+        })
+
+    return {
+        "call_targets": call_targets,
+        "cics_targets": cics_targets,
+        "cics_arguments": cics_arguments,
+    }
+
+
+def generate_flow_sensitive_target_chunks(report_dir: Path, chunks_dir: Path,
+                                          program: str, verbose: bool) -> int:
+    """Emit opt-in RAG chunks for resolved flow-sensitive CALL/CICS facts."""
+    nodes, _edges = _cfg_nodes_edges(report_dir)
+    count = 0
+    for node in nodes:
+        if count >= MAX_STATIC_ANALYSIS_RAG_CHUNKS:
+            break
+        node_id = str(node.get("id") or node.get("node_id") or "")
+        if not node_id:
+            continue
+        facts = _node_path_sensitive_facts(node)
+        if not any(facts.values()):
+            continue
+
+        node_safe = _safe_name(node_id)
+        paragraph = _metadata_paragraph(node.get("metadata", {}) if isinstance(node.get("metadata"), dict) else {})
+        lines = [
+            f"Flow-sensitive target facts for {program} at CFG node {node_id}.",
+            "These facts are read from path_sensitive_* CFG metadata and are scoped to this node's dataflow entry state; they are not global target claims.",
+        ]
+        if paragraph:
+            lines.append(f"Paragraph: {paragraph}.")
+        if facts["call_targets"]:
+            lines.append("")
+            lines.append("CALL targets:")
+            for fact in facts["call_targets"]:
+                lines.append(f"- {fact.get('identifier')} resolves to {fact.get('target')} ({fact.get('confidence') or 'unknown'} confidence).")
+        if facts["cics_targets"]:
+            lines.append("")
+            lines.append("CICS targets:")
+            for fact in facts["cics_targets"]:
+                command = fact.get("command") or "CICS"
+                lines.append(f"- {command} target {fact.get('identifier')} resolves to {fact.get('target')} ({fact.get('confidence') or 'unknown'} confidence).")
+        if facts["cics_arguments"]:
+            lines.append("")
+            lines.append("CICS arguments:")
+            for fact in facts["cics_arguments"]:
+                lines.append(f"- {fact.get('name')} identifier {fact.get('identifier')} resolves to {fact.get('resolved_value')} ({fact.get('confidence') or 'unknown'} confidence).")
+
+        metadata = {
+            "chunk_type": "flow_sensitive.target",
+            "chunk_id": f"{program}:flow_sensitive.target:{node_safe}",
+            "program": program,
+            "node_id": node_id,
+            "paragraph": paragraph,
+            "analysis_scope": "flow_sensitive_per_cfg_node",
+            "claim_scope": "node_entry_target_resolution",
+            "path_sensitive_field_prefix": "path_sensitive_*",
+            "provenance_source": "java_path_sensitive_cfg_metadata",
+            "size_guard_exempt": True,
+            **facts,
+        }
+        write_chunk(
+            chunks_dir,
+            f"{program}__flow_sensitive_target__{node_safe}.json",
+            "\n".join(lines),
+            metadata,
+        )
+        count += 1
+
+    if verbose:
+        print(f"  flow_sensitive.target: {count} chunk(s)")
+    return count
+
+
 # =============================================================================
 # Main orchestrator
 # =============================================================================
 
 def run_pipeline(report_dir: Path, verbose: bool = False,
                  label_boost: float = 1.0,
-                 profile: str = "default") -> dict:
+                 profile: str = "default",
+                 include_static_analysis_rag: bool = False) -> dict:
     """Run the full chunk pipeline on a report directory.
 
     Returns a summary dict with chunk counts by type.
@@ -7026,6 +7354,7 @@ def run_pipeline(report_dir: Path, verbose: bool = False,
         mode.append("JCL")
     print(f"Mode: {' + '.join(mode)} | Schema: v{CHUNK_SCHEMA_VERSION}")
     print(f"Profile: {profile}")
+    print(f"Static-analysis RAG chunks: {'enabled' if include_static_analysis_rag else 'disabled'}")
     print(f"Output: {chunks_dir}")
     if verbose and removed_stale_chunks:
         print(f"Cleared {removed_stale_chunks} stale chunk JSON file(s)")
@@ -7090,6 +7419,11 @@ def run_pipeline(report_dir: Path, verbose: bool = False,
                 report_dir, chunks_dir, program, verbose)
             summary["static_values"] = generate_static_values(
                 report_dir, chunks_dir, program, verbose)
+            if include_static_analysis_rag:
+                summary["static_value.propagation"] = generate_static_value_propagation_chunks(
+                    report_dir, chunks_dir, program, verbose)
+                summary["flow_sensitive.target"] = generate_flow_sensitive_target_chunks(
+                    report_dir, chunks_dir, program, verbose)
             summary["paragraph_logic"] = generate_paragraph_logic(
                 report_dir, chunks_dir, program, verbose)
             summary["business_rules"] = generate_business_rules(
@@ -7196,6 +7530,11 @@ def main():
         default="default",
         help="Retrieval profile: default emits all chunks; facts-only emits core fact chunks",
     )
+    parser.add_argument(
+        "--include-static-analysis-rag",
+        action="store_true",
+        help="Emit opt-in RAG chunks for static_analysis/dataflow.json and path_sensitive_* CFG facts",
+    )
     args = parser.parse_args()
 
     if not args.report_dir.is_dir():
@@ -7214,7 +7553,8 @@ def main():
 
     summary = run_pipeline(args.report_dir, verbose=args.verbose,
                            label_boost=args.label_boost,
-                           profile=args.profile)
+                           profile=args.profile,
+                           include_static_analysis_rag=args.include_static_analysis_rag)
     if summary:
         counter_label = "BPE" if _USE_BPE else "whitespace"
         print(f"\nDone. {summary.get('total', 0)} chunks generated "
